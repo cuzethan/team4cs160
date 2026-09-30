@@ -1,0 +1,2 @@
+-- Runs once, the first time the Postgres data volume is created.
+-- Schema for OFS goes in this directory.
