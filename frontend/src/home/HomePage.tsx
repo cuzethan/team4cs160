@@ -38,7 +38,7 @@ function HomeHeader() {
     <header className="border-b border-[#ecebe2] bg-[#fffefa]">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4 sm:px-8">
         <Link
-          to="/home"
+          to="/"
           className="text-lg font-extrabold tracking-tight text-[#2e4935]"
           aria-label="OFS home"
         >
@@ -50,6 +50,12 @@ function HomeHeader() {
             className="rounded-full px-4 py-2.5 text-sm font-bold text-[#426149] hover:bg-[#f0f3e8]"
           >
             Shop
+          </Link>
+          <Link
+            to="/login"
+            className="rounded-full px-4 py-2.5 text-sm font-bold text-[#426149] hover:bg-[#f0f3e8]"
+          >
+            Log in
           </Link>
           <button
             type="button"

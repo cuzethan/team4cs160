@@ -1,11 +1,16 @@
 import './Login.css';
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 function Header() {
   return <header className="login-header">OFS Login</header>;
 }
 
 function Content() {
+  const navigate = useNavigate();
+
+  // TODO: call POST /api/auth/login once it exists; for now just go to the home page.
+  const handleLogin = () => navigate("/");
+
   return (
     <>
       <div className="login-field">
@@ -20,7 +25,7 @@ function Content() {
 
       <Link to="/forgot-password" className="forgot-link">Forgot your password?</Link>
 
-      <button className="login-button" type="button">Login</button>
+      <button className="login-button" type="button" onClick={handleLogin}>Login</button>
     </>
   );
 }
