@@ -1,4 +1,3 @@
-import './Login.css';
 import { Link, useNavigate } from "react-router-dom";
 
 function Header() {
@@ -35,7 +34,8 @@ function Content() {
   );
 }
 
-export function Login() {
+
+export function Register() {
   return (
     <div className="login-page">
       <div className="login-card">
