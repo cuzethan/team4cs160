@@ -5,7 +5,7 @@ import type { InventoryProduct } from "./types";
 
 const categories = ["All groceries", "Fruits", "Vegetables", "Grains"];
 
-const products: InventoryProduct[] = [
+export const products: InventoryProduct[] = [
   {
     id: "apple-gala",
     name: "Gala Apples",
