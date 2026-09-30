@@ -194,13 +194,22 @@ function InventorySearch() {
   );
 }
 
-function SortControl() {
+type SortOption = "featured" | "price-low" | "price-high";
+
+function SortControl({
+  value,
+  onChange,
+}: {
+  value: SortOption;
+  onChange: (value: SortOption) => void;
+}) {
   return (
     <label className="flex h-12 items-center gap-2 rounded-xl border border-[#e6e6dc] bg-white px-4 text-sm text-[#667269] shadow-sm">
       <span className="whitespace-nowrap">Sort by</span>
       <select
         aria-label="Sort products"
-        defaultValue="featured"
+        value={value}
+        onChange={(event) => onChange(event.target.value as SortOption)}
         className="max-w-36 bg-transparent font-semibold text-[#304336] outline-none"
       >
         <option value="featured">Featured</option>
@@ -214,6 +223,14 @@ function SortControl() {
 export function InventoryPage() {
   const [selectedProduct, setSelectedProduct] =
     useState<InventoryProduct | null>(null);
+  const [sortOption, setSortOption] = useState<SortOption>("featured");
+
+  const sortedProducts =
+    sortOption === "featured"
+      ? products
+      : [...products].sort((a, b) =>
+          sortOption === "price-low" ? a.price - b.price : b.price - a.price,
+        );
 
   const handleCardClick = (productId: string) => {
     setSelectedProduct(
@@ -236,7 +253,7 @@ export function InventoryPage() {
 
         <div className="mb-5 flex flex-col gap-3 sm:flex-row">
           <InventorySearch />
-          <SortControl />
+          <SortControl value={sortOption} onChange={setSortOption} />
         </div>
 
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[230px_minmax(0,1fr)]">
@@ -251,7 +268,7 @@ export function InventoryPage() {
               </p>
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {products.map((product) => (
+              {sortedProducts.map((product) => (
                 <ProductCard
                   key={product.id}
                   product={product}
