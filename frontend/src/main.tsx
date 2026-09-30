@@ -1,8 +1,8 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
-import { Login } from "./Login";
-import ForgotPassword from './ForgotPassword';
+import { Login } from "./login/Login";
+import { ForgotPassword } from './login/ForgotPassword';
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { InventoryPage } from "./inventory/InventoryPage";
 import { HomePage } from "./home/HomePage";
