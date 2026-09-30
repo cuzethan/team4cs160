@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { SiteHeader } from "../components/SiteHeader";
 import { ProductCard } from "./ProductCard";
 import { ProductDetailPage } from "./ProductDetailPage";
 import type { InventoryProduct } from "./types";
@@ -222,24 +223,7 @@ export function InventoryPage() {
 
   return (
     <div className="min-h-screen bg-[#fbfaf5] text-[#253b2d]">
-      <header className="border-b border-[#ecebe2] bg-[#fffefa]">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 sm:px-8">
-          <a
-            href="/inventory"
-            className="text-lg font-extrabold tracking-tight text-[#2e4935]"
-            aria-label="OFS home"
-          >
-            OFS
-          </a>
-          <button
-            type="button"
-            className="flex h-11 items-center gap-2 rounded-full border border-[#e5e7dc] bg-white px-4 text-sm font-bold text-[#426149] shadow-sm"
-          >
-            <span aria-hidden="true">🛒</span>
-            <span className="hidden sm:inline">Your cart</span>
-          </button>
-        </div>
-      </header>
+      <SiteHeader />
 
       <main className="mx-auto max-w-7xl px-5 py-8 sm:px-8 sm:py-12">
         <div className="mb-8 flex flex-col justify-between gap-5 md:flex-row md:items-end">
