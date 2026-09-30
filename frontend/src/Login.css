@@ -3,8 +3,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-  font-family: Arial, Helvetica, sans-serif;
+  background: #fbfaf5;
+  font-family: inherit;
   padding: 24px;
   box-sizing: border-box;
 }
@@ -12,10 +12,10 @@
 .login-card {
   width: 100%;
   max-width: 420px;
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid #dbeafe;
+  background: #fff;
+  border: 1px solid #e8e7dc;
   border-radius: 18px;
-  box-shadow: 0 18px 45px rgba(37, 99, 235, 0.15);
+  box-shadow: 0 12px 28px rgba(42, 65, 48, 0.08);
   padding: 32px 28px;
   box-sizing: border-box;
 }
@@ -25,7 +25,7 @@
   font-size: 2rem;
   font-weight: 700;
   text-align: center;
-  color: #1f2937;
+  color: #294332;
 }
 
 .login-field {
@@ -38,16 +38,16 @@
   margin-bottom: 8px;
   font-size: 0.96rem;
   font-weight: 600;
-  color: #374151;
+  color: #253b2d;
 }
 
 .login-input {
   width: 100%;
   padding: 12px 14px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid #e6e6dc;
   border-radius: 10px;
   font-size: 1rem;
-  color: #111827;
+  color: #253b2d;
   background: #fff;
   box-sizing: border-box;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
@@ -55,14 +55,14 @@
 
 .login-input:focus {
   outline: none;
-  border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+  border-color: #416449;
+  box-shadow: 0 0 0 3px rgba(65, 100, 73, 0.18);
 }
 
 .forgot-link {
   display: inline-block;
   margin: 6px 0 22px;
-  color: #2563eb;
+  color: #416449;
   text-decoration: none;
   font-size: 0.9rem;
   font-weight: 500;
@@ -76,7 +76,7 @@
   width: 100%;
   border: none;
   border-radius: 10px;
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  background: #2e4935;
   color: #fff;
   font-size: 1rem;
   font-weight: 600;
@@ -87,7 +87,8 @@
 
 .login-button:hover {
   transform: translateY(-1px);
-  box-shadow: 0 10px 20px rgba(37, 99, 235, 0.2);
+  background: #253b2d;
+  box-shadow: 0 10px 20px rgba(42, 65, 48, 0.2);
 }
 
 .login-button:active {
