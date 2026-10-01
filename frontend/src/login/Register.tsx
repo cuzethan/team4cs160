@@ -1,46 +1,93 @@
-import { Link, useNavigate } from "react-router-dom";
-
-function Header() {
-  return <header className="login-header">OFS Login</header>;
-}
-
-function Content() {
-  const navigate = useNavigate();
-
-  // TODO: call POST /api/auth/login once it exists; for now just go to the home page.
-  const handleLogin = () => navigate("/");
-
-  return (
-    <>
-      <div className="login-field">
-        <label htmlFor="username" className="login-label">Username:</label>
-        <input id="username" className="login-input" type="text" placeholder="" />
-      </div>
-
-      <div className="login-field">
-        <label htmlFor="password" className="login-label">Password:</label>
-        <input id="password" className="login-input" type="password" placeholder="" />
-      </div>
-
-      <Link to="/forgot-password" className="forgot-link">Forgot your password?</Link>
-
-      <button className="login-button" type="button" onClick={handleLogin}>Login</button>
-      <p className="register-prompt">Don't have an account?{" "}
-        <Link to="/register" className="register-link">
-          Register here
-        </Link>
-      </p>
-    </>
-  );
-}
+import { useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
+import "./Login.css";
+import "./Register.css";
 
 
 export function Register() {
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [formMessage, setFormMessage] = useState("");
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (password !== confirmPassword) {
+      setFormMessage("Passwords do not match.");
+      return;
+    }
+
+    setFormMessage("Account creation is not connected yet.");
+  };
+
   return (
-    <div className="login-page">
-      <div className="login-card">
-        <Header />
-        <Content />
+    <div className="login-page register-page">
+      <div className="login-card register-card">
+        <header className="login-header">Create Account</header>
+        <form onSubmit={handleSubmit}>
+          <div className="register-fields">
+            <div className="login-field">
+              <label htmlFor="firstName" className="login-label">First Name <span className="required-marker" aria-hidden="true">*</span></label>
+              <input id="firstName" name="firstName" className="login-input" type="text" autoComplete="given-name" required />
+            </div>
+
+            <div className="login-field">
+              <label htmlFor="lastName" className="login-label">Last Name <span className="required-marker" aria-hidden="true">*</span></label>
+              <input id="lastName" name="lastName" className="login-input" type="text" autoComplete="family-name" required />
+            </div>
+
+            <div className="login-field">
+              <label htmlFor="phone" className="login-label">Phone Number <span className="required-marker" aria-hidden="true">*</span></label>
+              <input id="phone" name="phone" className="login-input" type="tel" placeholder="e.g. (123) 456-7890" autoComplete="tel" required />
+            </div>
+
+            <div className="login-field">
+              <label htmlFor="email" className="login-label">Email <span className="required-marker" aria-hidden="true">*</span></label>
+              <input id="email" name="email" className="login-input" type="email" autoComplete="email" required />
+            </div>
+
+            <div className="login-field">
+              <label htmlFor="password" className="login-label">Password <span className="required-marker" aria-hidden="true">*</span></label>
+              <input
+                id="password"
+                name="password"
+                className="login-input"
+                type="password"
+                autoComplete="new-password"
+                value={password}
+                onChange={(event) => {
+                  setPassword(event.target.value);
+                  setFormMessage("");
+                }}
+                required
+              />
+            </div>
+
+            <div className="login-field">
+              <label htmlFor="confirmPassword" className="login-label">Confirm Password <span className="required-marker" aria-hidden="true">*</span></label>
+              <input
+                id="confirmPassword"
+                name="confirmPassword"
+                className="login-input"
+                type="password"
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(event) => {
+                  setConfirmPassword(event.target.value);
+                  setFormMessage("");
+                }}
+                required
+              />
+            </div>
+          </div>
+
+          {formMessage && <p className="register-message" role="status">{formMessage}</p>}
+          <button className="login-button" type="submit">Create Account</button>
+        </form>
+
+        <p className="register-footer">
+          Already have an account? <Link to="/login">Log in</Link>
+        </p>
       </div>
     </div>
   );

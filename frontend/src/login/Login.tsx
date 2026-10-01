@@ -13,19 +13,24 @@ function Content() {
 
   return (
     <>
-      <div className="login-field">
-        <label htmlFor="username" className="login-label">Username:</label>
-        <input id="username" className="login-input" type="text" placeholder="" />
-      </div>
+      <form onSubmit={(event) => {
+        event.preventDefault();
+        handleLogin();
+      }}>
+        <div className="login-field">
+          <label htmlFor="username" className="login-label">Username:</label>
+          <input id="username" name="username" className="login-input" type="text" autoComplete="username" required />
+        </div>
 
-      <div className="login-field">
-        <label htmlFor="password" className="login-label">Password:</label>
-        <input id="password" className="login-input" type="password" placeholder="" />
-      </div>
+        <div className="login-field">
+          <label htmlFor="password" className="login-label">Password:</label>
+          <input id="password" name="password" className="login-input" type="password" autoComplete="current-password" required />
+        </div>
 
-      <Link to="/forgot-password" className="forgot-link">Forgot your password?</Link>
+        <Link to="/forgot-password" className="forgot-link">Forgot your password?</Link>
 
-      <button className="login-button" type="button" onClick={handleLogin}>Login</button>
+        <button className="login-button" type="submit">Login</button>
+      </form>
       <p className="register-prompt">Don't have an account?{" "}
         <Link to="/register" className="register-link">
           Register here

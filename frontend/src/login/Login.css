@@ -94,3 +94,21 @@
 .login-button:active {
   transform: translateY(0);
 }
+
+.register-prompt {
+  margin: 20px 0 0;
+  padding-top: 18px;
+  border-top: 1px solid #e8e7dc;
+  color: #526157;
+  text-align: center;
+}
+
+.register-link {
+  color: #416449;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.register-link:hover {
+  text-decoration: underline;
+}

@@ -1,0 +1,44 @@
+.register-page {
+  align-items: stretch;
+}
+
+.register-card {
+  max-width: 620px;
+  margin-block: auto;
+}
+
+.register-fields {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.register-fields .login-field {
+  margin-bottom: 16px;
+}
+
+.required-marker {
+  color: #b42318;
+}
+
+.register-message {
+  margin: 0 0 14px;
+  color: #8b342b;
+  font-size: 0.92rem;
+}
+
+.register-footer {
+  margin: 20px 0 0;
+  color: #526157;
+  text-align: center;
+  font-size: 0.94rem;
+}
+
+.register-footer a {
+  color: #416449;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.register-footer a:hover {
+  text-decoration: underline;
+}
