@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import "./Login.css";
 import "./Register.css";
 
-
 export function Register() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
