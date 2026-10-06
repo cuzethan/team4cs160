@@ -24,7 +24,7 @@ function ForgotPassword() {
 
   return (
     <div className="absolute left-1/2 top-1/2 box-border w-full max-w-[420px] -translate-x-1/2 -translate-y-1/2 rounded-[18px] border border-[#e8e7dc] bg-white px-7 py-[34px] shadow-[0_12px_28px_rgba(42,65,48,0.12)]">
-      <h2 className="mb-3 text-center text-[2rem] font-bold text-[#294332]">Forgot Password?</h2>
+      <h2 className="mb-3 text-center text-[2rem] font-extrabold tracking-tight text-[#294332]">Forgot Password?</h2>
       <p className="mb-10 text-center text-[0.95rem] text-[#536557]">Please enter your email to receive verification codes.</p>
       <form noValidate onSubmit={handleSubmit}>
         <div className="mx-auto mb-[15px] w-[300px]">
