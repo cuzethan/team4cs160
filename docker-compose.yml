@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: ofs
       POSTGRES_DB: ofs
     ports:
-      - "5432:5432"
+      - "${DB_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -20,8 +20,9 @@ services:
     environment:
       PORT: 3001
       DATABASE_URL: postgres://ofs:ofs@db:5432/ofs
+      APP_URL: http://localhost:5173
     ports:
-      - "3001:3001"
+      - "${API_PORT:-3001}:3001"
     depends_on:
       db:
         condition: service_healthy
@@ -31,6 +32,8 @@ services:
 
   frontend:
     build: ./frontend
+    environment:
+      API_PROXY_TARGET: http://backend:3001
     ports:
       - "5173:5173"
     depends_on:

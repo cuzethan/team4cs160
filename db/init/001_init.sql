@@ -15,9 +15,10 @@ CREATE TABLE users (
                     CHECK (role IN ('customer', 'admin')),
   account_status  text NOT NULL DEFAULT 'active'
                     CHECK (account_status IN ('active', 'disabled')),
+  -- Security question for password recovery. The answer is stored as a bcrypt hash.
   question_choice text NOT NULL
-                    CHECK (question_choice IN ('What is your favorite color?', 'What is your favorite food?', 'What is your favorite movie?')),
-  answer          text NOT NULL,
+                    CHECK (question_choice IN ('What was the name of your last pet?', 'Who was your favorite teacher?', 'What is your dream car?')),
+  answer_hash     text NOT NULL,
   created_at      timestamptz NOT NULL DEFAULT now(),
   updated_at      timestamptz NOT NULL DEFAULT now()
 );

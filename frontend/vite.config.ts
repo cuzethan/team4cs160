@@ -10,5 +10,9 @@ export default defineConfig({
     watch: {
       usePolling: true,
     },
+    // The site calls /api/...; Vite forwards it to the backend so cookies stay same-origin.
+    proxy: {
+      "/api": process.env.API_PROXY_TARGET ?? "http://localhost:3001",
+    },
   },
 });

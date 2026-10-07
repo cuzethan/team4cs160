@@ -1,10 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { getSecurityQuestion, resetPassword, verifySecurityAnswer } from "../auth/api";
 
 type RecoveryStep = "email" | "answer" | "password";
-type ApiResponse = { message?: string; question?: string; resetToken?: string };
-
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
 function ForgotPassword() {
   const navigate = useNavigate();
@@ -39,34 +37,14 @@ function ForgotPassword() {
 
     setIsSubmitting(true);
     try {
-      let path: string;
-      let body: Record<string, string>;
       if (step === "email") {
-        path = "/api/auth/recovery/question";
-        body = { email: email.trim() };
-      } else if (step === "answer") {
-        path = "/api/auth/recovery/verify";
-        body = { email: email.trim(), answer };
-      } else {
-        path = "/api/auth/recovery/reset";
-        body = { resetToken, password };
-      }
-
-      const response = await fetch(`${API_BASE_URL}${path}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const result = (await response.json()) as ApiResponse;
-      if (!response.ok) throw new Error(result.message ?? "Password recovery failed.");
-
-      if (step === "email") {
-        setQuestion(result.question ?? "");
+        setQuestion(await getSecurityQuestion(email.trim()));
         setStep("answer");
       } else if (step === "answer") {
-        setResetToken(result.resetToken ?? "");
+        setResetToken(await verifySecurityAnswer(email.trim(), answer));
         setStep("password");
       } else {
+        await resetPassword(resetToken, password);
         navigate("/login", { replace: true });
       }
     } catch (error) {

@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
 import { SiteHeader } from "../components/SiteHeader";
 import { products } from "../inventory/InventoryPage";
 import { ProductCard } from "../inventory/ProductCard";
@@ -35,10 +36,22 @@ const featuredProductIds = ["strawberry", "avocado", "spinach", "bread"];
 const featuredProducts = products.filter((product) => featuredProductIds.includes(product.id));
 
 function Hero() {
+  const { user, loading } = useAuth();
+
   return (
     <section className="overflow-hidden rounded-3xl bg-[#2e4935] text-white">
       <div className="grid items-center gap-8 px-6 py-10 sm:px-10 sm:py-14 md:grid-cols-[minmax(0,1fr)_auto]">
         <div>
+          {user ? (
+            <p className="mb-4 text-3xl font-extrabold text-[#f5d77a]">Hello, {user.firstName}! 👋</p>
+          ) : !loading ? (
+            <p className="mb-4 text-base text-[#e4eedb]">
+              You're not logged in.{" "}
+              <Link to="/login" className="font-bold text-[#f5d77a] underline-offset-2 hover:underline">Log in</Link>
+              {" "}or{" "}
+              <Link to="/register" className="font-bold text-[#f5d77a] underline-offset-2 hover:underline">create an account</Link>.
+            </p>
+          ) : null}
           <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#cfe3c0]">
             Organic Food Store · San Jose
           </p>
@@ -207,11 +220,34 @@ function OrdersBanner() {
   );
 }
 
+// A one-time message passed by navigate("/", { state: { notice } }), e.g. after logging out.
+function NoticeBanner() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const notice = (location.state as { notice?: string } | null)?.notice;
+  if (!notice) return null;
+
+  return (
+    <div role="status" className="flex items-center justify-between gap-4 rounded-2xl border border-[#cfe3c0] bg-[#eef6e8] px-5 py-4 font-semibold text-[#2e4935]">
+      <span>{notice}</span>
+      <button
+        type="button"
+        onClick={() => navigate(".", { replace: true, state: null })}
+        className="cursor-pointer rounded-full px-3 py-1 text-sm font-bold text-[#426149] hover:bg-[#dcebd2]"
+        aria-label="Dismiss"
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
+
 export function HomePage() {
   return (
     <div className="min-h-screen bg-[#fbfaf5] text-[#253b2d]">
       <SiteHeader />
       <main className="mx-auto flex max-w-7xl flex-col gap-12 px-5 py-8 sm:px-8 sm:py-12">
+        <NoticeBanner />
         <Hero />
         <CategoryTiles />
         <FeaturedProducts />
