@@ -1,5 +1,24 @@
 ### Team 4 - OFS Delivery System
 
+## Login/logout update
+
+**Login/logout is on main.** Run these after pulling:
+
+```bash
+git checkout main
+git pull
+docker compose down -v
+docker compose up --build
+docker compose exec backend npm run create-manager -- manager@ofs.com manager123 Max Boss
+```
+
+Run the last command in a second terminal while the app is running.
+
+If a port is already in use, replace the `up` command with:
+```bash
+DB_PORT=5433 API_PORT=3002 docker compose up --build
+```
+
 ## Start
 
 Docker Desktop needs to be running.
@@ -40,9 +59,3 @@ Then log in at http://localhost:5173/manager-login.
 Managers land on the manager dashboard after signing in. The dashboard shows an overview of the current product catalog and links to the catalog and customer storefront.
 
 **Forgot password:** users answer the security question they picked at sign-up, then choose a new password. Manager accounts don't have a usable security answer; make a new manager account instead.
-
-**After pulling this change:** the login tables are new, so reset your local database once (this deletes local data):
-
-```bash
-docker compose down -v && docker compose up --build
-```
