@@ -10,6 +10,12 @@ From the repo root:
 docker compose up --build
 ```
 
+If another app is already using port 5432 or 3001, pick other ports for this one:
+
+```bash
+DB_PORT=5433 API_PORT=3002 docker compose up --build
+```
+
 Then open:
 
 - Site: http://localhost:5173
