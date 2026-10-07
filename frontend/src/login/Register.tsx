@@ -76,6 +76,34 @@ export function Register() {
                 required
               />
             </div>
+
+            <div className="mb-4 flex flex-col">
+              <label htmlFor="securityQuestion" className="mb-2 text-[0.96rem] font-semibold text-[#253b2d]">Choose a question <span className="text-[#b42318]" aria-hidden="true">*</span></label>
+              <select
+                id="securityQuestion"
+                name="securityQuestion"
+                className="box-border w-full rounded-[10px] border border-[#e6e6dc] bg-white px-[14px] py-3 text-base text-[#253b2d] transition-[border-color,box-shadow] duration-200 ease-in-out focus:border-[#416449] focus:outline-none focus:ring-[3px] focus:ring-[rgba(65,100,73,0.18)]"
+                defaultValue=""
+                required
+              >
+                <option value="" disabled>Select a security question</option>
+                <option value="last-pet">What was the name of your last pet?</option>
+                <option value="favorite-teacher">Who was your favorite teacher?</option>
+                <option value="dream-car">What is your dream car?</option>
+              </select>
+            </div>
+
+            <div className="mb-4 flex flex-col">
+              <label htmlFor="securityAnswer" className="mb-2 text-[0.96rem] font-semibold text-[#253b2d]">Answer <span className="text-[#b42318]" aria-hidden="true">*</span></label>
+              <input
+                id="securityAnswer"
+                name="securityAnswer"
+                className="box-border w-full rounded-[10px] border border-[#e6e6dc] bg-white px-[14px] py-3 text-base text-[#253b2d] transition-[border-color,box-shadow] duration-200 ease-in-out focus:border-[#416449] focus:outline-none focus:ring-[3px] focus:ring-[rgba(65,100,73,0.18)]"
+                type="text"
+                autoComplete="off"
+                required
+              />
+            </div>
           </div>
 
           {formMessage && <p className="mb-[14px] text-[0.92rem] text-[#8b342b]" role="status">{formMessage}</p>}

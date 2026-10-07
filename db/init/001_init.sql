@@ -15,6 +15,9 @@ CREATE TABLE users (
                     CHECK (role IN ('customer', 'admin')),
   account_status  text NOT NULL DEFAULT 'active'
                     CHECK (account_status IN ('active', 'disabled')),
+  question_choice text NOT NULL
+                    CHECK (question_choice IN ('What is your favorite color?', 'What is your favorite food?', 'What is your favorite movie?')),
+  answer          text NOT NULL,
   created_at      timestamptz NOT NULL DEFAULT now(),
   updated_at      timestamptz NOT NULL DEFAULT now()
 );
