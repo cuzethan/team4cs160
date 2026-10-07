@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { SiteHeader } from "../components/SiteHeader";
 import { products } from "../inventory/InventoryPage";
 import { CartItemCard } from "./CartItemCard";
+import { CartSummary } from "./CartSummary";
 import type { CartItem } from "./types";
 
 const mockCartItems: CartItem[] = [
@@ -119,13 +120,12 @@ export function CartPage() {
               ))}
             </section>
 
-            <aside aria-labelledby="cart-summary-heading" className="rounded-2xl border border-[#e8e7dc] bg-white p-6 shadow-[0_3px_12px_rgba(42,65,48,0.04)]">
-              <h2 id="cart-summary-heading" className="text-xl font-extrabold">Order summary</h2>
-              <dl className="mt-5 space-y-4">
-                <div className="flex justify-between gap-4"><dt className="text-[#667269]">Total price</dt><dd className="font-bold">${calculateTotalPrice().toFixed(2)}</dd></div>
-                <div className="flex justify-between gap-4"><dt className="text-[#667269]">Total weight</dt><dd className="font-bold">{calculateTotalWeight().toFixed(1)} lb</dd></div>
-                <div className="border-t border-[#ecebe2] pt-4"><dt className="text-sm font-bold text-[#55705b]">Delivery fee</dt><dd className="mt-1 text-sm text-[#667269]">Calculated at checkout</dd></div>
-              </dl>
+            <aside className="rounded-2xl border border-[#e8e7dc] bg-white p-6 shadow-[0_3px_12px_rgba(42,65,48,0.04)]">
+              <CartSummary
+                totalPrice={calculateTotalPrice()}
+                totalWeight={calculateTotalWeight()}
+                deliveryStatus="Calculated at checkout"
+              />
               <button type="button" onClick={handleCheckoutClick} disabled className="mt-6 w-full cursor-not-allowed rounded-xl bg-[#416449] px-5 py-3 font-bold text-white opacity-50">Checkout</button>
             </aside>
           </div>
