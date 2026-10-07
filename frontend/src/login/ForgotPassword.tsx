@@ -1,11 +1,14 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
+import { requestPasswordReset } from '../auth/api';
 
 function ForgotPassword() {
   const emailInput = useRef<HTMLInputElement>(null);
   const [formMessage, setFormMessage] = useState('');
+  const [sent, setSent] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const email = emailInput.current;
 
@@ -19,7 +22,14 @@ function ForgotPassword() {
       return;
     }
 
-    setFormMessage('Email format is valid, but password recovery is not connected yet.');
+    setSubmitting(true);
+    try {
+      setFormMessage(await requestPasswordReset(email.value));
+      setSent(true);
+    } catch (err) {
+      setFormMessage((err as Error).message);
+    }
+    setSubmitting(false);
   };
 
   return (
@@ -37,11 +47,14 @@ function ForgotPassword() {
             type="email"
             placeholder="example@gmail.com"
             required
-            onChange={() => setFormMessage('')}
+            onChange={() => {
+              setFormMessage('');
+              setSent(false);
+            }}
           />
         </div>
-        {formMessage && <p className="mx-auto mb-[15px] w-[300px] text-[0.9rem] text-[#b42318]" role="alert">{formMessage}</p>}
-        <button className="mx-auto block w-[300px] cursor-pointer rounded-[10px] border-0 bg-[#2e4935] px-5 py-3 text-white hover:bg-[#253b2d]" type="submit">Send Email</button>
+        {formMessage && <p className={`mx-auto mb-[15px] w-[300px] text-[0.9rem] ${sent ? 'text-[#2e6b3f]' : 'text-[#b42318]'}`} role={sent ? 'status' : 'alert'}>{formMessage}</p>}
+        <button disabled={submitting} className="mx-auto block w-[300px] cursor-pointer disabled:cursor-wait disabled:opacity-70 rounded-[10px] border-0 bg-[#2e4935] px-5 py-3 text-white hover:bg-[#253b2d]" type="submit">{submitting ? 'Sending...' : 'Send Email'}</button>
       </form>
       <Link to="/login" className="mt-[18px] block text-center text-[#416449] no-underline hover:underline">Back to Login</Link>
     </div>

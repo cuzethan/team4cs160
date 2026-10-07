@@ -1,18 +1,32 @@
+import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { login } from "../auth/api";
+import { useAuth } from "../auth/AuthContext";
 import groceryBackground from "./background/grocery_background.jpg";
 
 function LoginForm({ role }: { role: "customer" | "manager" }) {
   const navigate = useNavigate();
+  const { setUser } = useAuth();
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  // TODO: call POST /api/auth/login once it exists; for now just go to the home page.
-  const handleLogin = () => navigate("/");
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    setError("");
+    setSubmitting(true);
+    try {
+      setUser(await login(String(form.get("email")), String(form.get("password")), role));
+      navigate("/");
+    } catch (err) {
+      setError((err as Error).message);
+      setSubmitting(false);
+    }
+  };
 
   return (
     <>
-      <form onSubmit={(event) => {
-        event.preventDefault();
-        handleLogin();
-      }}>
+      <form onSubmit={handleSubmit}>
         <div className="mb-[18px] flex flex-col">
           <label htmlFor="email" className="mb-2 text-[0.96rem] font-semibold text-[#253b2d]">Email:</label>
           <input id="email" name="email" className="box-border w-full rounded-[10px] border border-[#e6e6dc] bg-white px-[14px] py-3 text-base text-[#253b2d] transition-[border-color,box-shadow] duration-200 ease-in-out focus:border-[#416449] focus:outline-none focus:ring-[3px] focus:ring-[rgba(65,100,73,0.18)]" type="email" autoComplete="username" required />
@@ -25,7 +39,9 @@ function LoginForm({ role }: { role: "customer" | "manager" }) {
 
         <Link to="/forgot-password" className="mb-[22px] mt-[6px] inline-block text-[0.9rem] font-medium text-[#416449] no-underline hover:underline">Forgot your password?</Link>
 
-        <button className="w-full cursor-pointer rounded-[10px] border-0 bg-[#2e4935] px-4 py-[14px] text-base font-semibold text-white transition-[transform,box-shadow] duration-200 hover:-translate-y-px hover:bg-[#253b2d] hover:shadow-[0_10px_20px_rgba(42,65,48,0.2)] active:translate-y-0" type="submit">{role === "manager" ? "Manager Login" : "Customer Login"}</button>
+        {error && <p className="mb-[14px] text-[0.92rem] text-[#b42318]" role="alert">{error}</p>}
+
+        <button disabled={submitting} className="w-full cursor-pointer disabled:cursor-wait disabled:opacity-70 rounded-[10px] border-0 bg-[#2e4935] px-4 py-[14px] text-base font-semibold text-white transition-[transform,box-shadow] duration-200 hover:-translate-y-px hover:bg-[#253b2d] hover:shadow-[0_10px_20px_rgba(42,65,48,0.2)] active:translate-y-0" type="submit">{submitting ? "Logging in..." : role === "manager" ? "Manager Login" : "Customer Login"}</button>
       </form>
       {role === "customer" ? (
         <p className="mt-5 border-t border-[#e8e7dc] pt-[18px] text-center text-[#526157]">Don't have an account?{" "}

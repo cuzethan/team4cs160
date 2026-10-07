@@ -21,3 +21,25 @@ Stop the stack with:
 ```bash
 docker compose down
 ```
+
+## Accounts and login
+
+Customers sign up at http://localhost:5173/register. Manager accounts can't sign up on the site; create one from the command line while the stack is running:
+
+```bash
+docker compose exec backend npm run create-manager -- manager@ofs.com yourpassword First Last 408-555-0100
+```
+
+Then log in at http://localhost:5173/manager-login.
+
+**Forgot password:** there is no email service yet, so the reset link is printed in the backend logs instead of emailed. Find it with:
+
+```bash
+docker compose logs backend | grep "password reset"
+```
+
+**After pulling this change:** the login tables are new, so reset your local database once (this deletes local data):
+
+```bash
+docker compose down -v && docker compose up --build
+```

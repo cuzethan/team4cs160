@@ -1,20 +1,43 @@
 import { useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { register } from "../auth/api";
+import { useAuth } from "../auth/AuthContext";
 
 export function Register() {
+  const navigate = useNavigate();
+  const { setUser } = useAuth();
+  const [submitting, setSubmitting] = useState(false);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [formMessage, setFormMessage] = useState("");
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (password !== confirmPassword) {
       setFormMessage("Passwords do not match.");
       return;
     }
+    if (password.length < 8) {
+      setFormMessage("Password must be at least 8 characters.");
+      return;
+    }
 
-    setFormMessage("Account creation is not connected yet.");
+    const form = new FormData(event.currentTarget);
+    setSubmitting(true);
+    try {
+      setUser(await register({
+        firstName: String(form.get("firstName")),
+        lastName: String(form.get("lastName")),
+        phone: String(form.get("phone")),
+        email: String(form.get("email")),
+        password,
+      }));
+      navigate("/");
+    } catch (err) {
+      setFormMessage((err as Error).message);
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -78,8 +101,8 @@ export function Register() {
             </div>
           </div>
 
-          {formMessage && <p className="mb-[14px] text-[0.92rem] text-[#8b342b]" role="status">{formMessage}</p>}
-          <button className="w-full cursor-pointer rounded-[10px] border-0 bg-[#2e4935] px-4 py-[14px] text-base font-semibold text-white transition-[transform,box-shadow] duration-200 hover:-translate-y-px hover:bg-[#253b2d] hover:shadow-[0_10px_20px_rgba(42,65,48,0.2)] active:translate-y-0" type="submit">Create Account</button>
+          {formMessage && <p className="mb-[14px] text-[0.92rem] text-[#8b342b]" role="alert">{formMessage}</p>}
+          <button disabled={submitting} className="w-full cursor-pointer disabled:cursor-wait disabled:opacity-70 rounded-[10px] border-0 bg-[#2e4935] px-4 py-[14px] text-base font-semibold text-white transition-[transform,box-shadow] duration-200 hover:-translate-y-px hover:bg-[#253b2d] hover:shadow-[0_10px_20px_rgba(42,65,48,0.2)] active:translate-y-0" type="submit">{submitting ? "Creating account..." : "Create Account"}</button>
         </form>
 
         <p className="mt-5 text-center text-[0.94rem] text-[#526157]">

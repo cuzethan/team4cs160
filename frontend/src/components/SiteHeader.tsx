@@ -1,6 +1,9 @@
 import { Link } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
 
 export function SiteHeader() {
+  const { user, logout } = useAuth();
+
   return (
     <header className="border-b border-[#ecebe2] bg-[#fffefa]">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4 sm:px-8">
@@ -18,12 +21,27 @@ export function SiteHeader() {
           >
             Shop
           </Link>
-          <Link
-            to="/login"
-            className="rounded-full px-4 py-2.5 text-sm font-bold text-[#426149] hover:bg-[#f0f3e8]"
-          >
-            Log in
-          </Link>
+          {user ? (
+            <>
+              <span className="hidden px-2 text-sm font-semibold text-[#526157] sm:inline">
+                Hi, {user.firstName}
+              </span>
+              <button
+                type="button"
+                onClick={logout}
+                className="cursor-pointer rounded-full px-4 py-2.5 text-sm font-bold text-[#426149] hover:bg-[#f0f3e8]"
+              >
+                Log out
+              </button>
+            </>
+          ) : (
+            <Link
+              to="/login"
+              className="rounded-full px-4 py-2.5 text-sm font-bold text-[#426149] hover:bg-[#f0f3e8]"
+            >
+              Log in
+            </Link>
+          )}
           <button
             type="button"
             className="flex h-11 items-center gap-2 rounded-full border border-[#e5e7dc] bg-white px-4 text-sm font-bold text-[#426149] shadow-sm"
