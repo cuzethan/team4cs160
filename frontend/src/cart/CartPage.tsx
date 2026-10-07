@@ -2,13 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { SiteHeader } from "../components/SiteHeader";
 import { products } from "../inventory/InventoryPage";
-import type { InventoryProduct } from "../inventory/types";
-
-type CartItem = InventoryProduct & {
-  cartItemId: string;
-  quantity: number;
-  weightLbs: number;
-};
+import { CartItemCard } from "./CartItemCard";
+import type { CartItem } from "./types";
 
 const mockCartItems: CartItem[] = [
   {
@@ -114,21 +109,13 @@ export function CartPage() {
           <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
             <section aria-label="Cart items" className="space-y-4">
               {cartItems.map((item) => (
-                <article key={item.cartItemId} className="flex flex-col gap-4 rounded-2xl border border-[#e8e7dc] bg-white p-5 shadow-[0_3px_12px_rgba(42,65,48,0.04)] sm:flex-row sm:items-center">
-                  <span aria-hidden="true" className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-[#f3f5e9] text-4xl">{item.emoji}</span>
-                  <div className="min-w-0 flex-1">
-                    <h2 className="truncate text-lg font-bold">{item.name}</h2>
-                    <p className="mt-1 text-sm text-[#788078]">${item.price.toFixed(2)} / {item.unit}</p>
-                    <p className="mt-1 text-sm text-[#788078]">{(item.weightLbs * item.quantity).toFixed(1)} lb total</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <button type="button" onClick={() => handleDecreaseQuantity(item.cartItemId)} aria-label={`Decrease ${item.name} quantity`} className="flex h-9 w-9 items-center justify-center rounded-full border border-[#dce2d5] font-bold hover:bg-[#f3f5e9]">−</button>
-                    <span aria-label={`Quantity ${item.quantity}`} className="min-w-6 text-center font-bold">{item.quantity}</span>
-                    <button type="button" onClick={() => handleIncreaseQuantity(item.cartItemId)} disabled={item.quantity >= item.quantityInStock} aria-label={`Increase ${item.name} quantity`} className="flex h-9 w-9 items-center justify-center rounded-full border border-[#dce2d5] font-bold hover:bg-[#f3f5e9] disabled:cursor-not-allowed disabled:opacity-40">+</button>
-                  </div>
-                  <p className="min-w-20 text-right font-extrabold">${(item.price * item.quantity).toFixed(2)}</p>
-                  <button type="button" onClick={() => handleRemoveItem(item.cartItemId)} className="text-left text-sm font-bold text-[#8b5145] underline sm:text-center">Remove</button>
-                </article>
+                <CartItemCard
+                  key={item.cartItemId}
+                  item={item}
+                  onIncrease={handleIncreaseQuantity}
+                  onDecrease={handleDecreaseQuantity}
+                  onRemove={handleRemoveItem}
+                />
               ))}
             </section>
 
