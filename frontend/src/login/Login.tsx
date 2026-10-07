@@ -16,8 +16,9 @@ function LoginForm({ role }: { role: "customer" | "manager" }) {
     setError("");
     setSubmitting(true);
     try {
-      setUser(await login(String(form.get("email")), String(form.get("password")), role));
-      navigate("/");
+      const user = await login(String(form.get("email")), String(form.get("password")), role);
+      setUser(user);
+      navigate(user.role === "manager" ? "/manager-dashboard" : "/");
     } catch (err) {
       setError((err as Error).message);
       setSubmitting(false);

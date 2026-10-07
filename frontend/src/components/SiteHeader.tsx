@@ -71,11 +71,27 @@ export function SiteHeader() {
         </Link>
         <nav aria-label="Main" className="flex items-center gap-2 sm:gap-3">
           <Link
-            to="/inventory"
+            to={user?.role === "manager" ? "/manager-dashboard" : "/inventory"}
             className="rounded-full px-4 py-2.5 text-sm font-bold text-[#426149] hover:bg-[#f0f3e8]"
           >
-            Shop
+            {user?.role === "manager" ? "Dashboard" : "Shop"}
           </Link>
+          {user?.role === "manager" && (
+            <>
+              <Link
+                to="/inventory"
+                className="rounded-full px-4 py-2.5 text-sm font-bold text-[#426149] hover:bg-[#f0f3e8]"
+              >
+                Catalog
+              </Link>
+              <Link
+                to="/"
+                className="rounded-full px-4 py-2.5 text-sm font-bold text-[#426149] hover:bg-[#f0f3e8]"
+              >
+                Customer Storefront
+              </Link>
+            </>
+          )}
           {user ? (
             <>
               <span className="flex items-center gap-2 rounded-full bg-[#eef6e8] px-3 py-2 text-sm font-bold text-[#2e4935]">

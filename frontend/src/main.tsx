@@ -9,6 +9,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { InventoryPage } from "./inventory/InventoryPage";
 import { HomePage } from "./home/HomePage";
 import { CartPage } from "./cart/CartPage";
+import { ManagerDashboard } from "./manager/ManagerDashboard";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -20,6 +21,7 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/login" element={<Login />} />
           <Route path="/customer-login" element={<DedicatedLogin role="customer" />} />
           <Route path="/manager-login" element={<DedicatedLogin role="manager" />} />
+          <Route path="/manager-dashboard" element={<ManagerDashboard />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/register" element={<Register />} />
           <Route path="/inventory" element={<InventoryPage />} />
