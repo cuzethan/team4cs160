@@ -37,6 +37,7 @@ docker compose exec backend npm run create-manager -- manager@ofs.com yourpasswo
 ```
 
 Then log in at http://localhost:5173/manager-login.
+Managers land on the manager dashboard after signing in. The dashboard shows an overview of the current product catalog and links to the catalog and customer storefront.
 
 **Forgot password:** users answer the security question they picked at sign-up, then choose a new password. Manager accounts don't have a usable security answer; make a new manager account instead.
 

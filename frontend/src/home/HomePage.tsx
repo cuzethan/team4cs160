@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { SiteHeader } from "../components/SiteHeader";
 import { products } from "../inventory/InventoryPage";
@@ -243,6 +243,15 @@ function NoticeBanner() {
 }
 
 export function HomePage() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <main className="p-8 text-center text-[#5f6b61]" aria-live="polite">Loading your account...</main>;
+  }
+  if (user?.role === "manager") {
+    return <Navigate to="/manager-dashboard" replace />;
+  }
+
   return (
     <div className="min-h-screen bg-[#fbfaf5] text-[#253b2d]">
       <SiteHeader />
