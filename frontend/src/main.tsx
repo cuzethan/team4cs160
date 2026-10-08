@@ -8,7 +8,9 @@ import { AuthProvider } from "./auth/AuthContext";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { InventoryPage } from "./inventory/InventoryPage";
 import { HomePage } from "./home/HomePage";
+import { CartPage } from "./cart/CartPage";
 import { ManagerDashboard } from "./manager/ManagerDashboard";
+import { CustomerOrderHistoryPage } from "./orders/CustomerOrderHistoryPage";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -25,6 +27,8 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/register" element={<Register />} />
           <Route path="/inventory" element={<InventoryPage />} />
+          <Route path="/orders" element={<CustomerOrderHistoryPage />} />
+          <Route path="/cart" element={<CartPage />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

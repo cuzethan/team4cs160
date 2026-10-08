@@ -119,13 +119,13 @@ export function SiteHeader() {
               Log in
             </Link>
           )}
-          <button
-            type="button"
+          <Link
+            to="/cart"
             className="flex h-11 items-center gap-2 rounded-full border border-[#e5e7dc] bg-white px-4 text-sm font-bold text-[#426149] shadow-sm"
           >
             <span aria-hidden="true">🛒</span>
             <span className="hidden sm:inline">Your cart</span>
-          </button>
+          </Link>
         </nav>
       </div>
       {confirmingLogout && (

@@ -210,12 +210,12 @@ function OrdersBanner() {
           Check your orders and see where your robot is right now.
         </p>
       </div>
-      <button
-        type="button"
+      <Link
+        to="/orders"
         className="rounded-full border-2 border-[#2e4935] px-5 py-2.5 text-sm font-bold text-[#2e4935] transition hover:bg-[#2e4935] hover:text-white"
       >
         View my orders
-      </button>
+      </Link>
     </section>
   );
 }
