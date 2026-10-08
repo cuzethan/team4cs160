@@ -85,7 +85,7 @@ export function SiteHeader() {
                 Catalog
               </Link>
               <Link
-                to="/"
+                to="/customer-storefront"
                 className="rounded-full px-4 py-2.5 text-sm font-bold text-[#426149] hover:bg-[#f0f3e8]"
               >
                 Customer Storefront

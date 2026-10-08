@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchCurrentUser, login, logout } from "../src/auth/api";
+import { fetchCurrentUser, fetchCustomers, login, logout } from "../src/auth/api";
 
 function mockFetch(status: number, body: unknown) {
   const fetchMock = vi.fn().mockResolvedValue(
@@ -43,5 +43,22 @@ describe("auth api client", () => {
   it("handles the empty logout response", async () => {
     mockFetch(204, null);
     await expect(logout()).resolves.toBeUndefined();
+  });
+
+  it("fetches the customer directory", async () => {
+    const customers = [{
+      id: "1",
+      firstName: "Lee",
+      lastName: "Nguyen",
+      email: "lee@ofs.com",
+      phone: "408-555-0100",
+      accountStatus: "active",
+      createdAt: "2026-01-01T00:00:00.000Z",
+    }];
+    const fetchMock = mockFetch(200, { customers });
+
+    await expect(fetchCustomers()).resolves.toEqual(customers);
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/auth/customers");
+    expect(fetchMock.mock.calls[0][1].method).toBe("GET");
   });
 });

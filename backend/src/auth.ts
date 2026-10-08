@@ -183,6 +183,20 @@ export function createAuthRouter({ store, secureCookies }: AuthOptions) {
     res.json({ user: toPublicUser(user) });
   }));
 
+  router.get("/customers", handle(async (req, res) => {
+    const token = req.cookies?.[SESSION_COOKIE];
+    const user = typeof token === "string" ? await store.findSessionUser(hashToken(token)) : null;
+    if (!user || user.accountStatus !== "active") {
+      return res.status(401).json({ error: "Not logged in." });
+    }
+    if (user.role !== "admin") {
+      return res.status(403).json({ error: "Manager access is required." });
+    }
+
+    const customers = await store.listCustomers();
+    res.json({ customers });
+  }));
+
   // Password recovery, step 1: look up the account's security question.
   router.post("/recovery/question", handle(async (req, res) => {
     const email = text(req.body?.email);

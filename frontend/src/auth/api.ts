@@ -7,6 +7,16 @@ export type User = {
   role: "customer" | "manager";
 };
 
+export type Customer = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  accountStatus: "active" | "disabled";
+  createdAt: string;
+};
+
 export type RegisterInput = {
   firstName: string;
   lastName: string;
@@ -55,6 +65,10 @@ export async function register(input: RegisterInput) {
 
 export async function logout() {
   await request<null>("/logout", {});
+}
+
+export async function fetchCustomers() {
+  return (await request<{ customers: Customer[] }>("/customers")).customers;
 }
 
 // Returns the logged-in user, or null if there isn't one.

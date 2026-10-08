@@ -244,11 +244,12 @@ function NoticeBanner() {
 
 export function HomePage() {
   const { user, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return <main className="p-8 text-center text-[#5f6b61]" aria-live="polite">Loading your account...</main>;
   }
-  if (user?.role === "manager") {
+  if (user?.role === "manager" && location.pathname !== "/customer-storefront") {
     return <Navigate to="/manager-dashboard" replace />;
   }
 

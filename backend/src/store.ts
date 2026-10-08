@@ -17,6 +17,16 @@ export type User = {
 
 export type NewUser = Omit<User, "userId" | "accountStatus">;
 
+export type CustomerRecord = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  accountStatus: "active" | "disabled";
+  createdAt: Date;
+};
+
 export class EmailTakenError extends Error {
   constructor() {
     super("An account with this email already exists.");
@@ -27,6 +37,7 @@ export class EmailTakenError extends Error {
 // used by the server; tests swap in an in-memory one.
 export interface AuthStore {
   findUserByEmail(email: string): Promise<User | null>;
+  listCustomers(): Promise<CustomerRecord[]>;
   createUser(user: NewUser): Promise<User>;
   updatePassword(userId: string, passwordHash: string): Promise<void>;
 
@@ -54,6 +65,17 @@ export function createPgStore(pool: pg.Pool): AuthStore {
         [email],
       );
       return rows[0] ?? null;
+    },
+
+    async listCustomers() {
+      const { rows } = await pool.query<CustomerRecord>(
+        `SELECT user_id AS id, first_name AS "firstName", last_name AS "lastName",
+                email, phone, account_status AS "accountStatus", created_at AS "createdAt"
+         FROM users
+         WHERE role = 'customer'
+         ORDER BY last_name, first_name, email`,
+      );
+      return rows;
     },
 
     async createUser(user) {

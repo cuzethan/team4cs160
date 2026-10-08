@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
-import { EmailTakenError, type AuthStore, type User } from "../src/store.js";
+import { EmailTakenError, type AuthStore, type CustomerRecord, type User } from "../src/store.js";
 
 function createMemoryStore() {
   const users = new Map<string, User>();
@@ -13,6 +13,19 @@ function createMemoryStore() {
   const store: AuthStore = {
     async findUserByEmail(email) {
       return [...users.values()].find((u) => u.email.toLowerCase() === email.toLowerCase()) ?? null;
+    },
+    async listCustomers() {
+      return [...users.values()]
+        .filter((user) => user.role === "customer")
+        .map((user): CustomerRecord => ({
+          id: user.userId,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          phone: user.phone,
+          accountStatus: user.accountStatus,
+          createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        }));
     },
     async createUser(user) {
       if (await store.findUserByEmail(user.email)) throw new EmailTakenError();
@@ -160,6 +173,49 @@ describe("auth API", () => {
       .send({ email: "manager@ofs.com", password: "manager123", role: "manager" });
     expect(manager.status).toBe(200);
     expect(manager.body.user.role).toBe("manager");
+  });
+
+  it("lists customer account details for managers only", async () => {
+    await request(app).post("/api/auth/register").send(customer);
+    const customerAgent = request.agent(app);
+    await customerAgent.post("/api/auth/login").send({
+      email: customer.email,
+      password: customer.password,
+      role: "customer",
+    });
+
+    const forbidden = await customerAgent.get("/api/auth/customers");
+    expect(forbidden.status).toBe(403);
+
+    await memory.store.createUser({
+      firstName: "Max",
+      lastName: "Boss",
+      phone: "000",
+      email: "manager@ofs.com",
+      passwordHash: await bcrypt.hash("manager123", 4),
+      role: "admin",
+      questionChoice: "What is your dream car?",
+      answerHash: await bcrypt.hash("tesla", 4),
+    });
+    const managerAgent = request.agent(app);
+    await managerAgent.post("/api/auth/login").send({
+      email: "manager@ofs.com",
+      password: "manager123",
+      role: "manager",
+    });
+
+    const response = await managerAgent.get("/api/auth/customers");
+    expect(response.status).toBe(200);
+    expect(response.body.customers).toHaveLength(1);
+    expect(response.body.customers[0]).toMatchObject({
+      firstName: "Lee",
+      lastName: "Nguyen",
+      email: "Lee@ofs.com",
+      phone: "(408) 555-0100",
+      accountStatus: "active",
+    });
+    expect(response.body.customers[0]).toHaveProperty("createdAt");
+    expect(JSON.stringify(response.body)).not.toMatch(/password|question|answer/i);
   });
 
   it("blocks disabled accounts", async () => {

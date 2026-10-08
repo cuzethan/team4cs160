@@ -16,6 +16,7 @@ createRoot(document.getElementById("root")!).render(
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<HomePage />} />
+          <Route path="/customer-storefront" element={<HomePage />} />
           <Route path="/home" element={<Navigate to="/" replace />} />
           <Route path="/login" element={<Login />} />
           <Route path="/customer-login" element={<DedicatedLogin role="customer" />} />
