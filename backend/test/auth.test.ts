@@ -2,11 +2,15 @@ import bcrypt from "bcryptjs";
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
-import { createMemoryCartStore, createMemoryOrderStore, createMemoryStore } from "./memoryStores.js";
+import { createMemoryCartStore, createMemoryOrderStore, createMemoryProductStore, createMemoryStore } from "./memoryStores.js";
 
 function memoryShopStores() {
   const cart = createMemoryCartStore([]);
-  return { cartStore: cart.cartStore, orderStore: createMemoryOrderStore(cart).orderStore };
+  return {
+    cartStore: cart.cartStore,
+    orderStore: createMemoryOrderStore(cart).orderStore,
+    productStore: createMemoryProductStore(cart).productStore,
+  };
 }
 
 const customer = {

@@ -64,6 +64,6 @@ Customers' carts are saved in the database, so they persist across logins and de
 
 Checkout (`POST /api/orders`) turns the cart into an order with a delivery address. It checks stock, takes the items out of inventory, and empties the cart in one transaction. Orders under 20 lbs ship free; 20 lbs or more adds a $10 fee. Payment is simulated: every order is marked paid. Customers see their orders at http://localhost:5173/orders (`GET /api/orders/mine`).
 
-The starter products are seeded by `db/init/003_products.sql`. If your database volume predates it, recreate it with `docker compose down -v && docker compose up --build` (this deletes existing accounts, so re-run `create-manager` afterwards).
+Products come from the database through `GET /api/products` (public, active products only). The inventory page's search, category filters, and item counts all work off that list, so stock goes down there after a purchase. Categories and the starter products are seeded by `db/init/003_products.sql`, which also adds `category_id` and `unit` columns to `Product`. If your database volume predates it, recreate it with `docker compose down -v && docker compose up --build` (this deletes existing accounts, so re-run `create-manager` afterwards).
 
 **Forgot password:** users answer the security question they picked at sign-up, then choose a new password. Manager accounts don't have a usable security answer; make a new manager account instead.

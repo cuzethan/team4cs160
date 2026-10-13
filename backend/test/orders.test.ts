@@ -1,7 +1,7 @@
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
-import { createMemoryCartStore, createMemoryOrderStore, createMemoryStore } from "./memoryStores.js";
+import { createMemoryCartStore, createMemoryOrderStore, createMemoryProductStore, createMemoryStore } from "./memoryStores.js";
 
 const APPLES = "00000000-0000-4000-8000-000000000001";
 const RICE = "00000000-0000-4000-8000-000000000010";
@@ -30,13 +30,14 @@ describe("orders API", () => {
 
   beforeEach(() => {
     cart = createMemoryCartStore([
-      { productId: APPLES, name: "Gala Apples", price: 1.49, weightLbs: 1, quantityInStock: 5, active: true },
-      { productId: RICE, name: "Jasmine Rice", price: 5.99, weightLbs: 2, quantityInStock: 20, active: true },
+      { productId: APPLES, name: "Gala Apples", category: "Test", unit: "each", price: 1.49, weightLbs: 1, quantityInStock: 5, active: true },
+      { productId: RICE, name: "Jasmine Rice", category: "Test", unit: "each", price: 5.99, weightLbs: 2, quantityInStock: 20, active: true },
     ]);
     app = createApp({
       store: createMemoryStore().store,
       cartStore: cart.cartStore,
       orderStore: createMemoryOrderStore(cart).orderStore,
+      productStore: createMemoryProductStore(cart).productStore,
       appUrl: "http://localhost:5173",
       secureCookies: false,
       checkDatabase: async () => {},

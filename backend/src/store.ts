@@ -146,9 +146,46 @@ export function createPgStore(pool: pg.Pool): AuthStore {
   };
 }
 
+// A product as shoppers see it in the catalog.
+export type CatalogProduct = {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  price: number;
+  weightLbs: number;
+  unit: string;
+  quantityInStock: number;
+  imageUrl: string | null;
+};
+
+export interface ProductStore {
+  // Active products only, ordered by category then name.
+  listProducts(): Promise<CatalogProduct[]>;
+}
+
+export function createPgProductStore(pool: pg.Pool): ProductStore {
+  return {
+    async listProducts() {
+      const { rows } = await pool.query<CatalogProduct>(
+        `SELECT p.product_id AS id, p.product_name AS name, COALESCE(c.category_name, 'Other') AS category,
+                COALESCE(p.description, '') AS description, p.price::float8 AS price,
+                p.weight::float8 AS "weightLbs", p.unit, p.quantity_in_stock AS "quantityInStock",
+                p.image_url AS "imageUrl"
+         FROM Product p LEFT JOIN Category c ON c.category_id = p.category_id
+         WHERE p.active
+         ORDER BY category, p.product_name`,
+      );
+      return rows;
+    },
+  };
+}
+
 export type CartProduct = {
   productId: string;
   name: string;
+  category: string;
+  unit: string;
   price: number;
   weightLbs: number;
   quantityInStock: number;
@@ -159,6 +196,8 @@ export type CartLine = {
   cartItemId: string;
   productId: string;
   name: string;
+  category: string;
+  unit: string;
   price: number;
   weightLbs: number;
   quantityInStock: number;
@@ -179,9 +218,11 @@ export function createPgCartStore(pool: pg.Pool): CartStore {
   return {
     async findProduct(productId) {
       const { rows } = await pool.query<CartProduct>(
-        `SELECT product_id AS "productId", product_name AS name, price::float8 AS price,
-                weight::float8 AS "weightLbs", quantity_in_stock AS "quantityInStock", active
-         FROM Product WHERE product_id = $1`,
+        `SELECT p.product_id AS "productId", p.product_name AS name,
+                COALESCE(c.category_name, 'Other') AS category, p.unit, p.price::float8 AS price,
+                p.weight::float8 AS "weightLbs", p.quantity_in_stock AS "quantityInStock", p.active
+         FROM Product p LEFT JOIN Category c ON c.category_id = p.category_id
+         WHERE p.product_id = $1`,
         [productId],
       );
       return rows[0] ?? null;
@@ -190,11 +231,12 @@ export function createPgCartStore(pool: pg.Pool): CartStore {
     async listCartItems(userId) {
       const { rows } = await pool.query<CartLine>(
         `SELECT ci.cart_item_id AS "cartItemId", p.product_id AS "productId", p.product_name AS name,
-                p.price::float8 AS price, p.weight::float8 AS "weightLbs",
+                COALESCE(c.category_name, 'Other') AS category, p.unit, p.price::float8 AS price, p.weight::float8 AS "weightLbs",
                 p.quantity_in_stock AS "quantityInStock", ci.quantity
          FROM ShoppingCart sc
          JOIN CartItems ci ON ci.cart_id = sc.cart_id
          JOIN Product p ON p.product_id = ci.product_id
+         LEFT JOIN Category c ON c.category_id = p.category_id
          WHERE sc.user_id = $1
          ORDER BY p.product_name`,
         [userId],

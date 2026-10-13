@@ -2,7 +2,7 @@ import bcrypt from "bcryptjs";
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
-import { createMemoryCartStore, createMemoryOrderStore, createMemoryStore } from "./memoryStores.js";
+import { createMemoryCartStore, createMemoryOrderStore, createMemoryProductStore, createMemoryStore } from "./memoryStores.js";
 
 const APPLES = "00000000-0000-4000-8000-000000000001";
 const BREAD = "00000000-0000-4000-8000-000000000011";
@@ -26,14 +26,15 @@ describe("cart API", () => {
   beforeEach(() => {
     memory = createMemoryStore();
     const cart = createMemoryCartStore([
-      { productId: APPLES, name: "Gala Apples", price: 1.49, weightLbs: 1, quantityInStock: 5, active: true },
-      { productId: BREAD, name: "Whole Grain Bread", price: 4.19, weightLbs: 1.2, quantityInStock: 11, active: true },
-      { productId: RETIRED, name: "Old Cereal", price: 2, weightLbs: 1, quantityInStock: 9, active: false },
+      { productId: APPLES, name: "Gala Apples", category: "Test", unit: "each", price: 1.49, weightLbs: 1, quantityInStock: 5, active: true },
+      { productId: BREAD, name: "Whole Grain Bread", category: "Test", unit: "each", price: 4.19, weightLbs: 1.2, quantityInStock: 11, active: true },
+      { productId: RETIRED, name: "Old Cereal", category: "Test", unit: "each", price: 2, weightLbs: 1, quantityInStock: 9, active: false },
     ]);
     app = createApp({
       store: memory.store,
       cartStore: cart.cartStore,
       orderStore: createMemoryOrderStore(cart).orderStore,
+      productStore: createMemoryProductStore(cart).productStore,
       appUrl: "http://localhost:5173",
       secureCookies: false,
       checkDatabase: async () => {},
@@ -76,7 +77,7 @@ describe("cart API", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.items).toEqual([
-      expect.objectContaining({ productId: APPLES, name: "Gala Apples", price: 1.49, weightLbs: 1, quantity: 3 }),
+      expect.objectContaining({ productId: APPLES, name: "Gala Apples", category: "Test", unit: "each", price: 1.49, weightLbs: 1, quantity: 3 }),
       expect.objectContaining({ productId: BREAD, quantity: 1 }),
     ]);
     expect((await agent.get("/api/cart")).body.items).toHaveLength(2);

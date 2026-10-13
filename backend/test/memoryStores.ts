@@ -9,6 +9,7 @@ import {
   CheckoutError,
   type OrderRecord,
   type OrderStore,
+  type ProductStore,
   type User,
 } from "../src/store.js";
 import { deliveryFeeFor, roundCents } from "../src/pricing.js";
@@ -90,6 +91,8 @@ export function createMemoryCartStore(products: CartProduct[]) {
             cartItemId: line.cartItemId,
             productId,
             name: product.name,
+            category: product.category,
+            unit: product.unit,
             price: product.price,
             weightLbs: product.weightLbs,
             quantityInStock: product.quantityInStock,
@@ -164,4 +167,22 @@ export function createMemoryOrderStore({ cartStore, products, carts }: ReturnTyp
   };
 
   return { orderStore };
+}
+
+export function createMemoryProductStore({ products }: ReturnType<typeof createMemoryCartStore>) {
+  const productStore: ProductStore = {
+    async listProducts() {
+      return [...products.values()]
+        .filter((product) => product.active)
+        .map(({ productId, active: _active, ...product }) => ({
+          ...product,
+          id: productId,
+          description: "",
+          imageUrl: null,
+        }))
+        .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name));
+    },
+  };
+
+  return { productStore };
 }
