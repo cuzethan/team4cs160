@@ -13,22 +13,26 @@ function quantityValue(value: unknown) {
   return Number.isInteger(value) && (value as number) > 0 ? (value as number) : null;
 }
 
-export function createCartRouter({ store, cartStore }: CartOptions) {
-  const router = express.Router();
-
-  // Sends the right error and returns null unless a customer is logged in.
-  async function requireCustomer(req: Request, res: Response): Promise<User | null> {
+// Returns a check that sends the right error and returns null unless a customer is logged in.
+export function createCustomerGuard(store: AuthStore, loggedOutMessage: string) {
+  return async (req: Request, res: Response): Promise<User | null> => {
     const user = await findCurrentUser(store, req);
     if (!user) {
-      res.status(401).json({ error: "Please log in to use your cart." });
+      res.status(401).json({ error: loggedOutMessage });
       return null;
     }
     if (user.role !== "customer") {
-      res.status(403).json({ error: "Only customer accounts have a cart." });
+      res.status(403).json({ error: "Only customer accounts can shop." });
       return null;
     }
     return user;
-  }
+  };
+}
+
+export function createCartRouter({ store, cartStore }: CartOptions) {
+  const router = express.Router();
+
+  const requireCustomer = createCustomerGuard(store, "Please log in to use your cart.");
 
   // Checks the product can be bought in this quantity. Sends the error and returns false if not.
   async function checkStock(res: Response, productId: string, quantity: number) {

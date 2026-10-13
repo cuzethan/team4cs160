@@ -3,14 +3,16 @@ import cors from "cors";
 import express from "express";
 import { createAuthRouter, type AuthOptions } from "./auth.js";
 import { createCartRouter } from "./cart.js";
-import type { CartStore } from "./store.js";
+import { createOrderRouter } from "./orders.js";
+import type { CartStore, OrderStore } from "./store.js";
 
 export type AppOptions = AuthOptions & {
   cartStore: CartStore;
+  orderStore: OrderStore;
   checkDatabase: () => Promise<void>;
 };
 
-export function createApp({ checkDatabase, cartStore, ...authOptions }: AppOptions) {
+export function createApp({ checkDatabase, cartStore, orderStore, ...authOptions }: AppOptions) {
   const app = express();
 
   app.use(cors({ origin: authOptions.appUrl, credentials: true }));
@@ -28,6 +30,7 @@ export function createApp({ checkDatabase, cartStore, ...authOptions }: AppOptio
 
   app.use("/api/auth", createAuthRouter(authOptions));
   app.use("/api/cart", createCartRouter({ store: authOptions.store, cartStore }));
+  app.use("/api/orders", createOrderRouter({ store: authOptions.store, orderStore }));
 
   return app;
 }

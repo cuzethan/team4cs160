@@ -1,4 +1,6 @@
+import { randomUUID } from "node:crypto";
 import type pg from "pg";
+import { deliveryFeeFor, roundCents } from "./pricing.js";
 
 export type Role = "customer" | "admin";
 
@@ -220,6 +222,178 @@ export function createPgCartStore(pool: pg.Pool): CartStore {
          WHERE ci.cart_id = sc.cart_id AND sc.user_id = $1 AND ci.product_id = $2`,
         [userId, productId],
       );
+    },
+  };
+}
+
+export type NewAddress = {
+  street: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  deliveryInstructions: string;
+};
+
+export type OrderLine = {
+  orderItemId: string;
+  productId: string;
+  productName: string;
+  quantity: number;
+  priceAtPurchase: number;
+  weightAtPurchase: number;
+};
+
+export type OrderRecord = {
+  orderId: string;
+  createdAt: Date;
+  orderStatus: string;
+  paymentStatus: string;
+  subtotal: number;
+  deliveryFee: number;
+  grandTotal: number;
+  totalWeight: number;
+  items: OrderLine[];
+};
+
+// Thrown when checkout can't go ahead; the message is safe to show the customer.
+export class CheckoutError extends Error {}
+
+export interface OrderStore {
+  // Turns the user's cart into a paid order in one transaction: checks stock, saves the
+  // address, order, items and payment, takes the items out of stock, and empties the cart.
+  placeOrder(userId: string, address: NewAddress): Promise<OrderRecord>;
+  listOrders(userId: string): Promise<OrderRecord[]>;
+}
+
+type OrderRow = Omit<OrderRecord, "items">;
+
+const orderColumns = `
+  o.order_id AS "orderId", o.created_at AS "createdAt", o.order_status AS "orderStatus",
+  o.payment_status AS "paymentStatus", o.subtotal::float8 AS subtotal,
+  o.delivery_fee::float8 AS "deliveryFee", o.grand_total::float8 AS "grandTotal",
+  o.total_weight::float8 AS "totalWeight"
+`;
+
+async function loadOrderItems(client: pg.Pool | pg.PoolClient, orderIds: string[]) {
+  const { rows } = await client.query<OrderLine & { orderId: string }>(
+    `SELECT oi.order_id AS "orderId", oi.order_item_id AS "orderItemId", oi.product_id AS "productId",
+            p.product_name AS "productName", oi.quantity,
+            oi.price_at_purchase::float8 AS "priceAtPurchase", oi.weight_at_purchase::float8 AS "weightAtPurchase"
+     FROM OrderItem oi JOIN Product p ON p.product_id = oi.product_id
+     WHERE oi.order_id = ANY($1)
+     ORDER BY p.product_name`,
+    [orderIds],
+  );
+  return rows;
+}
+
+function attachItems(orders: OrderRow[], lines: (OrderLine & { orderId: string })[]): OrderRecord[] {
+  return orders.map((order) => ({
+    ...order,
+    items: lines
+      .filter((line) => line.orderId === order.orderId)
+      .map(({ orderId: _orderId, ...line }) => line),
+  }));
+}
+
+export function createPgOrderStore(pool: pg.Pool): OrderStore {
+  return {
+    async placeOrder(userId, address) {
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+
+        // Lock the products being bought so two checkouts can't oversell the same stock.
+        const { rows: lines } = await client.query<{
+          productId: string; name: string; price: number; weight: number;
+          stock: number; active: boolean; quantity: number;
+        }>(
+          `SELECT p.product_id AS "productId", p.product_name AS name, p.price::float8 AS price,
+                  p.weight::float8 AS weight, p.quantity_in_stock AS stock, p.active, ci.quantity
+           FROM ShoppingCart sc
+           JOIN CartItems ci ON ci.cart_id = sc.cart_id
+           JOIN Product p ON p.product_id = ci.product_id
+           WHERE sc.user_id = $1
+           ORDER BY p.product_id
+           FOR UPDATE OF p`,
+          [userId],
+        );
+        if (lines.length === 0) throw new CheckoutError("Your cart is empty.");
+        for (const line of lines) {
+          if (!line.active) throw new CheckoutError(`${line.name} is no longer available. Remove it to continue.`);
+          if (line.quantity > line.stock) {
+            throw new CheckoutError(`Only ${line.stock} of ${line.name} left in stock. Update your cart to continue.`);
+          }
+        }
+
+        const subtotal = roundCents(lines.reduce((sum, line) => sum + line.price * line.quantity, 0));
+        const totalWeight = roundCents(lines.reduce((sum, line) => sum + line.weight * line.quantity, 0));
+        const deliveryFee = deliveryFeeFor(totalWeight);
+        const grandTotal = roundCents(subtotal + deliveryFee);
+
+        const { rows: [{ addressId }] } = await client.query<{ addressId: string }>(
+          `INSERT INTO Address (user_id, street, city, state, zip_code, delivery_instructions)
+           VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''))
+           RETURNING address_id AS "addressId"`,
+          [userId, address.street, address.city, address.state, address.zipCode, address.deliveryInstructions],
+        );
+
+        const { rows: [order] } = await client.query<OrderRow>(
+          `INSERT INTO Orders AS o
+             (user_id, address_id, order_status, payment_status, subtotal, delivery_fee, grand_total, total_weight)
+           VALUES ($1, $2, 'placed', 'paid', $3, $4, $5, $6)
+           RETURNING ${orderColumns}`,
+          [userId, addressId, subtotal, deliveryFee, grandTotal, totalWeight],
+        );
+
+        for (const line of lines) {
+          await client.query(
+            `INSERT INTO OrderItem (order_id, product_id, quantity, price_at_purchase, weight_at_purchase)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [order.orderId, line.productId, line.quantity, line.price, line.weight],
+          );
+          await client.query(
+            `UPDATE Product SET quantity_in_stock = quantity_in_stock - $2, updated_at = now()
+             WHERE product_id = $1`,
+            [line.productId, line.quantity],
+          );
+          await client.query(
+            `INSERT INTO Transactions (user_id, product_id, transaction_type, quantity_changed, quantity_after_change, reason)
+             VALUES ($1, $2, 'sale', $3, $4, $5)`,
+            [userId, line.productId, -line.quantity, line.stock - line.quantity, `Order ${order.orderId}`],
+          );
+        }
+
+        // Payment is simulated: every checkout is approved straight away.
+        await client.query(
+          `INSERT INTO Payment (order_id, payment_amount, payment_status, payment_method, transaction_reference, processed_at)
+           VALUES ($1, $2, 'paid', 'card', $3, now())`,
+          [order.orderId, grandTotal, `SIM-${randomUUID()}`],
+        );
+
+        await client.query(
+          "DELETE FROM CartItems WHERE cart_id = (SELECT cart_id FROM ShoppingCart WHERE user_id = $1)",
+          [userId],
+        );
+
+        const items = await loadOrderItems(client, [order.orderId]);
+        await client.query("COMMIT");
+        return attachItems([order], items)[0];
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+
+    async listOrders(userId) {
+      const { rows: orders } = await pool.query<OrderRow>(
+        `SELECT ${orderColumns} FROM Orders o WHERE o.user_id = $1 ORDER BY o.created_at DESC`,
+        [userId],
+      );
+      if (orders.length === 0) return [];
+      return attachItems(orders, await loadOrderItems(pool, orders.map((order) => order.orderId)));
     },
   };
 }

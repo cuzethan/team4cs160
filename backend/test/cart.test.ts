@@ -2,7 +2,7 @@ import bcrypt from "bcryptjs";
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
-import { createMemoryCartStore, createMemoryStore } from "./memoryStores.js";
+import { createMemoryCartStore, createMemoryOrderStore, createMemoryStore } from "./memoryStores.js";
 
 const APPLES = "00000000-0000-4000-8000-000000000001";
 const BREAD = "00000000-0000-4000-8000-000000000011";
@@ -25,14 +25,15 @@ describe("cart API", () => {
 
   beforeEach(() => {
     memory = createMemoryStore();
-    const { cartStore } = createMemoryCartStore([
+    const cart = createMemoryCartStore([
       { productId: APPLES, name: "Gala Apples", price: 1.49, weightLbs: 1, quantityInStock: 5, active: true },
       { productId: BREAD, name: "Whole Grain Bread", price: 4.19, weightLbs: 1.2, quantityInStock: 11, active: true },
       { productId: RETIRED, name: "Old Cereal", price: 2, weightLbs: 1, quantityInStock: 9, active: false },
     ]);
     app = createApp({
       store: memory.store,
-      cartStore,
+      cartStore: cart.cartStore,
+      orderStore: createMemoryOrderStore(cart).orderStore,
       appUrl: "http://localhost:5173",
       secureCookies: false,
       checkDatabase: async () => {},

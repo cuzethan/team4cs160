@@ -2,7 +2,12 @@ import bcrypt from "bcryptjs";
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
-import { createMemoryCartStore, createMemoryStore } from "./memoryStores.js";
+import { createMemoryCartStore, createMemoryOrderStore, createMemoryStore } from "./memoryStores.js";
+
+function memoryShopStores() {
+  const cart = createMemoryCartStore([]);
+  return { cartStore: cart.cartStore, orderStore: createMemoryOrderStore(cart).orderStore };
+}
 
 const customer = {
   firstName: "Lee",
@@ -22,7 +27,7 @@ describe("auth API", () => {
     memory = createMemoryStore();
     app = createApp({
       store: memory.store,
-      cartStore: createMemoryCartStore([]).cartStore,
+      ...memoryShopStores(),
       appUrl: "http://localhost:5173",
       secureCookies: false,
       checkDatabase: async () => {},

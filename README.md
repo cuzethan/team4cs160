@@ -58,9 +58,11 @@ docker compose exec backend npm run create-manager -- manager@ofs.com yourpasswo
 Then log in at http://localhost:5173/manager-login.
 Managers land on the manager dashboard after signing in. The dashboard shows an overview of the current product catalog and links to the catalog and customer storefront.
 
-## Cart
+## Cart and checkout
 
 Customers' carts are saved in the database, so they persist across logins and devices. The API lives under `/api/cart` (`GET /`, `POST /items`, `PATCH /items/:productId`, `DELETE /items/:productId`) and only works for logged-in customers.
+
+Checkout (`POST /api/orders`) turns the cart into an order with a delivery address. It checks stock, takes the items out of inventory, and empties the cart in one transaction. Orders under 20 lbs ship free; 20 lbs or more adds a $10 fee. Payment is simulated: every order is marked paid. Customers see their orders at http://localhost:5173/orders (`GET /api/orders/mine`).
 
 The starter products are seeded by `db/init/003_products.sql`. If your database volume predates it, recreate it with `docker compose down -v && docker compose up --build` (this deletes existing accounts, so re-run `create-manager` afterwards).
 

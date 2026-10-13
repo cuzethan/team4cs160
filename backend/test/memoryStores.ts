@@ -6,8 +6,12 @@ import {
   type CartProduct,
   type CartStore,
   type CustomerRecord,
+  CheckoutError,
+  type OrderRecord,
+  type OrderStore,
   type User,
 } from "../src/store.js";
+import { deliveryFeeFor, roundCents } from "../src/pricing.js";
 
 // In-memory stand-ins for the Postgres stores, so tests run without a database.
 export function createMemoryStore() {
@@ -105,5 +109,59 @@ export function createMemoryCartStore(products: CartProduct[]) {
     },
   };
 
-  return { cartStore, products: productsById };
+  return { cartStore, products: productsById, carts };
+}
+
+export function createMemoryOrderStore({ cartStore, products, carts }: ReturnType<typeof createMemoryCartStore>) {
+  const orders: (OrderRecord & { userId: string })[] = [];
+
+  const orderStore: OrderStore = {
+    async placeOrder(userId) {
+      const lines = await cartStore.listCartItems(userId);
+      if (lines.length === 0) throw new CheckoutError("Your cart is empty.");
+      for (const line of lines) {
+        const product = products.get(line.productId)!;
+        if (!product.active) throw new CheckoutError(`${line.name} is no longer available. Remove it to continue.`);
+        if (line.quantity > product.quantityInStock) {
+          throw new CheckoutError(`Only ${product.quantityInStock} of ${line.name} left in stock. Update your cart to continue.`);
+        }
+      }
+
+      const subtotal = roundCents(lines.reduce((sum, line) => sum + line.price * line.quantity, 0));
+      const totalWeight = roundCents(lines.reduce((sum, line) => sum + line.weightLbs * line.quantity, 0));
+      const deliveryFee = deliveryFeeFor(totalWeight);
+      const order = {
+        userId,
+        orderId: randomUUID(),
+        createdAt: new Date(),
+        orderStatus: "placed",
+        paymentStatus: "paid",
+        subtotal,
+        deliveryFee,
+        grandTotal: roundCents(subtotal + deliveryFee),
+        totalWeight,
+        items: lines.map((line) => ({
+          orderItemId: randomUUID(),
+          productId: line.productId,
+          productName: line.name,
+          quantity: line.quantity,
+          priceAtPurchase: line.price,
+          weightAtPurchase: line.weightLbs,
+        })),
+      };
+      for (const line of lines) products.get(line.productId)!.quantityInStock -= line.quantity;
+      carts.delete(userId);
+      orders.push(order);
+      const { userId: _userId, ...record } = order;
+      return record;
+    },
+    async listOrders(userId) {
+      return orders
+        .filter((order) => order.userId === userId)
+        .reverse()
+        .map(({ userId: _userId, ...record }) => record);
+    },
+  };
+
+  return { orderStore };
 }
