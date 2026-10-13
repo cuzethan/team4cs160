@@ -143,3 +143,83 @@ export function createPgStore(pool: pg.Pool): AuthStore {
     },
   };
 }
+
+export type CartProduct = {
+  productId: string;
+  name: string;
+  price: number;
+  weightLbs: number;
+  quantityInStock: number;
+  active: boolean;
+};
+
+export type CartLine = {
+  cartItemId: string;
+  productId: string;
+  name: string;
+  price: number;
+  weightLbs: number;
+  quantityInStock: number;
+  quantity: number;
+};
+
+// Everything the cart routes need from the database. Each user has at most one cart,
+// created the first time they add something.
+export interface CartStore {
+  findProduct(productId: string): Promise<CartProduct | null>;
+  listCartItems(userId: string): Promise<CartLine[]>;
+  // Adds the product to the cart, or replaces its quantity if it's already there.
+  setCartItemQuantity(userId: string, productId: string, quantity: number): Promise<void>;
+  removeCartItem(userId: string, productId: string): Promise<void>;
+}
+
+export function createPgCartStore(pool: pg.Pool): CartStore {
+  return {
+    async findProduct(productId) {
+      const { rows } = await pool.query<CartProduct>(
+        `SELECT product_id AS "productId", product_name AS name, price::float8 AS price,
+                weight::float8 AS "weightLbs", quantity_in_stock AS "quantityInStock", active
+         FROM Product WHERE product_id = $1`,
+        [productId],
+      );
+      return rows[0] ?? null;
+    },
+
+    async listCartItems(userId) {
+      const { rows } = await pool.query<CartLine>(
+        `SELECT ci.cart_item_id AS "cartItemId", p.product_id AS "productId", p.product_name AS name,
+                p.price::float8 AS price, p.weight::float8 AS "weightLbs",
+                p.quantity_in_stock AS "quantityInStock", ci.quantity
+         FROM ShoppingCart sc
+         JOIN CartItems ci ON ci.cart_id = sc.cart_id
+         JOIN Product p ON p.product_id = ci.product_id
+         WHERE sc.user_id = $1
+         ORDER BY p.product_name`,
+        [userId],
+      );
+      return rows;
+    },
+
+    async setCartItemQuantity(userId, productId, quantity) {
+      await pool.query(
+        `WITH cart AS (
+           INSERT INTO ShoppingCart (user_id) VALUES ($1)
+           ON CONFLICT (user_id) DO UPDATE SET updated_at = now()
+           RETURNING cart_id
+         )
+         INSERT INTO CartItems (cart_id, product_id, quantity)
+         SELECT cart_id, $2, $3 FROM cart
+         ON CONFLICT (cart_id, product_id) DO UPDATE SET quantity = EXCLUDED.quantity`,
+        [userId, productId, quantity],
+      );
+    },
+
+    async removeCartItem(userId, productId) {
+      await pool.query(
+        `DELETE FROM CartItems ci USING ShoppingCart sc
+         WHERE ci.cart_id = sc.cart_id AND sc.user_id = $1 AND ci.product_id = $2`,
+        [userId, productId],
+      );
+    },
+  };
+}

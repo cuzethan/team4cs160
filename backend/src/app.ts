@@ -2,12 +2,15 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import express from "express";
 import { createAuthRouter, type AuthOptions } from "./auth.js";
+import { createCartRouter } from "./cart.js";
+import type { CartStore } from "./store.js";
 
 export type AppOptions = AuthOptions & {
+  cartStore: CartStore;
   checkDatabase: () => Promise<void>;
 };
 
-export function createApp({ checkDatabase, ...authOptions }: AppOptions) {
+export function createApp({ checkDatabase, cartStore, ...authOptions }: AppOptions) {
   const app = express();
 
   app.use(cors({ origin: authOptions.appUrl, credentials: true }));
@@ -24,6 +27,7 @@ export function createApp({ checkDatabase, ...authOptions }: AppOptions) {
   });
 
   app.use("/api/auth", createAuthRouter(authOptions));
+  app.use("/api/cart", createCartRouter({ store: authOptions.store, cartStore }));
 
   return app;
 }

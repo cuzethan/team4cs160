@@ -1,68 +1,8 @@
 import bcrypt from "bcryptjs";
-import { randomUUID } from "node:crypto";
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
-import { EmailTakenError, type AuthStore, type CustomerRecord, type User } from "../src/store.js";
-
-function createMemoryStore() {
-  const users = new Map<string, User>();
-  const sessions = new Map<string, { userId: string; expiresAt: Date }>();
-  const resets = new Map<string, { userId: string; expiresAt: Date; used: boolean }>();
-
-  const store: AuthStore = {
-    async findUserByEmail(email) {
-      return [...users.values()].find((u) => u.email.toLowerCase() === email.toLowerCase()) ?? null;
-    },
-    async listCustomers() {
-      return [...users.values()]
-        .filter((user) => user.role === "customer")
-        .map((user): CustomerRecord => ({
-          id: user.userId,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          email: user.email,
-          phone: user.phone,
-          accountStatus: user.accountStatus,
-          createdAt: new Date("2026-01-01T00:00:00.000Z"),
-        }));
-    },
-    async createUser(user) {
-      if (await store.findUserByEmail(user.email)) throw new EmailTakenError();
-      const created: User = { ...user, userId: randomUUID(), accountStatus: "active" };
-      users.set(created.userId, created);
-      return created;
-    },
-    async updatePassword(userId, passwordHash) {
-      users.get(userId)!.passwordHash = passwordHash;
-    },
-    async createSession(userId, tokenHash, expiresAt) {
-      sessions.set(tokenHash, { userId, expiresAt });
-    },
-    async findSessionUser(tokenHash) {
-      const session = sessions.get(tokenHash);
-      if (!session || session.expiresAt <= new Date()) return null;
-      return users.get(session.userId) ?? null;
-    },
-    async deleteSession(tokenHash) {
-      sessions.delete(tokenHash);
-    },
-    async deleteUserSessions(userId) {
-      for (const [hash, session] of sessions) if (session.userId === userId) sessions.delete(hash);
-    },
-    async createResetToken(userId, tokenHash, expiresAt) {
-      resets.set(tokenHash, { userId, expiresAt, used: false });
-    },
-    async consumeResetToken(tokenHash) {
-      const reset = resets.get(tokenHash);
-      if (!reset || reset.used || reset.expiresAt <= new Date()) return null;
-      reset.used = true;
-      return reset.userId;
-    },
-  };
-
-  return { store, users };
-}
+import { createMemoryCartStore, createMemoryStore } from "./memoryStores.js";
 
 const customer = {
   firstName: "Lee",
@@ -82,6 +22,7 @@ describe("auth API", () => {
     memory = createMemoryStore();
     app = createApp({
       store: memory.store,
+      cartStore: createMemoryCartStore([]).cartStore,
       appUrl: "http://localhost:5173",
       secureCookies: false,
       checkDatabase: async () => {},

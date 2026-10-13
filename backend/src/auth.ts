@@ -69,13 +69,20 @@ function passwordProblem(password: unknown) {
 }
 
 // Wraps async handlers so a thrown error becomes a 500 instead of an unhandled rejection.
-function handle(fn: (req: Request, res: Response) => Promise<unknown>) {
+export function handle(fn: (req: Request, res: Response) => Promise<unknown>) {
   return (req: Request, res: Response) => {
     fn(req, res).catch((error) => {
       console.error(error);
       res.status(500).json({ error: "Something went wrong. Please try again." });
     });
   };
+}
+
+// The active user behind the request's session cookie, or null.
+export async function findCurrentUser(store: AuthStore, req: Request) {
+  const token = req.cookies?.[SESSION_COOKIE];
+  const user = typeof token === "string" ? await store.findSessionUser(hashToken(token)) : null;
+  return user && user.accountStatus === "active" ? user : null;
 }
 
 export function createAuthRouter({ store, secureCookies }: AuthOptions) {
@@ -175,18 +182,16 @@ export function createAuthRouter({ store, secureCookies }: AuthOptions) {
   }));
 
   router.get("/me", handle(async (req, res) => {
-    const token = req.cookies?.[SESSION_COOKIE];
-    const user = typeof token === "string" ? await store.findSessionUser(hashToken(token)) : null;
-    if (!user || user.accountStatus !== "active") {
+    const user = await findCurrentUser(store, req);
+    if (!user) {
       return res.status(401).json({ error: "Not logged in." });
     }
     res.json({ user: toPublicUser(user) });
   }));
 
   router.get("/customers", handle(async (req, res) => {
-    const token = req.cookies?.[SESSION_COOKIE];
-    const user = typeof token === "string" ? await store.findSessionUser(hashToken(token)) : null;
-    if (!user || user.accountStatus !== "active") {
+    const user = await findCurrentUser(store, req);
+    if (!user) {
       return res.status(401).json({ error: "Not logged in." });
     }
     if (user.role !== "admin") {
