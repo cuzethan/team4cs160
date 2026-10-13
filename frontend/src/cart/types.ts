@@ -1,26 +1,25 @@
+import { emojiFor } from "../inventory/api";
 import type { InventoryProduct } from "../inventory/types";
 import type { CartLine } from "./api";
 
 export type CartItem = InventoryProduct & {
   cartItemId: string;
   quantity: number;
-  weightLbs: number;
 };
 
-// Fills in the display details (emoji, unit, category) the cart API doesn't store yet.
-export function toCartItem(line: CartLine, catalog: InventoryProduct[]): CartItem {
-  const product = catalog.find((candidate) => candidate.id === line.productId);
+export function toCartItem(line: CartLine): CartItem {
   return {
     id: line.productId,
     name: line.name,
-    category: product?.category ?? "",
-    emoji: product?.emoji ?? "🛒",
+    category: line.category,
+    emoji: emojiFor(line.name, line.category),
     price: line.price,
-    unit: product?.unit ?? "each",
+    weightLbs: line.weightLbs,
+    unit: line.unit,
     quantityInStock: line.quantityInStock,
-    description: product?.description ?? "",
+    description: "",
+    imageUrl: null,
     cartItemId: line.cartItemId,
     quantity: line.quantity,
-    weightLbs: line.weightLbs,
   };
 }

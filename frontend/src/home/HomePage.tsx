@@ -2,10 +2,10 @@ import { useState } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { SiteHeader } from "../components/SiteHeader";
-import { products } from "../inventory/InventoryPage";
 import { ProductCard } from "../inventory/ProductCard";
 import { ProductDetailPage } from "../inventory/ProductDetailPage";
 import type { InventoryProduct } from "../inventory/types";
+import { useProducts } from "../inventory/useProducts";
 import { useAddToCart } from "../cart/useAddToCart";
 import { DELIVERY_FEE, FREE_DELIVERY_LIMIT_LBS } from "../cart/delivery";
 
@@ -30,9 +30,9 @@ const steps = [
   },
 ];
 
-// Placeholder until the Products API exists; replace with a fetch of featured products.
+// Shown first when they are in stock; any other products fill the remaining spots.
 const featuredProductNames = ["Fresh Strawberries", "Hass Avocados", "Baby Spinach", "Whole Grain Bread"];
-const featuredProducts = products.filter((product) => featuredProductNames.includes(product.name));
+const FEATURED_COUNT = 4;
 
 function Hero() {
   const { user, loading } = useAuth();
@@ -166,6 +166,13 @@ function DeliveryInfo() {
 function FeaturedProducts() {
   const [selectedProduct, setSelectedProduct] = useState<InventoryProduct | null>(null);
   const { handleAddToCart, noticeElement } = useAddToCart();
+  const { products } = useProducts();
+  const featuredProducts = [
+    ...products.filter((product) => featuredProductNames.includes(product.name)),
+    ...products.filter((product) => !featuredProductNames.includes(product.name)),
+  ]
+    .filter((product) => product.quantityInStock > 0)
+    .slice(0, FEATURED_COUNT);
 
   return (
     <section aria-labelledby="featured-heading">

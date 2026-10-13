@@ -3,6 +3,8 @@ export type CartLine = {
   cartItemId: string;
   productId: string;
   name: string;
+  category: string;
+  unit: string;
   price: number;
   weightLbs: number;
   quantityInStock: number;

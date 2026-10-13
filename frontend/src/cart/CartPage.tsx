@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { SiteHeader } from "../components/SiteHeader";
-import { products } from "../inventory/InventoryPage";
 import { fetchCart, removeCartItem, updateCartItem, type CartLine } from "./api";
 import { CartItemCard } from "./CartItemCard";
 import { CartSummary } from "./CartSummary";
@@ -19,7 +18,7 @@ export function CartPage() {
   const [updateError, setUpdateError] = useState<string | null>(null);
 
   const showCart = (lines: CartLine[]) => {
-    setCartItems(lines.map((line) => toCartItem(line, products)));
+    setCartItems(lines.map(toCartItem));
   };
 
   const fetchCartItems = async () => {

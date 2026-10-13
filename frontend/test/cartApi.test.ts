@@ -1,12 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { addToCart, fetchCart, removeCartItem, updateCartItem } from "../src/cart/api";
 import { toCartItem } from "../src/cart/types";
-import { products } from "../src/inventory/InventoryPage";
 
 const line = {
   cartItemId: "line-1",
   productId: "00000000-0000-4000-8000-000000000001",
   name: "Gala Apples",
+  category: "Fruits",
+  unit: "lb",
   price: 1.49,
   weightLbs: 1,
   quantityInStock: 34,
@@ -53,13 +54,13 @@ describe("cart api client", () => {
 });
 
 describe("toCartItem", () => {
-  it("uses the server's price and stock with the catalog's display details", () => {
-    const item = toCartItem({ ...line, price: 1.99 }, products);
-    expect(item).toMatchObject({ id: line.productId, emoji: "🍎", unit: "lb", price: 1.99, quantity: 2 });
+  it("builds a cart item from the server's line", () => {
+    const item = toCartItem(line);
+    expect(item).toMatchObject({ id: line.productId, emoji: "🍎", unit: "lb", category: "Fruits", price: 1.49, quantity: 2 });
   });
 
-  it("still works for products missing from the catalog", () => {
-    const item = toCartItem({ ...line, productId: "unknown" }, products);
-    expect(item).toMatchObject({ name: "Gala Apples", emoji: "🛒", unit: "each" });
+  it("falls back to a category emoji for new products", () => {
+    expect(toCartItem({ ...line, name: "Pink Lady Apples" }).emoji).toBe("🍎");
+    expect(toCartItem({ ...line, name: "Mystery Box", category: "Other" }).emoji).toBe("🛒");
   });
 });

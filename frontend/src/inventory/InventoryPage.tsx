@@ -4,169 +4,44 @@ import { SiteHeader } from "../components/SiteHeader";
 import { ProductCard } from "./ProductCard";
 import { ProductDetailPage } from "./ProductDetailPage";
 import type { InventoryProduct } from "./types";
+import { useProducts } from "./useProducts";
 
-const categories = ["All groceries", "Fruits", "Vegetables", "Grains"];
+const ALL_CATEGORIES = "All groceries";
 
-// Placeholder until the products API exists. The ids match the rows seeded in
-// db/init/003_products.sql so the cart can reference them.
-export const products: InventoryProduct[] = [
-  {
-    id: "00000000-0000-4000-8000-000000000001",
-    name: "Gala Apples",
-    category: "Fruits",
-    emoji: "🍎",
-    price: 1.49,
-    unit: "lb",
-    quantityInStock: 34,
-    description:
-      "Sweet, crisp Gala apples with a bright red skin. A perfect snack for lunchboxes or a fresh addition to salads.",
-  },
-  {
-    id: "00000000-0000-4000-8000-000000000002",
-    name: "Organic Bananas",
-    category: "Fruits",
-    emoji: "🍌",
-    price: 0.89,
-    unit: "lb",
-    quantityInStock: 42,
-    description:
-      "Naturally sweet organic bananas, picked at their best and ready for smoothies, baking, or an easy snack.",
-  },
-  {
-    id: "00000000-0000-4000-8000-000000000003",
-    name: "Hass Avocados",
-    category: "Fruits",
-    emoji: "🥑",
-    price: 1.25,
-    unit: "each",
-    quantityInStock: 18,
-    description:
-      "Creamy ripe Hass avocados with rich flavor. Mash them for toast or dice them into your favorite bowl.",
-  },
-  {
-    id: "00000000-0000-4000-8000-000000000004",
-    name: "Fresh Strawberries",
-    category: "Fruits",
-    emoji: "🍓",
-    price: 4.29,
-    unit: "basket",
-    quantityInStock: 16,
-    description:
-      "Juicy, fragrant strawberries packed fresh for snacking, desserts, or a colorful breakfast topping.",
-  },
-  {
-    id: "00000000-0000-4000-8000-000000000005",
-    name: "Rainbow Carrots",
-    category: "Vegetables",
-    emoji: "🥕",
-    price: 2.19,
-    unit: "bunch",
-    quantityInStock: 21,
-    description:
-      "A colorful bunch of sweet and crunchy carrots. Roast them, shred them into salads, or enjoy them raw.",
-  },
-  {
-    id: "00000000-0000-4000-8000-000000000006",
-    name: "Green Broccoli",
-    category: "Vegetables",
-    emoji: "🥦",
-    price: 2.49,
-    unit: "each",
-    quantityInStock: 13,
-    description:
-      "Fresh green broccoli crowns with tender stems. Steam, roast, or stir-fry for a quick, versatile side.",
-  },
-  {
-    id: "00000000-0000-4000-8000-000000000007",
-    name: "Vine Tomatoes",
-    category: "Vegetables",
-    emoji: "🍅",
-    price: 2.99,
-    unit: "lb",
-    quantityInStock: 24,
-    description:
-      "Ripe tomatoes grown on the vine for a juicy texture and balanced sweetness in sandwiches and salads.",
-  },
-  {
-    id: "00000000-0000-4000-8000-000000000008",
-    name: "Sweet Corn",
-    category: "Vegetables",
-    emoji: "🌽",
-    price: 0.79,
-    unit: "each",
-    quantityInStock: 30,
-    description:
-      "Golden sweet corn with tender kernels. Grill it in the husk or boil for a simple summer favorite.",
-  },
-  {
-    id: "00000000-0000-4000-8000-000000000009",
-    name: "Baby Spinach",
-    category: "Vegetables",
-    emoji: "🥬",
-    price: 3.49,
-    unit: "bag",
-    quantityInStock: 12,
-    description:
-      "Tender baby spinach leaves, washed and ready to add to salads, omelets, pastas, and smoothies.",
-  },
-  {
-    id: "00000000-0000-4000-8000-000000000010",
-    name: "Jasmine Rice",
-    category: "Grains",
-    emoji: "🍚",
-    price: 5.99,
-    unit: "bag",
-    quantityInStock: 19,
-    description:
-      "Fragrant long-grain jasmine rice that cooks up light and fluffy. A lovely everyday base for many meals.",
-  },
-  {
-    id: "00000000-0000-4000-8000-000000000011",
-    name: "Whole Grain Bread",
-    category: "Grains",
-    emoji: "🍞",
-    price: 4.19,
-    unit: "loaf",
-    quantityInStock: 11,
-    description:
-      "Soft, hearty whole grain bread baked with a blend of grains and seeds for a satisfying everyday loaf.",
-  },
-  {
-    id: "00000000-0000-4000-8000-000000000012",
-    name: "Rolled Oats",
-    category: "Grains",
-    emoji: "🥣",
-    price: 3.79,
-    unit: "bag",
-    quantityInStock: 27,
-    description:
-      "Whole rolled oats for warm breakfasts, overnight oats, homemade granola, or baking.",
-  },
-];
+function CategorySidebar({
+  products,
+  selected,
+  onSelect,
+}: {
+  products: InventoryProduct[];
+  selected: string;
+  onSelect: (category: string) => void;
+}) {
+  const categoryNames = [...new Set(products.map((product) => product.category))].sort();
+  const categories = [
+    { name: ALL_CATEGORIES, count: products.length },
+    ...categoryNames.map((name) => ({
+      name,
+      count: products.filter((product) => product.category === name).length,
+    })),
+  ];
 
-function CategorySidebar() {
   return (
     <aside className="rounded-2xl border border-[#e8e7dc] bg-white p-5 shadow-[0_3px_12px_rgba(42,65,48,0.04)]">
       <h2 className="text-xs font-bold uppercase tracking-[0.16em] text-[#7d887b]">
         Shop by category
       </h2>
       <ul className="mt-4 space-y-1">
-        {categories.map((category, index) => (
-          <li key={category}>
+        {categories.map((category) => (
+          <li key={category.name}>
             <button
               type="button"
-              className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm transition ${index === 0 ? "bg-[#e9f1df] font-bold text-[#416449]" : "font-medium text-[#667269] hover:bg-[#f6f7f1]"}`}
+              onClick={() => onSelect(category.name)}
+              aria-pressed={category.name === selected}
+              className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm transition ${category.name === selected ? "bg-[#e9f1df] font-bold text-[#416449]" : "font-medium text-[#667269] hover:bg-[#f6f7f1]"}`}
             >
-              <span>{category}</span>
-              <span className="text-xs text-[#90998f]">
-                {index === 0
-                  ? "12"
-                  : index === 1
-                    ? "4"
-                    : index === 2
-                      ? "5"
-                      : "3"}
-              </span>
+              <span>{category.name}</span>
+              <span className="text-xs text-[#90998f]">{category.count}</span>
             </button>
           </li>
         ))}
@@ -175,7 +50,7 @@ function CategorySidebar() {
   );
 }
 
-function InventorySearch() {
+function InventorySearch({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   return (
     <label className="flex h-12 flex-1 items-center gap-3 rounded-xl border border-[#e6e6dc] bg-white px-4 text-[#899188] shadow-sm">
       <svg
@@ -191,6 +66,8 @@ function InventorySearch() {
         type="search"
         placeholder="Search for fresh groceries..."
         aria-label="Search groceries"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
         className="w-full bg-transparent text-sm text-[#304336] outline-none placeholder:text-[#a3aaa1]"
       />
     </label>
@@ -224,15 +101,27 @@ function SortControl({
 }
 
 export function InventoryPage() {
+  const { products, isLoading, error, reload } = useProducts();
   const [selectedProduct, setSelectedProduct] =
     useState<InventoryProduct | null>(null);
   const [sortOption, setSortOption] = useState<SortOption>("featured");
+  const [selectedCategory, setSelectedCategory] = useState(ALL_CATEGORIES);
+  const [searchText, setSearchText] = useState("");
   const { handleAddToCart, noticeElement } = useAddToCart();
+
+  const search = searchText.trim().toLowerCase();
+  const visibleProducts = products.filter(
+    (product) =>
+      (selectedCategory === ALL_CATEGORIES || product.category === selectedCategory) &&
+      (!search ||
+        product.name.toLowerCase().includes(search) ||
+        product.description.toLowerCase().includes(search)),
+  );
 
   const sortedProducts =
     sortOption === "featured"
-      ? products
-      : [...products].sort((a, b) =>
+      ? visibleProducts
+      : [...visibleProducts].sort((a, b) =>
           sortOption === "price-low" ? a.price - b.price : b.price - a.price,
         );
 
@@ -256,31 +145,51 @@ export function InventoryPage() {
         </div>
 
         <div className="mb-5 flex flex-col gap-3 sm:flex-row">
-          <InventorySearch />
+          <InventorySearch value={searchText} onChange={setSearchText} />
           <SortControl value={sortOption} onChange={setSortOption} />
         </div>
 
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[230px_minmax(0,1fr)]">
-          <CategorySidebar />
+          <CategorySidebar
+            products={products}
+            selected={selectedCategory}
+            onSelect={setSelectedCategory}
+          />
           <section aria-label="Available groceries">
             <div className="mb-4 flex items-center justify-between">
               <p className="text-sm font-semibold text-[#718071]">
-                Showing <span className="text-[#314a37]">12 items</span>
+                Showing{" "}
+                <span className="text-[#314a37]">
+                  {sortedProducts.length} {sortedProducts.length === 1 ? "item" : "items"}
+                </span>
               </p>
               <p className="text-xs font-medium text-[#9aa197]">
                 Prices shown per item
               </p>
             </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {sortedProducts.map((product) => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  onClick={handleCardClick}
-                  onAddToCart={handleAddToCart}
-                />
-              ))}
-            </div>
+            {isLoading ? (
+              <p role="status" className="rounded-2xl bg-white p-6 text-[#5f6b61]">Loading groceries…</p>
+            ) : error ? (
+              <div role="alert" className="rounded-2xl border border-red-200 bg-white p-6">
+                <p className="text-red-800">{error}</p>
+                <button type="button" onClick={() => void reload()} className="mt-4 font-bold text-[#416449] underline">Try again</button>
+              </div>
+            ) : sortedProducts.length === 0 ? (
+              <p className="rounded-2xl border border-[#e8e7dc] bg-white p-8 text-center text-[#667269]">
+                No groceries match your search.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {sortedProducts.map((product) => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    onClick={handleCardClick}
+                    onAddToCart={handleAddToCart}
+                  />
+                ))}
+              </div>
+            )}
           </section>
         </div>
       </main>

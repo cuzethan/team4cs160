@@ -3,7 +3,7 @@ import { Link, Navigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { fetchCustomers, type Customer } from "../auth/api";
 import { SiteHeader } from "../components/SiteHeader";
-import { products } from "../inventory/InventoryPage";
+import { useProducts } from "../inventory/useProducts";
 
 const tabs = ["Overview", "Customers", "Inventory", "Delivery", "Robot", "Sales"] as const;
 type DashboardTab = (typeof tabs)[number];
@@ -24,12 +24,6 @@ const chartData: Record<DateRange, { labels: string[] }> = {
     labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul"],
   },
 };
-
-const categoryCount = new Set(products.map((product) => product.category)).size;
-const totalUnits = products.reduce((total, product) => total + product.quantityInStock, 0);
-const lowestStockProducts = [...products]
-  .sort((first, second) => first.quantityInStock - second.quantityInStock)
-  .slice(0, 5);
 
 export function ManagerDashboard() {
   const { user, loading } = useAuth();
@@ -267,6 +261,20 @@ function DummyChart({
 }
 
 function InventoryPanel() {
+  const { products, isLoading, error } = useProducts();
+  const categoryCount = new Set(products.map((product) => product.category)).size;
+  const totalUnits = products.reduce((total, product) => total + product.quantityInStock, 0);
+  const lowestStockProducts = [...products]
+    .sort((first, second) => first.quantityInStock - second.quantityInStock)
+    .slice(0, 5);
+
+  if (isLoading) {
+    return <p role="status" className="rounded-2xl bg-white p-6 text-[#5f6b61]">Loading inventory…</p>;
+  }
+  if (error) {
+    return <p role="alert" className="rounded-2xl border border-red-200 bg-white p-6 text-red-800">{error}</p>;
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
