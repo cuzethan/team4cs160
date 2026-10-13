@@ -6,6 +6,7 @@ import { products } from "../inventory/InventoryPage";
 import { ProductCard } from "../inventory/ProductCard";
 import { ProductDetailPage } from "../inventory/ProductDetailPage";
 import type { InventoryProduct } from "../inventory/types";
+import { useAddToCart } from "../cart/useAddToCart";
 
 const FREE_DELIVERY_LIMIT_LBS = 20;
 const DELIVERY_FEE = 10;
@@ -32,8 +33,8 @@ const steps = [
 ];
 
 // Placeholder until the Products API exists; replace with a fetch of featured products.
-const featuredProductIds = ["strawberry", "avocado", "spinach", "bread"];
-const featuredProducts = products.filter((product) => featuredProductIds.includes(product.id));
+const featuredProductNames = ["Fresh Strawberries", "Hass Avocados", "Baby Spinach", "Whole Grain Bread"];
+const featuredProducts = products.filter((product) => featuredProductNames.includes(product.name));
 
 function Hero() {
   const { user, loading } = useAuth();
@@ -166,6 +167,7 @@ function DeliveryInfo() {
 
 function FeaturedProducts() {
   const [selectedProduct, setSelectedProduct] = useState<InventoryProduct | null>(null);
+  const { handleAddToCart, noticeElement } = useAddToCart();
 
   return (
     <section aria-labelledby="featured-heading">
@@ -185,13 +187,18 @@ function FeaturedProducts() {
             onClick={(productId) =>
               setSelectedProduct(featuredProducts.find((p) => p.id === productId) ?? null)
             }
-            onAddToCart={() => undefined}
+            onAddToCart={handleAddToCart}
           />
         ))}
       </div>
       {selectedProduct && (
-        <ProductDetailPage product={selectedProduct} onClose={() => setSelectedProduct(null)} />
+        <ProductDetailPage
+          product={selectedProduct}
+          onClose={() => setSelectedProduct(null)}
+          onAddToCart={handleAddToCart}
+        />
       )}
+      {noticeElement}
     </section>
   );
 }

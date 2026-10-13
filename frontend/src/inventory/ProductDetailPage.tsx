@@ -1,11 +1,26 @@
+import { useState } from "react";
 import type { InventoryProduct } from "./types";
+
+const MAX_QUANTITY_CHOICE = 10;
 
 type ProductDetailPageProps = {
   product: InventoryProduct;
   onClose: () => void;
+  onAddToCart: (product: InventoryProduct, quantity: number) => void;
 };
 
-export function ProductDetailPage({ product, onClose }: ProductDetailPageProps) {
+export function ProductDetailPage({ product, onClose, onAddToCart }: ProductDetailPageProps) {
+  const [quantity, setQuantity] = useState(1);
+  const quantityChoices = Array.from(
+    { length: Math.min(product.quantityInStock, MAX_QUANTITY_CHOICE) },
+    (_, index) => index + 1,
+  );
+
+  const handleAddToCartClick = () => {
+    onAddToCart(product, quantity);
+    onClose();
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-[#1c2c20]/55 p-4 backdrop-blur-sm"
@@ -54,15 +69,20 @@ export function ProductDetailPage({ product, onClose }: ProductDetailPageProps) 
               Quantity
               <select
                 aria-label="Quantity"
-                defaultValue="1"
+                value={quantity}
+                onChange={(event) => setQuantity(Number(event.target.value))}
                 className="bg-transparent font-bold text-[#253b2d] outline-none"
               >
-                <option value="1">1</option>
+                {quantityChoices.map((choice) => (
+                  <option key={choice} value={choice}>{choice}</option>
+                ))}
               </select>
             </label>
             <button
               type="button"
-              className="flex-1 rounded-xl bg-[#416449] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#35563c]"
+              onClick={handleAddToCartClick}
+              disabled={product.quantityInStock === 0}
+              className="flex-1 rounded-xl bg-[#416449] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#35563c] disabled:cursor-not-allowed disabled:opacity-50"
             >
               Add to cart
             </button>

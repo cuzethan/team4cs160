@@ -6,8 +6,9 @@ type ProductCardProps = {
   onAddToCart: (product: InventoryProduct, quantity: number) => void;
 };
 
-export function ProductCard({ product, onClick }: ProductCardProps) {
+export function ProductCard({ product, onClick, onAddToCart }: ProductCardProps) {
   const handleCardClick = () => onClick(product.id);
+  const handleAddToCartClick = () => onAddToCart(product, 1);
 
   return (
     <article className="group overflow-hidden rounded-2xl border border-[#e8e7dc] bg-white shadow-[0_3px_12px_rgba(42,65,48,0.05)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_12px_28px_rgba(42,65,48,0.12)]">
@@ -37,7 +38,9 @@ export function ProductCard({ product, onClick }: ProductCardProps) {
         </p>
         <button
           type="button"
-          className="rounded-full bg-[#e9f1df] px-3 py-2 text-xs font-bold text-[#416449] transition hover:bg-[#dce9cf]"
+          onClick={handleAddToCartClick}
+          disabled={product.quantityInStock === 0}
+          className="rounded-full bg-[#e9f1df] px-3 py-2 text-xs font-bold text-[#416449] transition hover:bg-[#dce9cf] disabled:cursor-not-allowed disabled:opacity-40"
           aria-label={`Add ${product.name} to cart`}
         >
           Add to cart

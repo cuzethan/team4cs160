@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useAddToCart } from "../cart/useAddToCart";
 import { SiteHeader } from "../components/SiteHeader";
 import { ProductCard } from "./ProductCard";
 import { ProductDetailPage } from "./ProductDetailPage";
@@ -6,9 +7,11 @@ import type { InventoryProduct } from "./types";
 
 const categories = ["All groceries", "Fruits", "Vegetables", "Grains"];
 
+// Placeholder until the products API exists. The ids match the rows seeded in
+// db/init/003_products.sql so the cart can reference them.
 export const products: InventoryProduct[] = [
   {
-    id: "apple-gala",
+    id: "00000000-0000-4000-8000-000000000001",
     name: "Gala Apples",
     category: "Fruits",
     emoji: "🍎",
@@ -19,7 +22,7 @@ export const products: InventoryProduct[] = [
       "Sweet, crisp Gala apples with a bright red skin. A perfect snack for lunchboxes or a fresh addition to salads.",
   },
   {
-    id: "banana",
+    id: "00000000-0000-4000-8000-000000000002",
     name: "Organic Bananas",
     category: "Fruits",
     emoji: "🍌",
@@ -30,7 +33,7 @@ export const products: InventoryProduct[] = [
       "Naturally sweet organic bananas, picked at their best and ready for smoothies, baking, or an easy snack.",
   },
   {
-    id: "avocado",
+    id: "00000000-0000-4000-8000-000000000003",
     name: "Hass Avocados",
     category: "Fruits",
     emoji: "🥑",
@@ -41,7 +44,7 @@ export const products: InventoryProduct[] = [
       "Creamy ripe Hass avocados with rich flavor. Mash them for toast or dice them into your favorite bowl.",
   },
   {
-    id: "strawberry",
+    id: "00000000-0000-4000-8000-000000000004",
     name: "Fresh Strawberries",
     category: "Fruits",
     emoji: "🍓",
@@ -52,7 +55,7 @@ export const products: InventoryProduct[] = [
       "Juicy, fragrant strawberries packed fresh for snacking, desserts, or a colorful breakfast topping.",
   },
   {
-    id: "carrot",
+    id: "00000000-0000-4000-8000-000000000005",
     name: "Rainbow Carrots",
     category: "Vegetables",
     emoji: "🥕",
@@ -63,7 +66,7 @@ export const products: InventoryProduct[] = [
       "A colorful bunch of sweet and crunchy carrots. Roast them, shred them into salads, or enjoy them raw.",
   },
   {
-    id: "broccoli",
+    id: "00000000-0000-4000-8000-000000000006",
     name: "Green Broccoli",
     category: "Vegetables",
     emoji: "🥦",
@@ -74,7 +77,7 @@ export const products: InventoryProduct[] = [
       "Fresh green broccoli crowns with tender stems. Steam, roast, or stir-fry for a quick, versatile side.",
   },
   {
-    id: "tomato",
+    id: "00000000-0000-4000-8000-000000000007",
     name: "Vine Tomatoes",
     category: "Vegetables",
     emoji: "🍅",
@@ -85,7 +88,7 @@ export const products: InventoryProduct[] = [
       "Ripe tomatoes grown on the vine for a juicy texture and balanced sweetness in sandwiches and salads.",
   },
   {
-    id: "corn",
+    id: "00000000-0000-4000-8000-000000000008",
     name: "Sweet Corn",
     category: "Vegetables",
     emoji: "🌽",
@@ -96,7 +99,7 @@ export const products: InventoryProduct[] = [
       "Golden sweet corn with tender kernels. Grill it in the husk or boil for a simple summer favorite.",
   },
   {
-    id: "spinach",
+    id: "00000000-0000-4000-8000-000000000009",
     name: "Baby Spinach",
     category: "Vegetables",
     emoji: "🥬",
@@ -107,7 +110,7 @@ export const products: InventoryProduct[] = [
       "Tender baby spinach leaves, washed and ready to add to salads, omelets, pastas, and smoothies.",
   },
   {
-    id: "rice",
+    id: "00000000-0000-4000-8000-000000000010",
     name: "Jasmine Rice",
     category: "Grains",
     emoji: "🍚",
@@ -118,7 +121,7 @@ export const products: InventoryProduct[] = [
       "Fragrant long-grain jasmine rice that cooks up light and fluffy. A lovely everyday base for many meals.",
   },
   {
-    id: "bread",
+    id: "00000000-0000-4000-8000-000000000011",
     name: "Whole Grain Bread",
     category: "Grains",
     emoji: "🍞",
@@ -129,7 +132,7 @@ export const products: InventoryProduct[] = [
       "Soft, hearty whole grain bread baked with a blend of grains and seeds for a satisfying everyday loaf.",
   },
   {
-    id: "oats",
+    id: "00000000-0000-4000-8000-000000000012",
     name: "Rolled Oats",
     category: "Grains",
     emoji: "🥣",
@@ -224,6 +227,7 @@ export function InventoryPage() {
   const [selectedProduct, setSelectedProduct] =
     useState<InventoryProduct | null>(null);
   const [sortOption, setSortOption] = useState<SortOption>("featured");
+  const { handleAddToCart, noticeElement } = useAddToCart();
 
   const sortedProducts =
     sortOption === "featured"
@@ -273,7 +277,7 @@ export function InventoryPage() {
                   key={product.id}
                   product={product}
                   onClick={handleCardClick}
-                  onAddToCart={() => undefined}
+                  onAddToCart={handleAddToCart}
                 />
               ))}
             </div>
@@ -285,8 +289,10 @@ export function InventoryPage() {
         <ProductDetailPage
           product={selectedProduct}
           onClose={() => setSelectedProduct(null)}
+          onAddToCart={handleAddToCart}
         />
       )}
+      {noticeElement}
     </div>
   );
 }
