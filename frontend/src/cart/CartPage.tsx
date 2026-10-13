@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { SiteHeader } from "../components/SiteHeader";
 import { products } from "../inventory/InventoryPage";
 import { fetchCart, removeCartItem, updateCartItem, type CartLine } from "./api";
 import { CartItemCard } from "./CartItemCard";
 import { CartSummary } from "./CartSummary";
+import { deliveryFeeFor } from "./delivery";
 import { toCartItem, type CartItem } from "./types";
 
 export function CartPage() {
   const { user, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +68,7 @@ export function CartPage() {
   };
 
   const handleCheckoutClick = () => {
-    // Checkout stays disabled until order submission is implemented.
+    navigate("/checkout");
   };
 
   const calculateTotalPrice = () =>
@@ -74,6 +76,8 @@ export function CartPage() {
 
   const calculateTotalWeight = () =>
     cartItems.reduce((total, item) => total + item.weightLbs * item.quantity, 0);
+
+  const deliveryFee = deliveryFeeFor(calculateTotalWeight());
 
   return (
     <div className="min-h-screen bg-[#fbfaf5] text-[#253b2d]">
@@ -124,9 +128,9 @@ export function CartPage() {
               <CartSummary
                 totalPrice={calculateTotalPrice()}
                 totalWeight={calculateTotalWeight()}
-                deliveryStatus="Calculated at checkout"
+                deliveryStatus={deliveryFee === 0 ? "Free" : `$${deliveryFee.toFixed(2)}`}
               />
-              <button type="button" onClick={handleCheckoutClick} disabled className="mt-6 w-full cursor-not-allowed rounded-xl bg-[#416449] px-5 py-3 font-bold text-white opacity-50">Checkout</button>
+              <button type="button" onClick={handleCheckoutClick} className="mt-6 w-full rounded-xl bg-[#416449] px-5 py-3 font-bold text-white transition hover:bg-[#35563c]">Checkout</button>
             </aside>
           </div>
         )}

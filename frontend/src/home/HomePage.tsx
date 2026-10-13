@@ -7,9 +7,7 @@ import { ProductCard } from "../inventory/ProductCard";
 import { ProductDetailPage } from "../inventory/ProductDetailPage";
 import type { InventoryProduct } from "../inventory/types";
 import { useAddToCart } from "../cart/useAddToCart";
-
-const FREE_DELIVERY_LIMIT_LBS = 20;
-const DELIVERY_FEE = 10;
+import { DELIVERY_FEE, FREE_DELIVERY_LIMIT_LBS } from "../cart/delivery";
 
 const categories = [
   { name: "Fruits", emoji: "🍎", blurb: "Apples, berries, bananas and more" },

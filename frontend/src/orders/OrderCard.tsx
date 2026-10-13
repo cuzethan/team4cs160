@@ -31,7 +31,7 @@ export function OrderCard({ order, onTrackClick, onConfirmReceived }: OrderCardP
         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#7d887b]">Order</p>
-            <h2 className="mt-1 text-lg font-extrabold text-[#294332]">#{order.id}</h2>
+            <h2 className="mt-1 text-lg font-extrabold text-[#294332]">#{order.id.slice(0, 8).toUpperCase()}</h2>
             <p className="mt-1 text-sm text-[#788078]">Placed {displayDate}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
