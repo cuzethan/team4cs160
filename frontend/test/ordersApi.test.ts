@@ -28,14 +28,14 @@ describe("orders api client", () => {
   it("places an order with the address and returns it in the order-history shape", async () => {
     const fetchMock = mockFetch(201, { order: record });
 
-    const order = await placeOrder(address);
+    const order = await placeOrder(address, "pi_test");
     expect(order).toMatchObject({ id: record.orderId, date: record.createdAt, status: "placed", grandTotal: 2.98 });
     expect(order.items[0]).toMatchObject({ productName: "Gala Apples", quantity: 2, price_at_purchase: 1.49 });
 
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("/api/orders");
     expect(init.method).toBe("POST");
-    expect(JSON.parse(init.body as string)).toEqual({ address });
+    expect(JSON.parse(init.body as string)).toEqual({ address, paymentIntentId: "pi_test" });
   });
 
   it("loads the customer's orders", async () => {
@@ -57,7 +57,7 @@ describe("orders api client", () => {
 
   it("throws the server's error message", async () => {
     mockFetch(409, { error: "Your cart is empty." });
-    await expect(placeOrder(address)).rejects.toThrow("Your cart is empty.");
+    await expect(placeOrder(address, "pi_test")).rejects.toThrow("Your cart is empty.");
   });
 });
 
