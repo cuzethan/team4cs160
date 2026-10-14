@@ -4,7 +4,7 @@
 -- If the database volume already exists, this file is not re-run.
 -- Recreate it with: docker compose down -v && docker compose up --build
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   user_id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   first_name      text NOT NULL,
   last_name       text NOT NULL,
@@ -23,7 +23,7 @@ CREATE TABLE users (
   updated_at      timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE Customer (
+CREATE TABLE IF NOT EXISTS Customer (
     user_id UUID PRIMARY KEY,
     customer_since TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_customer_user
@@ -31,7 +31,7 @@ CREATE TABLE Customer (
         REFERENCES Users(user_id)
         ON DELETE CASCADE
 );
-CREATE TABLE Manager (
+CREATE TABLE IF NOT EXISTS Manager (
     user_id UUID PRIMARY KEY,
     employee_status VARCHAR(50) NOT NULL,
     CONSTRAINT fk_manager_user
@@ -39,7 +39,7 @@ CREATE TABLE Manager (
         REFERENCES Users(user_id)
         ON DELETE CASCADE
 );
-CREATE TABLE Address (
+CREATE TABLE IF NOT EXISTS Address (
     address_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL,
     street VARCHAR(255) NOT NULL,
@@ -54,12 +54,12 @@ CREATE TABLE Address (
         REFERENCES Users(user_id)
         ON DELETE CASCADE
 );
-CREATE TABLE Category (
+CREATE TABLE IF NOT EXISTS Category (
     category_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     category_name VARCHAR(100) NOT NULL UNIQUE,
     description TEXT
 );
-CREATE TABLE Product (
+CREATE TABLE IF NOT EXISTS Product (
     product_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     product_name VARCHAR(255) NOT NULL,
     description TEXT,
@@ -77,14 +77,14 @@ CREATE TABLE Product (
     CONSTRAINT chk_product_stock
         CHECK (quantity_in_stock >= 0)
 );
-CREATE TABLE PriceHistory (
+CREATE TABLE IF NOT EXISTS PriceHistory (
     price_history_id BIGSERIAL PRIMARY KEY,
     old_price DECIMAL(10, 2) NOT NULL,
     new_price DECIMAL(10, 2) NOT NULL,
     changed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE ShoppingCart (
+CREATE TABLE IF NOT EXISTS ShoppingCart (
     cart_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL UNIQUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -94,7 +94,7 @@ CREATE TABLE ShoppingCart (
         REFERENCES Users(user_id)
         ON DELETE CASCADE
 );
-CREATE TABLE CartItems (
+CREATE TABLE IF NOT EXISTS CartItems (
     cart_item_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     cart_id UUID NOT NULL,
     product_id UUID NOT NULL,
@@ -115,7 +115,7 @@ CREATE TABLE CartItems (
     CONSTRAINT uq_cart_product
         UNIQUE (cart_id, product_id)
 );
-CREATE TABLE Orders (
+CREATE TABLE IF NOT EXISTS Orders (
     order_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL,
     address_id UUID NOT NULL,
@@ -142,7 +142,7 @@ CREATE TABLE Orders (
     CONSTRAINT chk_order_weight
         CHECK (total_weight >= 0)
 );
-CREATE TABLE OrderItem (
+CREATE TABLE IF NOT EXISTS OrderItem (
     order_item_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     order_id UUID NOT NULL,
     product_id UUID NOT NULL,
@@ -163,7 +163,7 @@ CREATE TABLE OrderItem (
     CONSTRAINT chk_order_item_weight
         CHECK (weight_at_purchase >= 0)
 );
-CREATE TABLE Payment (
+CREATE TABLE IF NOT EXISTS Payment (
     payment_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     order_id UUID NOT NULL,
     payment_amount DECIMAL(10,2) NOT NULL,
@@ -177,7 +177,7 @@ CREATE TABLE Payment (
     CONSTRAINT chk_payment_amount
         CHECK (payment_amount >= 0)
 );
-CREATE TABLE Transactions (
+CREATE TABLE IF NOT EXISTS Transactions (
     transaction_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL,
     product_id UUID NOT NULL,
@@ -195,7 +195,7 @@ CREATE TABLE Transactions (
     CONSTRAINT chk_transaction_quantity
         CHECK (quantity_after_change >= 0)
 );
-CREATE TABLE Robot (
+CREATE TABLE IF NOT EXISTS Robot (
     robot_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     robot_name VARCHAR(100) NOT NULL UNIQUE,
     robot_status VARCHAR(50) NOT NULL,
@@ -205,7 +205,7 @@ CREATE TABLE Robot (
     current_longitude DECIMAL(9,6),
     last_updated TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-CREATE TABLE DeliveryRun (
+CREATE TABLE IF NOT EXISTS DeliveryRun (
     run_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     robot_id UUID NOT NULL,
     run_status VARCHAR(50) NOT NULL,
@@ -217,7 +217,7 @@ CREATE TABLE DeliveryRun (
         FOREIGN KEY (robot_id)
         REFERENCES Robot(robot_id)
 );
-CREATE TABLE Delivery (
+CREATE TABLE IF NOT EXISTS Delivery (
     delivery_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     order_id UUID NOT NULL,
     address_id UUID NOT NULL,
@@ -244,7 +244,7 @@ CREATE TABLE Delivery (
     CONSTRAINT uq_run_stop
         UNIQUE (run_id, stop_number)
 );
-CREATE TABLE Setting (
+CREATE TABLE IF NOT EXISTS Setting (
     setting_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL,
     setting_name VARCHAR(100) NOT NULL,
@@ -257,7 +257,7 @@ CREATE TABLE Setting (
     CONSTRAINT uq_user_setting
         UNIQUE (user_id, setting_name)
 );
-CREATE TABLE AuditLog (
+CREATE TABLE IF NOT EXISTS AuditLog (
     audit_log_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID,
     affected_table VARCHAR(100) NOT NULL,
@@ -269,7 +269,7 @@ CREATE TABLE AuditLog (
         REFERENCES Users(user_id)
         ON DELETE SET NULL
 );
-CREATE TABLE Notification (
+CREATE TABLE IF NOT EXISTS Notification (
     notification_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL,
     order_id UUID,

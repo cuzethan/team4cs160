@@ -182,6 +182,15 @@ export function createMemoryProductStore({ products }: ReturnType<typeof createM
         }))
         .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name));
     },
+    async adjustStock(productId, adjustment) {
+      const product = products.get(productId);
+      if (!product || !product.active) return { status: "not-found" };
+      const nextQuantity = product.quantityInStock + adjustment;
+      if (nextQuantity < 0) return { status: "insufficient-stock" };
+      if (nextQuantity > 2147483647) return { status: "maximum-stock" };
+      product.quantityInStock = nextQuantity;
+      return { status: "updated", quantityInStock: nextQuantity };
+    },
   };
 
   return { productStore };

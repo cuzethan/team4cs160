@@ -47,3 +47,23 @@ export async function fetchProducts(): Promise<InventoryProduct[]> {
     emoji: emojiFor(product.name, product.category),
   }));
 }
+
+export async function adjustProductStock(productId: string, adjustment: number): Promise<number> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/manager/inventory/${encodeURIComponent(productId)}/stock`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ adjustment }),
+      credentials: "same-origin",
+    });
+  } catch {
+    throw new Error("Can't reach the server. Please try again.");
+  }
+
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(data?.error ?? "Unable to update stock quantity.");
+  }
+  return (data as { quantityInStock: number }).quantityInStock;
+}

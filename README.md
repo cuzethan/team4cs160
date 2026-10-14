@@ -76,12 +76,8 @@ Customers' carts are saved in the database, so they persist across logins and de
 
 Checkout (`POST /api/orders`) turns the cart into an order with a delivery address. It checks stock, takes the items out of inventory, and empties the cart in one transaction. Orders under 20 lbs ship free; 20 lbs or more adds a $10 fee. Payment is simulated: every order is marked paid. Customers see their orders at http://localhost:5173/orders (`GET /api/orders/mine`).
 
-Products come from the database through `GET /api/products` (public, active products only). The inventory page's search, category filters, and item counts all work off that list, so stock goes down there after a purchase. Categories and starter products are defined in `db/init/003_products.sql`, which adds `category_id` and `unit` columns to `Product`. Postgres runs files in `db/init` only when it creates a new data volume. If an existing database is missing these columns, apply the catalog schema and seeds in place without deleting accounts:
+Products come from the database through `GET /api/products` (public, active products only). The inventory page's search, category filters, and item counts all work off that list, so stock goes down there after a purchase. Catalog tables and starter products are defined in `db/init/003_products.sql`. Postgres runs files in `db/init` only when it creates a new data volume. If an existing database is missing catalog or application tables, apply both migrations in order without deleting accounts
 
-```bash
-docker compose exec -T db psql -v ON_ERROR_STOP=1 -U ofs -d ofs < db/init/003_products.sql
-```
-
-This script is safe to reapply: it adds missing columns and skips categories/products that already exist. To completely reset a local development database instead, use `docker compose down -v && docker compose up --build`; this deletes all database data, including accounts.
+These scripts are safe to reapply: they add missing schema objects and skip categories/products that already exist. To completely reset a local development database instead, use `docker compose down -v && docker compose up --build`; this deletes all database data, including accounts.
 
 **Forgot password:** users answer the security question they picked at sign-up, then choose a new password. Manager accounts don't have a usable security answer; make a new manager account instead.

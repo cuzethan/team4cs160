@@ -75,6 +75,10 @@ describe("orders API", () => {
 
     expect((await agent.get("/api/cart")).body.items).toEqual([]);
     expect(cart.products.get(APPLES)!.quantityInStock).toBe(3);
+    expect(cart.products.get(RICE)!.quantityInStock).toBe(19);
+    const products = await agent.get("/api/products");
+    expect(products.body.products.find((product: { id: string }) => product.id === APPLES).quantityInStock).toBe(3);
+    expect(products.body.products.find((product: { id: string }) => product.id === RICE).quantityInStock).toBe(19);
 
     const mine = await agent.get("/api/orders/mine");
     expect(mine.body.orders.map((order: { orderId: string }) => order.orderId)).toEqual([res.body.order.orderId]);

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useAddToCart } from "../cart/useAddToCart";
 import { SiteHeader } from "../components/SiteHeader";
+import { useAuth } from "../auth/AuthContext";
+import { adjustProductStock } from "./api";
 import { ProductCard } from "./ProductCard";
 import { ProductDetailPage } from "./ProductDetailPage";
 import type { InventoryProduct } from "./types";
@@ -101,13 +103,37 @@ function SortControl({
 }
 
 export function InventoryPage() {
-  const { products, isLoading, error, reload } = useProducts();
+  const { products, isLoading, error, reload, updateStockQuantity } = useProducts();
+  const { user, loading: authLoading } = useAuth();
+  const isManager = !authLoading && user?.role === "manager";
   const [selectedProduct, setSelectedProduct] =
     useState<InventoryProduct | null>(null);
   const [sortOption, setSortOption] = useState<SortOption>("featured");
   const [selectedCategory, setSelectedCategory] = useState(ALL_CATEGORIES);
   const [searchText, setSearchText] = useState("");
+  const [updatingProductIds, setUpdatingProductIds] = useState<Set<string>>(new Set());
+  const [stockUpdateError, setStockUpdateError] = useState<string | null>(null);
   const { handleAddToCart, noticeElement } = useAddToCart();
+
+  const handleAdjustStock = async (product: InventoryProduct, adjustment: number) => {
+    setStockUpdateError(null);
+    setUpdatingProductIds((current) => new Set(current).add(product.id));
+    try {
+      const quantityInStock = await adjustProductStock(product.id, adjustment);
+      updateStockQuantity(product.id, quantityInStock);
+      setSelectedProduct((current) =>
+        current?.id === product.id ? { ...current, quantityInStock } : current,
+      );
+    } catch (updateError) {
+      setStockUpdateError((updateError as Error).message);
+    } finally {
+      setUpdatingProductIds((current) => {
+        const next = new Set(current);
+        next.delete(product.id);
+        return next;
+      });
+    }
+  };
 
   const search = searchText.trim().toLowerCase();
   const visibleProducts = products.filter(
@@ -156,6 +182,11 @@ export function InventoryPage() {
             onSelect={setSelectedCategory}
           />
           <section aria-label="Available groceries">
+            {stockUpdateError && (
+              <p role="alert" className="mb-4 rounded-xl border border-red-200 bg-white p-4 text-sm text-red-800">
+                {stockUpdateError}
+              </p>
+            )}
             <div className="mb-4 flex items-center justify-between">
               <p className="text-sm font-semibold text-[#718071]">
                 Showing{" "}
@@ -186,6 +217,9 @@ export function InventoryPage() {
                     product={product}
                     onClick={handleCardClick}
                     onAddToCart={handleAddToCart}
+                    isManager={isManager}
+                    isUpdatingStock={updatingProductIds.has(product.id)}
+                    onAdjustStock={(selected, adjustment) => void handleAdjustStock(selected, adjustment)}
                   />
                 ))}
               </div>

@@ -5,6 +5,9 @@
 -- Like the other init files, this only runs on a fresh database volume.
 -- Recreate it with: docker compose down -v && docker compose up --build
 
+-- Existing volumes may predate the catalog tables, and init scripts do not
+-- run again for those volumes. Create the base tables if they are missing.
+
 -- Which category a product is listed under, and what one unit of it is ("lb", "bag", ...).
 ALTER TABLE Product
   ADD COLUMN IF NOT EXISTS category_id UUID REFERENCES Category (category_id),

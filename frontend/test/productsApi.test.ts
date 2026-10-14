@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchProducts } from "../src/inventory/api";
+import { adjustProductStock, fetchProducts } from "../src/inventory/api";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -28,5 +28,20 @@ describe("products api client", () => {
   it("explains when the server can't be reached", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("fetch failed")));
     await expect(fetchProducts()).rejects.toThrow("Can't reach the server");
+  });
+
+  it("sends manager stock adjustments and returns the updated quantity", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ quantityInStock: 35 }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(adjustProductStock("p-1", 1)).resolves.toBe(35);
+    expect(fetchMock).toHaveBeenCalledWith("/api/manager/inventory/p-1/stock", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ adjustment: 1 }),
+      credentials: "same-origin",
+    });
   });
 });

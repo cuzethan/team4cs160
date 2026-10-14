@@ -20,9 +20,17 @@ export function useProducts() {
     }
   };
 
+  const updateStockQuantity = (productId: string, quantityInStock: number) => {
+    setProducts((current) =>
+      current.map((product) =>
+        product.id === productId ? { ...product, quantityInStock } : product,
+      ),
+    );
+  };
+
   useEffect(() => {
     void reload();
   }, []);
 
-  return { products, isLoading, error, reload };
+  return { products, isLoading, error, reload, updateStockQuantity };
 }

@@ -4,9 +4,19 @@ type ProductCardProps = {
   product: InventoryProduct;
   onClick: (productId: string) => void;
   onAddToCart: (product: InventoryProduct, quantity: number) => void;
+  isManager?: boolean;
+  isUpdatingStock?: boolean;
+  onAdjustStock?: (product: InventoryProduct, adjustment: number) => void;
 };
 
-export function ProductCard({ product, onClick, onAddToCart }: ProductCardProps) {
+export function ProductCard({
+  product,
+  onClick,
+  onAddToCart,
+  isManager = false,
+  isUpdatingStock = false,
+  onAdjustStock,
+}: ProductCardProps) {
   const handleCardClick = () => onClick(product.id);
   const handleAddToCartClick = () => onAddToCart(product, 1);
 
@@ -46,6 +56,31 @@ export function ProductCard({ product, onClick, onAddToCart }: ProductCardProps)
           Add to cart
         </button>
       </div>
+      {isManager && onAdjustStock && (
+        <div className="flex items-center justify-between border-t border-[#eef0e8] px-4 py-3">
+          <span className="text-xs font-semibold text-[#667269]">Manage stock</span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onAdjustStock(product, -1)}
+              disabled={isUpdatingStock || product.quantityInStock === 0}
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-[#d9e2d2] text-base font-bold text-[#416449] hover:bg-[#f1f5eb] disabled:cursor-not-allowed disabled:opacity-40"
+              aria-label={`Subtract one ${product.unit} of ${product.name} from stock`}
+            >
+              −
+            </button>
+            <button
+              type="button"
+              onClick={() => onAdjustStock(product, 1)}
+              disabled={isUpdatingStock}
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-[#d9e2d2] text-base font-bold text-[#416449] hover:bg-[#f1f5eb] disabled:cursor-not-allowed disabled:opacity-40"
+              aria-label={`Add one ${product.unit} of ${product.name} to stock`}
+            >
+              +
+            </button>
+          </div>
+        </div>
+      )}
     </article>
   );
 }

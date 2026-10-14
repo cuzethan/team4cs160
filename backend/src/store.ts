@@ -162,6 +162,15 @@ export type CatalogProduct = {
 export interface ProductStore {
   // Active products only, ordered by category then name.
   listProducts(): Promise<CatalogProduct[]>;
+  adjustStock(
+    productId: string,
+    adjustment: number,
+  ): Promise<
+    | { status: "updated"; quantityInStock: number }
+    | { status: "not-found" }
+    | { status: "insufficient-stock" }
+    | { status: "maximum-stock" }
+  >;
 }
 
 export type SalesRange = "today" | "week" | "month" | "all";
@@ -189,6 +198,30 @@ export function createPgProductStore(pool: pg.Pool): ProductStore {
          ORDER BY category, p.product_name`,
       );
       return rows;
+    },
+
+    async adjustStock(productId, adjustment) {
+      const { rows } = await pool.query<{ quantityInStock: number }>(
+        `UPDATE Product
+         SET quantity_in_stock = (quantity_in_stock::bigint + $2::bigint)::integer
+         WHERE product_id = $1 AND active
+           AND quantity_in_stock::bigint + $2::bigint BETWEEN 0 AND 2147483647
+         RETURNING quantity_in_stock AS "quantityInStock"`,
+        [productId, adjustment],
+      );
+      if (rows[0]) return { status: "updated", quantityInStock: rows[0].quantityInStock };
+
+      const product = await pool.query<{ quantityInStock: number }>(
+        `SELECT quantity_in_stock AS "quantityInStock"
+         FROM Product WHERE product_id = $1 AND active`,
+        [productId],
+      );
+      if (!product.rows[0]) return { status: "not-found" };
+
+      const nextQuantity = product.rows[0].quantityInStock + adjustment;
+      return nextQuantity < 0
+        ? { status: "insufficient-stock" }
+        : { status: "maximum-stock" };
     },
   };
 }
