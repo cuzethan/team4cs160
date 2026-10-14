@@ -4,25 +4,18 @@ import { useAuth } from "../auth/AuthContext";
 import { fetchCustomers, type Customer } from "../auth/api";
 import { SiteHeader } from "../components/SiteHeader";
 import { useProducts } from "../inventory/useProducts";
+import { fetchSales, type SalesBucket, type SalesRange } from "./api";
 
 const tabs = ["Overview", "Customers", "Inventory", "Delivery", "Robot", "Sales"] as const;
 type DashboardTab = (typeof tabs)[number];
 const dateRanges = ["Today", "Last week", "Last 30 days", "All time"] as const;
 type DateRange = (typeof dateRanges)[number];
 
-const chartData: Record<DateRange, { labels: string[] }> = {
-  Today: {
-    labels: ["8 AM", "10 AM", "12 PM", "2 PM", "4 PM", "6 PM", "8 PM"],
-  },
-  "Last week": {
-    labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-  },
-  "Last 30 days": {
-    labels: ["1", "5", "10", "15", "20", "25", "30"],
-  },
-  "All time": {
-    labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul"],
-  },
+const salesRangeFor: Record<DateRange, SalesRange> = {
+  Today: "today",
+  "Last week": "week",
+  "Last 30 days": "month",
+  "All time": "all",
 };
 
 export function ManagerDashboard() {
@@ -178,6 +171,29 @@ function SalesOverview({
   onDateRangeChange: (dateRange: DateRange) => void;
   showOverviewContent: boolean;
 }) {
+  const [sales, setSales] = useState<SalesBucket[]>([]);
+  const [salesLoading, setSalesLoading] = useState(true);
+  const [salesError, setSalesError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    setSalesLoading(true);
+    setSalesError("");
+    fetchSales(salesRangeFor[dateRange])
+      .then((buckets) => {
+        if (active) setSales(buckets);
+      })
+      .catch((requestError: unknown) => {
+        if (active) setSalesError(requestError instanceof Error ? requestError.message : "Unable to load sales data.");
+      })
+      .finally(() => {
+        if (active) setSalesLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [dateRange]);
+
   return (
     <>
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
@@ -196,10 +212,16 @@ function SalesOverview({
           </select>
         </label>
       </div>
-      <div className="grid gap-4 xl:grid-cols-2">
-        <DummyChart title="Sales" labels={chartData[dateRange].labels} />
-        <DummyChart title="Revenue" labels={chartData[dateRange].labels} />
-      </div>
+      {salesLoading ? (
+        <p role="status" className="rounded-xl border border-[#e8e7dc] bg-white p-5 text-sm text-[#667269]">Loading sales data...</p>
+      ) : salesError ? (
+        <p role="alert" className="rounded-xl border border-red-200 bg-white p-5 text-sm text-red-700">{salesError}</p>
+      ) : (
+        <div className="grid gap-4 xl:grid-cols-2">
+          <SalesChart title="Paid orders" buckets={sales} range={salesRangeFor[dateRange]} metric="paidOrders" />
+          <SalesChart title="Payment revenue" buckets={sales} range={salesRangeFor[dateRange]} metric="revenue" />
+        </div>
+      )}
       {showOverviewContent && (
         <div className="mt-6 flex flex-col gap-6">
           <InventoryPanel />
@@ -219,45 +241,86 @@ function SalesOverview({
   );
 }
 
-function DummyChart({
+function SalesChart({
   title,
-  labels,
+  buckets,
+  range,
+  metric,
 }: {
   title: string;
-  labels: string[];
+  buckets: SalesBucket[];
+  range: SalesRange;
+  metric: "paidOrders" | "revenue";
 }) {
+  const values = buckets.map((bucket) => bucket[metric]);
+  const maximum = Math.max(...values, 1);
+  const points = values.map((value, index) => ({
+    x: 54 + (index / Math.max(values.length - 1, 1)) * 556,
+    y: 174 - (value / maximum) * 142,
+    value,
+  }));
+  const line = points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
+  const labelInterval = Math.max(1, Math.ceil(buckets.length / 7));
+  const hasSales = values.some((value) => value > 0);
+  const formatValue = (value: number) => metric === "revenue"
+    ? `$${new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value)}`
+    : new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value);
+
   return (
     <section
-      aria-label={`${title} chart placeholder`}
-      className="min-w-0 rounded-2xl border border-[#e8e7dc] bg-white p-4 shadow-[0_3px_12px_rgba(42,65,48,0.04)] sm:p-5">
+      aria-label={`${title} chart`}
+      className="min-w-0 rounded-2xl border border-[#e8e7dc] bg-white p-4 shadow-[0_3px_12px_rgba(42,65,48,0.04)] sm:p-5"
+    >
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-lg font-extrabold text-[#294332]">{title}</h2>
-        <span className="rounded-full bg-[#f6f7f1] px-2.5 py-1 text-xs font-bold text-[#7d887b]"></span>
+        <span className="text-sm font-bold tabular-nums text-[#426149]">
+          {metric === "revenue" ? `$${values.reduce((sum, value) => sum + value, 0).toFixed(2)}` : values.reduce((sum, value) => sum + value, 0)}
+        </span>
       </div>
       <svg
         viewBox="0 0 640 220"
         role="img"
-        aria-label={`Empty ${title.toLowerCase()} graph with date labels ${labels.join(", ")}`}
-        className="mt-3 w-full overflow-visible"
+        aria-label={`${title} graph for ${range}, showing ${buckets.length} time buckets`}
+        className="mt-3 w-full"
       >
-        {[40, 84, 128, 172].map((y) => (
-          <line key={y} x1="40" x2="600" y1={y} y2={y} stroke="#ecebe2" strokeDasharray="4 5" />
-        ))}
-        {labels.map((label, index) => (
-          <text
-            key={label}
-            x={42 + index * (556 / (labels.length - 1))}
-            y="205"
-            textAnchor="middle"
-            fill="#7d887b"
-            fontSize="12"
-          >
-            {label}
+        {[0, 1, 2, 3].map((tick) => {
+          const y = 32 + tick * (142 / 3);
+          const value = maximum * (1 - tick / 3);
+          return (
+            <g key={tick}>
+              <line x1="52" x2="612" y1={y} y2={y} stroke="#ecebe2" strokeDasharray="4 5" />
+              <text x="44" y={y + 4} textAnchor="end" fill="#7d887b" fontSize="11">{formatValue(value)}</text>
+            </g>
+          );
+        })}
+        {points.length > 0 && (
+          <>
+            <path d={line} fill="none" stroke="#438254" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+            {points.map((point, index) => (
+              <circle key={buckets[index].bucketStart} cx={point.x} cy={point.y} r="4" fill="#fff" stroke="#438254" strokeWidth="2.5">
+                <title>{`${formatBucketLabel(buckets[index].bucketStart, range)}: ${formatValue(point.value)}`}</title>
+              </circle>
+            ))}
+          </>
+        )}
+        {buckets.map((bucket, index) => index % labelInterval === 0 || index === buckets.length - 1 ? (
+          <text key={bucket.bucketStart} x={points[index].x} y="202" textAnchor="middle" fill="#7d887b" fontSize="11">
+            {formatBucketLabel(bucket.bucketStart, range)}
           </text>
-        ))}
+        ) : null)}
+        {!hasSales && (
+          <text x="332" y="112" textAnchor="middle" fill="#7d887b" fontSize="13">No paid sales in this range</text>
+        )}
       </svg>
     </section>
   );
+}
+
+function formatBucketLabel(bucketStart: string, range: SalesRange) {
+  const date = new Date(bucketStart);
+  if (range === "today") return date.toLocaleTimeString([], { hour: "numeric" });
+  if (range === "all") return date.toLocaleDateString([], { month: "short", year: "2-digit" });
+  return date.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
 function InventoryPanel() {

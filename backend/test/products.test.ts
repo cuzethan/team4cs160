@@ -15,6 +15,7 @@ describe("products API", () => {
       cartStore: cart.cartStore,
       orderStore: createMemoryOrderStore(cart).orderStore,
       productStore: createMemoryProductStore(cart).productStore,
+      salesStore: { listSales: async () => [] },
       appUrl: "http://localhost:5173",
       secureCookies: false,
       checkDatabase: async () => {},

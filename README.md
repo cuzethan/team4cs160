@@ -47,6 +47,18 @@ Stop the stack with:
 docker compose down
 ```
 
+# Database 
+
+View database tables and content:
+```bash
+docker compose exec db psql -U ofs -d ofs
+```
+
+"ofs=" should appear.
+For all relational database tables, type "\d" (press Enter to view more)
+To see attributes of a table, type "\d {TABLE}" (ie \d users for users table)
+To see contents of a table, use SQL (ie SELECT * FROM users for user data)
+
 ## Accounts and login
 
 Customers sign up at http://localhost:5173/register. Manager accounts can't sign up on the site; create one from the command line while the stack is running:
@@ -87,6 +99,12 @@ ZIP:     95192
 
 A successful card places the order and shows the payment in the Stripe test dashboard. The decline card shows an error and leaves the cart unchanged.
 
-Products come from the database through `GET /api/products` (public, active products only). The inventory page's search, category filters, and item counts all work off that list, so stock goes down there after a purchase. Categories and the starter products are seeded by `db/init/003_products.sql`, which also adds `category_id` and `unit` columns to `Product`. If your database volume predates it, recreate it with `docker compose down -v && docker compose up --build` (this deletes existing accounts, so re-run `create-manager` afterwards).
+Products come from the database through `GET /api/products` (public, active products only). The inventory page's search, category filters, and item counts all work off that list, so stock goes down there after a purchase. Categories and starter products are defined in `db/init/003_products.sql`, which adds `category_id` and `unit` columns to `Product`. Postgres runs files in `db/init` only when it creates a new data volume. If an existing database is missing these columns, apply the catalog schema and seeds in place without deleting accounts:
+
+```bash
+docker compose exec -T db psql -v ON_ERROR_STOP=1 -U ofs -d ofs < db/init/003_products.sql
+```
+
+This script is safe to reapply: it adds missing columns and skips categories/products that already exist. To completely reset a local development database instead, use `docker compose down -v && docker compose up --build`; this deletes all database data, including accounts.
 
 **Forgot password:** users answer the security question they picked at sign-up, then choose a new password. Manager accounts don't have a usable security answer; make a new manager account instead.

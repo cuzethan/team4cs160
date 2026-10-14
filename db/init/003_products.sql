@@ -7,13 +7,14 @@
 
 -- Which category a product is listed under, and what one unit of it is ("lb", "bag", ...).
 ALTER TABLE Product
-  ADD COLUMN category_id UUID REFERENCES Category (category_id),
-  ADD COLUMN unit VARCHAR(20) NOT NULL DEFAULT 'each';
+  ADD COLUMN IF NOT EXISTS category_id UUID REFERENCES Category (category_id),
+  ADD COLUMN IF NOT EXISTS unit VARCHAR(20) NOT NULL DEFAULT 'each';
 
 INSERT INTO Category (category_id, category_name, description) VALUES
   ('00000000-0000-4000-9000-000000000001', 'Fruits', 'Apples, berries, bananas and more'),
   ('00000000-0000-4000-9000-000000000002', 'Vegetables', 'Fresh greens, roots, and everyday vegetables'),
-  ('00000000-0000-4000-9000-000000000003', 'Grains', 'Rice, bread, oats, and pantry staples');
+  ('00000000-0000-4000-9000-000000000003', 'Grains', 'Rice, bread, oats, and pantry staples')
+ON CONFLICT DO NOTHING;
 
 INSERT INTO Product (product_id, product_name, description, price, weight, quantity_in_stock, category_id, unit) VALUES
   ('00000000-0000-4000-8000-000000000001', 'Gala Apples', 'Sweet, crisp Gala apples with a bright red skin. A perfect snack for lunchboxes or a fresh addition to salads.', 1.49, 1.00, 34, '00000000-0000-4000-9000-000000000001', 'lb'),
@@ -27,4 +28,5 @@ INSERT INTO Product (product_id, product_name, description, price, weight, quant
   ('00000000-0000-4000-8000-000000000009', 'Baby Spinach', 'Tender baby spinach leaves, washed and ready to add to salads, omelets, pastas, and smoothies.', 3.49, 0.31, 12, '00000000-0000-4000-9000-000000000002', 'bag'),
   ('00000000-0000-4000-8000-000000000010', 'Jasmine Rice', 'Fragrant long-grain jasmine rice that cooks up light and fluffy. A lovely everyday base for many meals.', 5.99, 2.00, 19, '00000000-0000-4000-9000-000000000003', 'bag'),
   ('00000000-0000-4000-8000-000000000011', 'Whole Grain Bread', 'Soft, hearty whole grain bread baked with a blend of grains and seeds for a satisfying everyday loaf.', 4.19, 1.20, 11, '00000000-0000-4000-9000-000000000003', 'loaf'),
-  ('00000000-0000-4000-8000-000000000012', 'Rolled Oats', 'Whole rolled oats for warm breakfasts, overnight oats, homemade granola, or baking.', 3.79, 2.00, 27, '00000000-0000-4000-9000-000000000003', 'bag');
+  ('00000000-0000-4000-8000-000000000012', 'Rolled Oats', 'Whole rolled oats for warm breakfasts, overnight oats, homemade granola, or baking.', 3.79, 2.00, 27, '00000000-0000-4000-9000-000000000003', 'bag')
+ON CONFLICT DO NOTHING;

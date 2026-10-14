@@ -4,19 +4,21 @@ import express from "express";
 import { createAuthRouter, type AuthOptions } from "./auth.js";
 import { createCartRouter } from "./cart.js";
 import { createOrderRouter } from "./orders.js";
-import { createProductRouter } from "./products.js";
 import { PaymentsNotConfiguredError, type PaymentIntentCreator } from "./payments.js";
-import type { CartStore, OrderStore, ProductStore } from "./store.js";
+import { createProductRouter } from "./products.js";
+import { createSalesRouter } from "./sales.js";
+import type { CartStore, OrderStore, ProductStore, SalesStore } from "./store.js";
 
 export type AppOptions = AuthOptions & {
   cartStore: CartStore;
   orderStore: OrderStore;
   productStore: ProductStore;
+  salesStore: SalesStore;
   payments?: PaymentIntentCreator;
   checkDatabase: () => Promise<void>;
 };
 
-export function createApp({ checkDatabase, cartStore, orderStore, productStore, payments, ...authOptions }: AppOptions) {
+export function createApp({ checkDatabase, cartStore, orderStore, productStore, salesStore, payments, ...authOptions }: AppOptions) {
   const app = express();
 
   app.use(cors({ origin: authOptions.appUrl, credentials: true }));
@@ -44,6 +46,7 @@ export function createApp({ checkDatabase, cartStore, orderStore, productStore, 
     },
   };
   app.use("/api/orders", createOrderRouter({ store: authOptions.store, orderStore, payments: paymentIntents }));
+  app.use("/api/manager/sales", createSalesRouter({ store: authOptions.store, salesStore }));
 
   return app;
 }

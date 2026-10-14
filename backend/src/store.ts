@@ -163,6 +163,18 @@ export interface ProductStore {
   listProducts(): Promise<CatalogProduct[]>;
 }
 
+export type SalesRange = "today" | "week" | "month" | "all";
+
+export type SalesBucket = {
+  bucketStart: Date;
+  paidOrders: number;
+  revenue: number;
+};
+
+export interface SalesStore {
+  listSales(range: SalesRange): Promise<SalesBucket[]>;
+}
+
 export function createPgProductStore(pool: pg.Pool): ProductStore {
   return {
     async listProducts() {
@@ -174,6 +186,56 @@ export function createPgProductStore(pool: pg.Pool): ProductStore {
          FROM Product p LEFT JOIN Category c ON c.category_id = p.category_id
          WHERE p.active
          ORDER BY category, p.product_name`,
+      );
+      return rows;
+    },
+  };
+}
+
+export function createPgSalesStore(pool: pg.Pool): SalesStore {
+  const ranges: Record<SalesRange, { start: string; end: string; step: string }> = {
+    today: {
+      start: "date_trunc('day', now())",
+      end: "date_trunc('hour', now())",
+      step: "interval '1 hour'",
+    },
+    week: {
+      start: "date_trunc('day', now()) - interval '6 days'",
+      end: "date_trunc('day', now())",
+      step: "interval '1 day'",
+    },
+    month: {
+      start: "date_trunc('day', now()) - interval '29 days'",
+      end: "date_trunc('day', now())",
+      step: "interval '1 day'",
+    },
+    all: {
+      start: "COALESCE((SELECT date_trunc('month', min(processed_at)) FROM Payment WHERE payment_status = 'paid'), date_trunc('month', now()))",
+      end: "date_trunc('month', now())",
+      step: "interval '1 month'",
+    },
+  };
+
+  return {
+    async listSales(range) {
+      const selectedRange = ranges[range];
+      const { rows } = await pool.query<SalesBucket>(
+        `WITH bounds AS (
+           SELECT ${selectedRange.start} AS start_at, ${selectedRange.end} AS end_at,
+                  ${selectedRange.step} AS bucket_step
+         ), buckets AS (
+           SELECT generate_series(start_at, end_at, bucket_step) AS bucket_start, bucket_step
+           FROM bounds
+         )
+         SELECT b.bucket_start AS "bucketStart", COUNT(DISTINCT p.order_id)::int AS "paidOrders",
+                COALESCE(SUM(p.payment_amount), 0)::float8 AS revenue
+         FROM buckets b
+         LEFT JOIN Payment p
+           ON p.payment_status = 'paid'
+          AND p.processed_at >= b.bucket_start
+          AND p.processed_at < b.bucket_start + b.bucket_step
+         GROUP BY b.bucket_start
+         ORDER BY b.bucket_start`,
       );
       return rows;
     },
