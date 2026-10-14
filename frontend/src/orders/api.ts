@@ -69,6 +69,12 @@ export async function placeOrder(address: CheckoutAddress) {
   return toCustomerOrder((await request<{ order: OrderRecord }>("POST", "", { address })).order);
 }
 
+// Asks the server to price the cart and start a Stripe PaymentIntent. The client secret
+// lets the checkout page collect the card without ever seeing the secret key.
+export async function createPaymentIntent() {
+  return (await request<{ clientSecret: string }>("POST", "/payment-intent")).clientSecret;
+}
+
 export async function fetchMyOrders() {
   return (await request<{ orders: OrderRecord[] }>("GET", "/mine")).orders.map(toCustomerOrder);
 }

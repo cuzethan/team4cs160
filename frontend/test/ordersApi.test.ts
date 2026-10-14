@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchMyOrders, placeOrder } from "../src/orders/api";
+import { createPaymentIntent, fetchMyOrders, placeOrder } from "../src/orders/api";
 import { deliveryFeeFor } from "../src/cart/delivery";
 
 const record = {
@@ -42,6 +42,17 @@ describe("orders api client", () => {
     mockFetch(200, { orders: [record] });
     const orders = await fetchMyOrders();
     expect(orders.map((order) => order.id)).toEqual([record.orderId]);
+  });
+
+  it("starts a payment intent and returns the client secret", async () => {
+    const fetchMock = mockFetch(200, { clientSecret: "pi_test_secret" });
+
+    await expect(createPaymentIntent()).resolves.toBe("pi_test_secret");
+
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/orders/payment-intent");
+    expect(init.method).toBe("POST");
+    expect(init.body).toBeUndefined();
   });
 
   it("throws the server's error message", async () => {

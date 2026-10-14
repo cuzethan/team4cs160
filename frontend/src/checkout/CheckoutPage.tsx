@@ -1,10 +1,15 @@
+import { Elements, PaymentElement } from "@stripe/react-stripe-js";
+import { loadStripe } from "@stripe/stripe-js";
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { fetchCart, type CartLine } from "../cart/api";
 import { deliveryFeeFor } from "../cart/delivery";
 import { SiteHeader } from "../components/SiteHeader";
-import { placeOrder, type CheckoutAddress } from "../orders/api";
+import { createPaymentIntent, placeOrder, type CheckoutAddress } from "../orders/api";
+
+const publishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
+const stripePromise = publishableKey ? loadStripe(publishableKey) : null;
 
 const emptyAddress: CheckoutAddress = {
   street: "",
@@ -26,12 +31,32 @@ export function CheckoutPage() {
   const [address, setAddress] = useState<CheckoutAddress>(emptyAddress);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [paymentLoading, setPaymentLoading] = useState(false);
+
+  const loadPaymentIntent = async () => {
+    setPaymentLoading(true);
+    setPaymentError(null);
+    setClientSecret(null);
+    try {
+      setClientSecret(await createPaymentIntent());
+    } catch (error) {
+      setPaymentError((error as Error).message);
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
 
   const loadCart = async () => {
     setIsLoading(true);
     setLoadError(null);
+    setClientSecret(null);
+    setPaymentError(null);
     try {
-      setLines(await fetchCart());
+      const cartLines = await fetchCart();
+      setLines(cartLines);
+      if (cartLines.length > 0) void loadPaymentIntent();
     } catch (error) {
       setLoadError((error as Error).message);
     } finally {
@@ -120,9 +145,28 @@ export function CheckoutPage() {
 
               <section aria-labelledby="payment-heading" className="rounded-2xl border border-[#e8e7dc] bg-white p-6">
                 <h2 id="payment-heading" className="text-xl font-extrabold">Payment</h2>
-                <p className="mt-2 text-sm text-[#667269]">
-                  Payment is simulated for now. No card details are needed, and your order is marked paid when you place it.
-                </p>
+                {!publishableKey ? (
+                  <p role="alert" className="mt-4 text-sm text-red-800">Card payments are not configured.</p>
+                ) : paymentLoading ? (
+                  <p role="status" className="mt-4 text-sm text-[#667269]">Loading payment…</p>
+                ) : paymentError ? (
+                  <div role="alert" className="mt-4">
+                    <p className="text-sm text-red-800">{paymentError}</p>
+                    <button type="button" onClick={() => void loadPaymentIntent()} className="mt-3 font-bold text-[#416449] underline">Try again</button>
+                  </div>
+                ) : clientSecret ? (
+                  <div className="mt-4">
+                    <Elements
+                      stripe={stripePromise}
+                      options={{
+                        clientSecret,
+                        appearance: { theme: "stripe", variables: { colorPrimary: "#416449", borderRadius: "12px" } },
+                      }}
+                    >
+                      <PaymentElement />
+                    </Elements>
+                  </div>
+                ) : null}
               </section>
             </div>
 
