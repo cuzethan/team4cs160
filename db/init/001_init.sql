@@ -83,6 +83,7 @@ CREATE TABLE PriceHistory (
     new_price DECIMAL(10, 2) NOT NULL,
     changed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
 CREATE TABLE ShoppingCart (
     cart_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL UNIQUE,

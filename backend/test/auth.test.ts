@@ -32,6 +32,7 @@ describe("auth API", () => {
     app = createApp({
       store: memory.store,
       ...memoryShopStores(),
+      salesStore: { listSales: async () => [] },
       appUrl: "http://localhost:5173",
       secureCookies: false,
       checkDatabase: async () => {},
