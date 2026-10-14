@@ -1,82 +1,73 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
 import { SiteHeader } from "../components/SiteHeader";
-import { products } from "../inventory/InventoryPage";
+import { fetchCart, removeCartItem, updateCartItem, type CartLine } from "./api";
 import { CartItemCard } from "./CartItemCard";
 import { CartSummary } from "./CartSummary";
-import type { CartItem } from "./types";
-
-const mockCartItems: CartItem[] = [
-  {
-    ...products.find((product) => product.id === "apple-gala")!,
-    cartItemId: "cart-apple-gala",
-    quantity: 2,
-    weightLbs: 1,
-  },
-  {
-    ...products.find((product) => product.id === "avocado")!,
-    cartItemId: "cart-avocado",
-    quantity: 3,
-    weightLbs: 0.4,
-  },
-  {
-    ...products.find((product) => product.id === "bread")!,
-    cartItemId: "cart-bread",
-    quantity: 1,
-    weightLbs: 1.2,
-  },
-];
+import { deliveryFeeFor } from "./delivery";
+import { toCartItem, type CartItem } from "./types";
 
 export function CartPage() {
+  const { user, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Problems with a single change (e.g. not enough stock). The cart itself still shows.
+  const [updateError, setUpdateError] = useState<string | null>(null);
+
+  const showCart = (lines: CartLine[]) => {
+    setCartItems(lines.map(toCartItem));
+  };
 
   const fetchCartItems = async () => {
     setIsLoading(true);
     setError(null);
     try {
-      // Replace this mock with GET /api/cart when the cart API is available.
-      setCartItems(mockCartItems.map((item) => ({ ...item })));
-    } catch {
-      setError("We couldn't load your cart. Please try again.");
+      showCart(await fetchCart());
+    } catch (fetchError) {
+      setError((fetchError as Error).message);
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    void fetchCartItems();
-  }, []);
+    if (user) void fetchCartItems();
+  }, [user]);
+
+  const changeCart = async (change: () => Promise<CartLine[]>) => {
+    setUpdateError(null);
+    try {
+      showCart(await change());
+    } catch (changeError) {
+      setUpdateError((changeError as Error).message);
+    }
+  };
+
+  const findItem = (cartItemId: string) => cartItems.find((item) => item.cartItemId === cartItemId);
 
   const handleIncreaseQuantity = (cartItemId: string) => {
-    setCartItems((items) =>
-      items.map((item) =>
-        item.cartItemId === cartItemId
-          ? { ...item, quantity: Math.min(item.quantity + 1, item.quantityInStock) }
-          : item,
-      ),
-    );
+    const item = findItem(cartItemId);
+    if (item) void changeCart(() => updateCartItem(item.id, item.quantity + 1));
   };
 
   const handleDecreaseQuantity = (cartItemId: string) => {
-    setCartItems((items) =>
-      items
-        .map((item) =>
-          item.cartItemId === cartItemId
-            ? { ...item, quantity: item.quantity - 1 }
-            : item,
-        )
-        .filter((item) => item.quantity > 0),
+    const item = findItem(cartItemId);
+    if (!item) return;
+    void changeCart(() =>
+      item.quantity > 1 ? updateCartItem(item.id, item.quantity - 1) : removeCartItem(item.id),
     );
   };
 
   const handleRemoveItem = (cartItemId: string) => {
-    setCartItems((items) => items.filter((item) => item.cartItemId !== cartItemId));
+    const item = findItem(cartItemId);
+    if (item) void changeCart(() => removeCartItem(item.id));
   };
 
   const handleCheckoutClick = () => {
-    // Checkout stays disabled until order submission is implemented.
+    navigate("/checkout");
   };
 
   const calculateTotalPrice = () =>
@@ -84,6 +75,8 @@ export function CartPage() {
 
   const calculateTotalWeight = () =>
     cartItems.reduce((total, item) => total + item.weightLbs * item.quantity, 0);
+
+  const deliveryFee = deliveryFeeFor(calculateTotalWeight());
 
   return (
     <div className="min-h-screen bg-[#fbfaf5] text-[#253b2d]">
@@ -94,7 +87,14 @@ export function CartPage() {
           <h1 className="mt-2 text-4xl font-extrabold tracking-tight text-[#294332] sm:text-5xl">Shopping cart</h1>
         </div>
 
-        {isLoading ? (
+        {authLoading ? (
+          <p role="status" className="rounded-2xl bg-white p-6 text-[#5f6b61]">Loading your cart…</p>
+        ) : !user ? (
+          <section className="rounded-2xl border border-[#e8e7dc] bg-white p-8 text-center">
+            <p className="text-lg font-bold">Log in to see your cart</p>
+            <Link to="/customer-login" className="mt-4 inline-block font-bold text-[#416449] underline">Customer login</Link>
+          </section>
+        ) : isLoading ? (
           <p role="status" className="rounded-2xl bg-white p-6 text-[#5f6b61]">Loading your cart…</p>
         ) : error ? (
           <section role="alert" className="rounded-2xl border border-red-200 bg-white p-6">
@@ -109,6 +109,9 @@ export function CartPage() {
         ) : (
           <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
             <section aria-label="Cart items" className="space-y-4">
+              {updateError && (
+                <p role="alert" className="rounded-xl border border-red-200 bg-white px-4 py-3 text-sm text-red-800">{updateError}</p>
+              )}
               {cartItems.map((item) => (
                 <CartItemCard
                   key={item.cartItemId}
@@ -124,9 +127,9 @@ export function CartPage() {
               <CartSummary
                 totalPrice={calculateTotalPrice()}
                 totalWeight={calculateTotalWeight()}
-                deliveryStatus="Calculated at checkout"
+                deliveryStatus={deliveryFee === 0 ? "Free" : `$${deliveryFee.toFixed(2)}`}
               />
-              <button type="button" onClick={handleCheckoutClick} disabled className="mt-6 w-full cursor-not-allowed rounded-xl bg-[#416449] px-5 py-3 font-bold text-white opacity-50">Checkout</button>
+              <button type="button" onClick={handleCheckoutClick} className="mt-6 w-full rounded-xl bg-[#416449] px-5 py-3 font-bold text-white transition hover:bg-[#35563c]">Checkout</button>
             </aside>
           </div>
         )}
