@@ -300,7 +300,41 @@ export type OrderRecord = {
 // Thrown when checkout can't go ahead; the message is safe to show the customer.
 export class CheckoutError extends Error {}
 
+export type CheckoutQuote = {
+  subtotal: number;
+  deliveryFee: number;
+  grandTotal: number;
+  totalWeight: number;
+};
+
+type PricedLine = {
+  name: string;
+  price: number;
+  weight: number;
+  stock: number;
+  active: boolean;
+  quantity: number;
+};
+
+// Same stock and pricing rules as placing an order, without writing anything.
+export function quoteFromLines(lines: PricedLine[]): CheckoutQuote {
+  if (lines.length === 0) throw new CheckoutError("Your cart is empty.");
+  for (const line of lines) {
+    if (!line.active) throw new CheckoutError(`${line.name} is no longer available. Remove it to continue.`);
+    if (line.quantity > line.stock) {
+      throw new CheckoutError(`Only ${line.stock} of ${line.name} left in stock. Update your cart to continue.`);
+    }
+  }
+
+  const subtotal = roundCents(lines.reduce((sum, line) => sum + line.price * line.quantity, 0));
+  const totalWeight = roundCents(lines.reduce((sum, line) => sum + line.weight * line.quantity, 0));
+  const deliveryFee = deliveryFeeFor(totalWeight);
+  return { subtotal, deliveryFee, grandTotal: roundCents(subtotal + deliveryFee), totalWeight };
+}
+
 export interface OrderStore {
+  // Prices the cart the same way placeOrder will, so Stripe is charged the server total.
+  quoteOrder(userId: string): Promise<CheckoutQuote>;
   // Turns the user's cart into a paid order in one transaction: checks stock, saves the
   // address, order, items and payment, takes the items out of stock, and empties the cart.
   placeOrder(userId: string, address: NewAddress): Promise<OrderRecord>;
@@ -338,40 +372,40 @@ function attachItems(orders: OrderRow[], lines: (OrderLine & { orderId: string }
   }));
 }
 
+type CheckoutLine = PricedLine & { productId: string };
+
+const checkoutLineSql = `
+  SELECT p.product_id AS "productId", p.product_name AS name, p.price::float8 AS price,
+         p.weight::float8 AS weight, p.quantity_in_stock AS stock, p.active, ci.quantity
+  FROM ShoppingCart sc
+  JOIN CartItems ci ON ci.cart_id = sc.cart_id
+  JOIN Product p ON p.product_id = ci.product_id
+  WHERE sc.user_id = $1
+  ORDER BY p.product_id
+`;
+
+async function loadCheckoutLines(client: pg.Pool | pg.PoolClient, userId: string, lock: boolean) {
+  const { rows } = await client.query<CheckoutLine>(
+    lock ? `${checkoutLineSql} FOR UPDATE OF p` : checkoutLineSql,
+    [userId],
+  );
+  return rows;
+}
+
 export function createPgOrderStore(pool: pg.Pool): OrderStore {
   return {
+    async quoteOrder(userId) {
+      return quoteFromLines(await loadCheckoutLines(pool, userId, false));
+    },
+
     async placeOrder(userId, address) {
       const client = await pool.connect();
       try {
         await client.query("BEGIN");
 
         // Lock the products being bought so two checkouts can't oversell the same stock.
-        const { rows: lines } = await client.query<{
-          productId: string; name: string; price: number; weight: number;
-          stock: number; active: boolean; quantity: number;
-        }>(
-          `SELECT p.product_id AS "productId", p.product_name AS name, p.price::float8 AS price,
-                  p.weight::float8 AS weight, p.quantity_in_stock AS stock, p.active, ci.quantity
-           FROM ShoppingCart sc
-           JOIN CartItems ci ON ci.cart_id = sc.cart_id
-           JOIN Product p ON p.product_id = ci.product_id
-           WHERE sc.user_id = $1
-           ORDER BY p.product_id
-           FOR UPDATE OF p`,
-          [userId],
-        );
-        if (lines.length === 0) throw new CheckoutError("Your cart is empty.");
-        for (const line of lines) {
-          if (!line.active) throw new CheckoutError(`${line.name} is no longer available. Remove it to continue.`);
-          if (line.quantity > line.stock) {
-            throw new CheckoutError(`Only ${line.stock} of ${line.name} left in stock. Update your cart to continue.`);
-          }
-        }
-
-        const subtotal = roundCents(lines.reduce((sum, line) => sum + line.price * line.quantity, 0));
-        const totalWeight = roundCents(lines.reduce((sum, line) => sum + line.weight * line.quantity, 0));
-        const deliveryFee = deliveryFeeFor(totalWeight);
-        const grandTotal = roundCents(subtotal + deliveryFee);
+        const lines = await loadCheckoutLines(client, userId, true);
+        const { subtotal, totalWeight, deliveryFee, grandTotal } = quoteFromLines(lines);
 
         const { rows: [{ addressId }] } = await client.query<{ addressId: string }>(
           `INSERT INTO Address (user_id, street, city, state, zip_code, delivery_instructions)

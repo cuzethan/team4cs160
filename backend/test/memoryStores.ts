@@ -6,14 +6,12 @@ import {
   type CartProduct,
   type CartStore,
   type CustomerRecord,
-  CheckoutError,
+  quoteFromLines,
   type OrderRecord,
   type OrderStore,
   type ProductStore,
   type User,
 } from "../src/store.js";
-import { deliveryFeeFor, roundCents } from "../src/pricing.js";
-
 // In-memory stand-ins for the Postgres stores, so tests run without a database.
 export function createMemoryStore() {
   const users = new Map<string, User>();
@@ -118,21 +116,28 @@ export function createMemoryCartStore(products: CartProduct[]) {
 export function createMemoryOrderStore({ cartStore, products, carts }: ReturnType<typeof createMemoryCartStore>) {
   const orders: (OrderRecord & { userId: string })[] = [];
 
+  async function pricedLines(userId: string) {
+    const lines = await cartStore.listCartItems(userId);
+    return lines.map((line) => {
+      const product = products.get(line.productId)!;
+      return {
+        name: line.name,
+        price: line.price,
+        weight: line.weightLbs,
+        stock: product.quantityInStock,
+        active: product.active,
+        quantity: line.quantity,
+      };
+    });
+  }
+
   const orderStore: OrderStore = {
+    async quoteOrder(userId) {
+      return quoteFromLines(await pricedLines(userId));
+    },
     async placeOrder(userId) {
       const lines = await cartStore.listCartItems(userId);
-      if (lines.length === 0) throw new CheckoutError("Your cart is empty.");
-      for (const line of lines) {
-        const product = products.get(line.productId)!;
-        if (!product.active) throw new CheckoutError(`${line.name} is no longer available. Remove it to continue.`);
-        if (line.quantity > product.quantityInStock) {
-          throw new CheckoutError(`Only ${product.quantityInStock} of ${line.name} left in stock. Update your cart to continue.`);
-        }
-      }
-
-      const subtotal = roundCents(lines.reduce((sum, line) => sum + line.price * line.quantity, 0));
-      const totalWeight = roundCents(lines.reduce((sum, line) => sum + line.weightLbs * line.quantity, 0));
-      const deliveryFee = deliveryFeeFor(totalWeight);
+      const { subtotal, deliveryFee, grandTotal, totalWeight } = quoteFromLines(await pricedLines(userId));
       const order = {
         userId,
         orderId: randomUUID(),
@@ -141,7 +146,7 @@ export function createMemoryOrderStore({ cartStore, products, carts }: ReturnTyp
         paymentStatus: "paid",
         subtotal,
         deliveryFee,
-        grandTotal: roundCents(subtotal + deliveryFee),
+        grandTotal,
         totalWeight,
         items: lines.map((line) => ({
           orderItemId: randomUUID(),
