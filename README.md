@@ -74,7 +74,30 @@ Managers land on the manager dashboard after signing in. The dashboard shows an 
 
 Customers' carts are saved in the database, so they persist across logins and devices. The API lives under `/api/cart` (`GET /`, `POST /items`, `PATCH /items/:productId`, `DELETE /items/:productId`) and only works for logged-in customers.
 
-Checkout (`POST /api/orders`) turns the cart into an order with a delivery address. It checks stock, takes the items out of inventory, and empties the cart in one transaction. Orders under 20 lbs ship free; 20 lbs or more adds a $10 fee. Payment is simulated: every order is marked paid. Customers see their orders at http://localhost:5173/orders (`GET /api/orders/mine`).
+Checkout (`POST /api/orders`) turns the cart into an order with a delivery address. It checks stock, takes the items out of inventory, and empties the cart in one transaction. Orders under 20 lbs ship free; 20 lbs or more adds a $10 fee. The card is charged through Stripe test mode. The order is saved only after Stripe confirms the payment, and the PaymentIntent id (`pi_…`) is stored on the payment as `transaction_reference`. Customers see their orders at http://localhost:5173/orders (`GET /api/orders/mine`).
+
+### Stripe test mode
+
+Create a `.env` file in the repo root (it is gitignored) with your test keys from the [Stripe Dashboard](https://dashboard.stripe.com/test/apikeys) while **Test mode** is on:
+
+```
+STRIPE_SECRET_KEY=sk_test_...
+VITE_STRIPE_PUBLISHABLE_KEY=pk_test_...
+```
+
+Restart the stack after saving it (`docker compose up --build`) so the backend and the checkout page both see the keys.
+
+Card fields accept any future expiry, any 3-digit CVC, and any 5-digit ZIP. These two test cards cover the paths that matter:
+
+```
+Success: 4242 4242 4242 4242
+Decline: 4000 0000 0000 0002
+Expiry:  12/34
+CVC:     123
+ZIP:     95192
+```
+
+A successful card places the order and shows the payment in the Stripe test dashboard. The decline card shows an error and leaves the cart unchanged.
 
 Products come from the database through `GET /api/products` (public, active products only). The inventory page's search, category filters, and item counts all work off that list, so stock goes down there after a purchase. Catalog tables and starter products are defined in `db/init/003_products.sql`. Postgres runs files in `db/init` only when it creates a new data volume. If an existing database is missing catalog or application tables, apply both migrations in order without deleting accounts
 

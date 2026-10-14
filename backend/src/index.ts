@@ -1,5 +1,6 @@
 import pg from "pg";
 import { createApp } from "./app.js";
+import { createStripePayments } from "./payments.js";
 import { createPgCartStore, createPgOrderStore, createPgProductStore, createPgSalesStore, createPgStore } from "./store.js";
 
 const port = Number(process.env.PORT ?? 3001);
@@ -13,6 +14,7 @@ const app = createApp({
   orderStore: createPgOrderStore(pool),
   productStore: createPgProductStore(pool),
   salesStore: createPgSalesStore(pool),
+  payments: createStripePayments(process.env.STRIPE_SECRET_KEY),
   appUrl: process.env.APP_URL ?? "http://localhost:5173",
   secureCookies: process.env.NODE_ENV === "production",
   checkDatabase: async () => {
