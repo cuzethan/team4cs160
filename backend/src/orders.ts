@@ -42,7 +42,7 @@ export function createOrderRouter({ store, orderStore, payments }: OrderOptions)
     }
   }));
 
-  // Checkout: turns the customer's cart into an order. Payment is simulated.
+  // Checkout: saves the order only after Stripe confirms the charge for this cart.
   router.post("/", handle(async (req, res) => {
     const user = await requireCustomer(req, res);
     if (!user) return;
@@ -61,11 +61,32 @@ export function createOrderRouter({ store, orderStore, payments }: OrderOptions)
       return res.status(400).json({ error: "Please enter a valid ZIP code." });
     }
 
+    const paymentIntentId = text(req.body?.paymentIntentId);
+
     try {
-      const order = await orderStore.placeOrder(user.userId, address);
+      const quote = await orderStore.quoteOrder(user.userId);
+      if (!paymentIntentId) {
+        return res.status(400).json({ error: "Please pay with a card before placing your order." });
+      }
+
+      const payment = await payments.retrieveSucceeded(paymentIntentId);
+      if (!payment || payment.userId !== user.userId) {
+        return res.status(402).json({ error: "Your payment could not be verified." });
+      }
+      if (payment.amountCents !== Math.round(quote.grandTotal * 100)) {
+        return res.status(409).json({ error: "Your cart total changed. Refresh checkout and pay again." });
+      }
+
+      const order = await orderStore.placeOrder(user.userId, address, {
+        paymentIntentId: payment.id,
+        amountCents: payment.amountCents,
+      });
       res.status(201).json({ order });
     } catch (error) {
       if (error instanceof CheckoutError) return res.status(409).json({ error: error.message });
+      if (error instanceof PaymentsNotConfiguredError) {
+        return res.status(500).json({ error: "Card payments are not configured." });
+      }
       throw error;
     }
   }));

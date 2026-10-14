@@ -39,6 +39,9 @@ export function createApp({ checkDatabase, cartStore, orderStore, productStore, 
     async create() {
       throw new PaymentsNotConfiguredError("STRIPE_SECRET_KEY is not set.");
     },
+    async retrieveSucceeded() {
+      throw new PaymentsNotConfiguredError("STRIPE_SECRET_KEY is not set.");
+    },
   };
   app.use("/api/orders", createOrderRouter({ store: authOptions.store, orderStore, payments: paymentIntents }));
 

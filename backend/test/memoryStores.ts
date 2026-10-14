@@ -6,6 +6,7 @@ import {
   type CartProduct,
   type CartStore,
   type CustomerRecord,
+  CheckoutError,
   quoteFromLines,
   type OrderRecord,
   type OrderStore,
@@ -135,9 +136,12 @@ export function createMemoryOrderStore({ cartStore, products, carts }: ReturnTyp
     async quoteOrder(userId) {
       return quoteFromLines(await pricedLines(userId));
     },
-    async placeOrder(userId) {
+    async placeOrder(userId, _address, payment) {
       const lines = await cartStore.listCartItems(userId);
       const { subtotal, deliveryFee, grandTotal, totalWeight } = quoteFromLines(await pricedLines(userId));
+      if (Math.round(grandTotal * 100) !== payment.amountCents) {
+        throw new CheckoutError("Your cart total changed. Refresh checkout and pay again.");
+      }
       const order = {
         userId,
         orderId: randomUUID(),

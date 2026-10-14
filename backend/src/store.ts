@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type pg from "pg";
 import { deliveryFeeFor, roundCents } from "./pricing.js";
 
@@ -332,12 +331,17 @@ export function quoteFromLines(lines: PricedLine[]): CheckoutQuote {
   return { subtotal, deliveryFee, grandTotal: roundCents(subtotal + deliveryFee), totalWeight };
 }
 
+export type PaidCheckout = {
+  paymentIntentId: string;
+  amountCents: number;
+};
+
 export interface OrderStore {
   // Prices the cart the same way placeOrder will, so Stripe is charged the server total.
   quoteOrder(userId: string): Promise<CheckoutQuote>;
   // Turns the user's cart into a paid order in one transaction: checks stock, saves the
   // address, order, items and payment, takes the items out of stock, and empties the cart.
-  placeOrder(userId: string, address: NewAddress): Promise<OrderRecord>;
+  placeOrder(userId: string, address: NewAddress, payment: PaidCheckout): Promise<OrderRecord>;
   listOrders(userId: string): Promise<OrderRecord[]>;
 }
 
@@ -398,7 +402,7 @@ export function createPgOrderStore(pool: pg.Pool): OrderStore {
       return quoteFromLines(await loadCheckoutLines(pool, userId, false));
     },
 
-    async placeOrder(userId, address) {
+    async placeOrder(userId, address, payment) {
       const client = await pool.connect();
       try {
         await client.query("BEGIN");
@@ -406,6 +410,9 @@ export function createPgOrderStore(pool: pg.Pool): OrderStore {
         // Lock the products being bought so two checkouts can't oversell the same stock.
         const lines = await loadCheckoutLines(client, userId, true);
         const { subtotal, totalWeight, deliveryFee, grandTotal } = quoteFromLines(lines);
+        if (Math.round(grandTotal * 100) !== payment.amountCents) {
+          throw new CheckoutError("Your cart total changed. Refresh checkout and pay again.");
+        }
 
         const { rows: [{ addressId }] } = await client.query<{ addressId: string }>(
           `INSERT INTO Address (user_id, street, city, state, zip_code, delivery_instructions)
@@ -440,11 +447,10 @@ export function createPgOrderStore(pool: pg.Pool): OrderStore {
           );
         }
 
-        // Payment is simulated: every checkout is approved straight away.
         await client.query(
           `INSERT INTO Payment (order_id, payment_amount, payment_status, payment_method, transaction_reference, processed_at)
            VALUES ($1, $2, 'paid', 'card', $3, now())`,
-          [order.orderId, grandTotal, `SIM-${randomUUID()}`],
+          [order.orderId, grandTotal, payment.paymentIntentId],
         );
 
         await client.query(
