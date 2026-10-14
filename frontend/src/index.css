@@ -14,8 +14,11 @@ body {
   margin: 0;
 }
 
-button,
-input,
-select {
-  font: inherit;
+/* In the base layer so Tailwind utilities like text-xs and font-bold still apply. */
+@layer base {
+  button,
+  input,
+  select {
+    font: inherit;
+  }
 }
