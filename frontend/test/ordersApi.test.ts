@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createPaymentIntent, fetchMyOrders, placeOrder } from "../src/orders/api";
+import { createPaymentIntent, fetchLatestCheckoutAddress, fetchMyOrders, placeOrder } from "../src/orders/api";
 import { deliveryFeeFor } from "../src/cart/delivery";
 
 const record = {
@@ -42,6 +42,17 @@ describe("orders api client", () => {
     mockFetch(200, { orders: [record] });
     const orders = await fetchMyOrders();
     expect(orders.map((order) => order.id)).toEqual([record.orderId]);
+  });
+
+  it("loads the latest saved checkout address", async () => {
+    const fetchMock = mockFetch(200, { address });
+
+    await expect(fetchLatestCheckoutAddress()).resolves.toEqual(address);
+
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/orders/latest-address");
+    expect(init.method).toBe("GET");
+    expect(init.credentials).toBe("same-origin");
   });
 
   it("starts a payment intent and returns the client secret", async () => {

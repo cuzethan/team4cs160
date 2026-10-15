@@ -4,7 +4,7 @@ import { useAuth } from "../auth/AuthContext";
 import { fetchCustomers, type Customer } from "../auth/api";
 import { SiteHeader } from "../components/SiteHeader";
 import { useProducts } from "../inventory/useProducts";
-import { fetchSales, type SalesBucket, type SalesRange } from "./api";
+import { fetchDeliveries, fetchSales, type ManagerDelivery, type SalesBucket, type SalesRange } from "./api";
 
 const tabs = ["Overview", "Customers", "Inventory", "Delivery", "Robot", "Sales"] as const;
 type DashboardTab = (typeof tabs)[number];
@@ -72,6 +72,8 @@ export function ManagerDashboard() {
             <InventoryPanel />
           ) : activeTab === "Customers" ? (
             <CustomersPanel />
+          ) : activeTab === "Delivery" ? (
+            <DeliveriesPanel />
           ) : (
             <ComingSoonPanel tab={activeTab} />
           )}
@@ -149,6 +151,81 @@ function CustomersPanel() {
                 <tr>
                   <td colSpan={6} className="px-5 py-8 text-center text-sm text-[#667269]">
                     No customer accounts found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DeliveriesPanel() {
+  const [deliveries, setDeliveries] = useState<ManagerDelivery[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    fetchDeliveries()
+      .then((results) => {
+        if (active) setDeliveries(results);
+      })
+      .catch((requestError: unknown) => {
+        if (active) {
+          setError(requestError instanceof Error ? requestError.message : "Unable to load deliveries.");
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return (
+    <div>
+      <div className="mb-5">
+        <h2 className="text-2xl font-extrabold text-[#294332]">Delivery</h2>
+        <p className="mt-1 text-sm text-[#667269]">Orders and delivery progress.</p>
+      </div>
+      {loading ? (
+        <p className="rounded-xl border border-[#e8e7dc] bg-white p-5 text-sm text-[#667269]" role="status">
+          Loading deliveries...
+        </p>
+      ) : error ? (
+        <p className="rounded-xl border border-red-200 bg-white p-5 text-sm text-red-700" role="alert">
+          {error}
+        </p>
+      ) : (
+        <div className="overflow-x-auto rounded-2xl border border-[#e8e7dc] bg-white shadow-[0_3px_12px_rgba(42,65,48,0.04)]">
+          <table className="w-full min-w-[44rem] text-left">
+            <thead className="bg-[#f6f7f1] text-xs uppercase tracking-wide text-[#667269]">
+              <tr>
+                <th scope="col" className="px-5 py-3 font-bold">Order ID</th>
+                <th scope="col" className="px-5 py-3 font-bold">Customer</th>
+                <th scope="col" className="px-5 py-3 font-bold">Delivery progress</th>
+                <th scope="col" className="px-5 py-3 font-bold">ETA</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#ecebe2]">
+              {deliveries.map((delivery) => (
+                <tr key={delivery.orderId}>
+                  <th scope="row" className="px-5 py-4 font-mono text-xs text-[#253b2d]">{delivery.orderId}</th>
+                  <td className="px-5 py-4 font-semibold text-[#253b2d]">{delivery.customerName}</td>
+                  <td className="px-5 py-4 text-sm capitalize text-[#667269]">{delivery.deliveryProgress}</td>
+                  <td className="px-5 py-4 text-sm text-[#667269]">
+                    {delivery.eta ? new Date(delivery.eta).toLocaleString() : "Not scheduled"}
+                  </td>
+                </tr>
+              ))}
+              {deliveries.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-5 py-8 text-center text-sm text-[#667269]">
+                    No orders to deliver yet.
                   </td>
                 </tr>
               )}
@@ -257,7 +334,6 @@ function SalesChart({
   const points = values.map((value, index) => ({
     x: 54 + (index / Math.max(values.length - 1, 1)) * 556,
     y: 174 - (value / maximum) * 142,
-    value,
   }));
   const line = points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
   const labelInterval = Math.max(1, Math.ceil(buckets.length / 7));
@@ -294,14 +370,7 @@ function SalesChart({
           );
         })}
         {points.length > 0 && (
-          <>
-            <path d={line} fill="none" stroke="#438254" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-            {points.map((point, index) => (
-              <circle key={buckets[index].bucketStart} cx={point.x} cy={point.y} r="4" fill="#fff" stroke="#438254" strokeWidth="2.5">
-                <title>{`${formatBucketLabel(buckets[index].bucketStart, range)}: ${formatValue(point.value)}`}</title>
-              </circle>
-            ))}
-          </>
+          <path d={line} fill="none" stroke="#438254" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
         )}
         {buckets.map((bucket, index) => index % labelInterval === 0 || index === buckets.length - 1 ? (
           <text key={bucket.bucketStart} x={points[index].x} y="202" textAnchor="middle" fill="#7d887b" fontSize="11">
@@ -401,9 +470,8 @@ function InventoryPanel() {
   );
 }
 
-function ComingSoonPanel({ tab }: { tab: "Delivery" | "Robot" | "Revenue" }) {
-  const descriptions: Record<"Delivery" | "Robot" | "Revenue", string> = {
-    Delivery: "Delivery queues and order status will be available here.",
+function ComingSoonPanel({ tab }: { tab: "Robot" | "Revenue" }) {
+  const descriptions: Record<"Robot" | "Revenue", string> = {
     Robot: "Robot status and fleet controls will be available here.",
     Revenue: "Revenue reports will be available here when payment reporting is connected.",
   };

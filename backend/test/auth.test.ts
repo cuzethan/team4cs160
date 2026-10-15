@@ -10,6 +10,7 @@ function memoryShopStores() {
     cartStore: cart.cartStore,
     orderStore: createMemoryOrderStore(cart).orderStore,
     productStore: createMemoryProductStore(cart).productStore,
+    deliveryStore: { listDeliveries: async () => [] },
   };
 }
 

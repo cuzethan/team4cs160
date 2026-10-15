@@ -7,19 +7,21 @@ import { createOrderRouter } from "./orders.js";
 import { PaymentsNotConfiguredError, type PaymentIntentCreator } from "./payments.js";
 import { createProductRouter } from "./products.js";
 import { createManagerInventoryRouter } from "./managerInventory.js";
+import { createManagerDeliveriesRouter } from "./managerDeliveries.js";
 import { createSalesRouter } from "./sales.js";
-import type { CartStore, OrderStore, ProductStore, SalesStore } from "./store.js";
+import type { CartStore, DeliveryStore, OrderStore, ProductStore, SalesStore } from "./store.js";
 
 export type AppOptions = AuthOptions & {
   cartStore: CartStore;
   orderStore: OrderStore;
   productStore: ProductStore;
   salesStore: SalesStore;
+  deliveryStore: DeliveryStore;
   payments?: PaymentIntentCreator;
   checkDatabase: () => Promise<void>;
 };
 
-export function createApp({ checkDatabase, cartStore, orderStore, productStore, salesStore, payments, ...authOptions }: AppOptions) {
+export function createApp({ checkDatabase, cartStore, orderStore, productStore, salesStore, deliveryStore, payments, ...authOptions }: AppOptions) {
   const app = express();
 
   app.use(cors({ origin: authOptions.appUrl, credentials: true }));
@@ -49,6 +51,7 @@ export function createApp({ checkDatabase, cartStore, orderStore, productStore, 
   app.use("/api/orders", createOrderRouter({ store: authOptions.store, orderStore, payments: paymentIntents }));
   app.use("/api/manager/sales", createSalesRouter({ store: authOptions.store, salesStore }));
   app.use("/api/manager/inventory", createManagerInventoryRouter({ store: authOptions.store, productStore }));
+  app.use("/api/manager/deliveries", createManagerDeliveriesRouter({ store: authOptions.store, deliveryStore }));
 
   return app;
 }

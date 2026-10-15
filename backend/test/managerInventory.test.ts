@@ -16,6 +16,7 @@ describe("manager inventory API", () => {
       orderStore: createMemoryOrderStore(cart).orderStore,
       productStore: createMemoryProductStore(cart).productStore,
       salesStore: { listSales: async () => [] },
+      deliveryStore: { listDeliveries: async () => [] },
       appUrl: "http://localhost:5173",
       secureCookies: false,
       checkDatabase: async () => {},
