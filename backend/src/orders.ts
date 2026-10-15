@@ -42,6 +42,11 @@ export function createOrderRouter({ store, orderStore, payments }: OrderOptions)
     }
   }));
 
+  router.get("/latest-address", handle(async (req, res) => {
+    const user = await requireCustomer(req, res);
+    if (user) res.json({ address: await orderStore.getLatestAddress(user.userId) });
+  }));
+
   // Checkout: saves the order only after Stripe confirms the charge for this cart.
   router.post("/", handle(async (req, res) => {
     const user = await requireCustomer(req, res);

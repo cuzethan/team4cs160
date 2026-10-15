@@ -20,6 +20,7 @@ describe("manager sales API", () => {
       orderStore: createMemoryOrderStore(cart).orderStore,
       productStore: createMemoryProductStore(cart).productStore,
       salesStore: { listSales },
+      deliveryStore: { listDeliveries: async () => [] },
       appUrl: "http://localhost:5173",
       secureCookies: false,
       checkDatabase: async () => {},

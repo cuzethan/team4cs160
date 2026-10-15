@@ -233,8 +233,19 @@ export type SalesBucket = {
   revenue: number;
 };
 
+export type ManagerDelivery = {
+  orderId: string;
+  customerName: string;
+  deliveryProgress: string;
+  eta: Date | null;
+};
+
 export interface SalesStore {
   listSales(range: SalesRange): Promise<SalesBucket[]>;
+}
+
+export interface DeliveryStore {
+  listDeliveries(): Promise<ManagerDelivery[]>;
 }
 
 export function createPgProductStore(pool: pg.Pool): ProductStore {
@@ -322,6 +333,30 @@ export function createPgSalesStore(pool: pg.Pool): SalesStore {
           AND p.processed_at < b.bucket_start + b.bucket_step
          GROUP BY b.bucket_start
          ORDER BY b.bucket_start`,
+      );
+      return rows;
+    },
+  };
+}
+
+export function createPgDeliveryStore(pool: pg.Pool): DeliveryStore {
+  return {
+    async listDeliveries() {
+      const { rows } = await pool.query<ManagerDelivery>(
+        `SELECT o.order_id AS "orderId",
+                concat_ws(' ', u.first_name, u.last_name) AS "customerName",
+                COALESCE(d.delivery_status, 'Awaiting dispatch') AS "deliveryProgress",
+                d.estimated_delivery_time AS eta
+         FROM Orders o
+         JOIN Users u ON u.user_id = o.user_id
+         LEFT JOIN LATERAL (
+           SELECT delivery_status, estimated_delivery_time
+           FROM Delivery
+           WHERE order_id = o.order_id
+           ORDER BY updated_at DESC, created_at DESC, delivery_id DESC
+           LIMIT 1
+         ) d ON true
+         ORDER BY o.created_at DESC, o.order_id`,
       );
       return rows;
     },
@@ -423,6 +458,8 @@ export type NewAddress = {
   deliveryInstructions: string;
 };
 
+export type SavedAddress = NewAddress;
+
 export type OrderLine = {
   orderItemId: string;
   productId: string;
@@ -485,6 +522,7 @@ export type PaidCheckout = {
 };
 
 export interface OrderStore {
+  getLatestAddress(userId: string): Promise<SavedAddress | null>;
   // Prices the cart the same way placeOrder will, so Stripe is charged the server total.
   quoteOrder(userId: string): Promise<CheckoutQuote>;
   // Turns the user's cart into a paid order in one transaction: checks stock, saves the
@@ -546,6 +584,20 @@ async function loadCheckoutLines(client: pg.Pool | pg.PoolClient, userId: string
 
 export function createPgOrderStore(pool: pg.Pool, settingsStore: SettingsStore = createPgSettingsStore(pool)): OrderStore {
   return {
+    async getLatestAddress(userId) {
+      const { rows } = await pool.query<SavedAddress>(
+        `SELECT a.street, a.city, a.state, a.zip_code AS "zipCode",
+                COALESCE(a.delivery_instructions, '') AS "deliveryInstructions"
+         FROM Orders o
+         JOIN Address a ON a.address_id = o.address_id
+         WHERE o.user_id = $1
+         ORDER BY o.created_at DESC, o.order_id DESC
+         LIMIT 1`,
+        [userId],
+      );
+      return rows[0] ?? null;
+    },
+
     async quoteOrder(userId) {
       return quoteFromLines(await loadCheckoutLines(pool, userId, false), await settingsStore.get());
     },

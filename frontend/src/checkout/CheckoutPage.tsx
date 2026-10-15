@@ -7,7 +7,7 @@ import { fetchCart, type CartLine } from "../cart/api";
 import { deliveryFeeFor } from "../cart/delivery";
 import { fetchDeliverySettings, type DeliverySettings } from "../manager/api";
 import { SiteHeader } from "../components/SiteHeader";
-import { createPaymentIntent, placeOrder, type CheckoutAddress } from "../orders/api";
+import { createPaymentIntent, fetchLatestCheckoutAddress, placeOrder, type CheckoutAddress } from "../orders/api";
 
 const publishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
 const stripePromise = publishableKey ? loadStripe(publishableKey) : null;
@@ -202,8 +202,12 @@ export function CheckoutPage() {
     setClientSecret(null);
     setPaymentError(null);
     try {
-      const cartLines = await fetchCart();
+      const [cartLines, savedAddress] = await Promise.all([
+        fetchCart(),
+        fetchLatestCheckoutAddress(),
+      ]);
       setLines(cartLines);
+      if (savedAddress) setAddress(savedAddress);
       if (cartLines.length > 0) void loadPaymentIntent();
     } catch (error) {
       setLoadError((error as Error).message);

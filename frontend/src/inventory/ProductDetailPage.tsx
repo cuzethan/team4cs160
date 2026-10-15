@@ -1,8 +1,6 @@
 import { useState } from "react";
 import type { InventoryProduct } from "./types";
 
-const MAX_QUANTITY_CHOICE = 10;
-
 type ProductDetailPageProps = {
   product: InventoryProduct;
   onClose: () => void;
@@ -12,7 +10,7 @@ type ProductDetailPageProps = {
 export function ProductDetailPage({ product, onClose, onAddToCart }: ProductDetailPageProps) {
   const [quantity, setQuantity] = useState(1);
   const quantityChoices = Array.from(
-    { length: Math.min(product.quantityInStock, MAX_QUANTITY_CHOICE) },
+    { length: product.quantityInStock },
     (_, index) => index + 1,
   );
 

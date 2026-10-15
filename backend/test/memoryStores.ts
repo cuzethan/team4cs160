@@ -11,6 +11,7 @@ import {
   type OrderRecord,
   type OrderStore,
   type ProductStore,
+  type SavedAddress,
   type User,
   DEFAULT_DELIVERY_SETTINGS,
   type SettingsStore,
@@ -126,7 +127,7 @@ export function createMemoryCartStore(products: CartProduct[]) {
 }
 
 export function createMemoryOrderStore({ cartStore, products, carts }: ReturnType<typeof createMemoryCartStore>, settingsStore?: SettingsStore) {
-  const orders: (OrderRecord & { userId: string })[] = [];
+  const orders: (OrderRecord & { userId: string; address: SavedAddress })[] = [];
 
   async function pricedLines(userId: string) {
     const lines = await cartStore.listCartItems(userId);
@@ -144,10 +145,14 @@ export function createMemoryOrderStore({ cartStore, products, carts }: ReturnTyp
   }
 
   const orderStore: OrderStore = {
+    async getLatestAddress(userId) {
+      const latestOrder = [...orders].reverse().find((order) => order.userId === userId);
+      return latestOrder ? { ...latestOrder.address } : null;
+    },
     async quoteOrder(userId) {
       return quoteFromLines(await pricedLines(userId), await settingsStore?.get() ?? DEFAULT_DELIVERY_SETTINGS);
     },
-    async placeOrder(userId, _address, payment) {
+    async placeOrder(userId, address, payment) {
       const lines = await cartStore.listCartItems(userId);
       const { subtotal, deliveryFee, grandTotal, totalWeight } = quoteFromLines(await pricedLines(userId), await settingsStore?.get() ?? DEFAULT_DELIVERY_SETTINGS);
       if (Math.round(grandTotal * 100) !== payment.amountCents) {
@@ -155,6 +160,7 @@ export function createMemoryOrderStore({ cartStore, products, carts }: ReturnTyp
       }
       const order = {
         userId,
+        address: { ...address },
         orderId: randomUUID(),
         createdAt: new Date(),
         orderStatus: "placed",
@@ -182,7 +188,7 @@ export function createMemoryOrderStore({ cartStore, products, carts }: ReturnTyp
       return orders
         .filter((order) => order.userId === userId)
         .reverse()
-        .map(({ userId: _userId, ...record }) => record);
+        .map(({ userId: _userId, address: _address, ...record }) => record);
     },
   };
 

@@ -17,6 +17,7 @@ describe("global delivery settings", () => {
       store: memory.store, settingsStore: settings.settingsStore, cartStore: cart.cartStore,
       orderStore: createMemoryOrderStore(cart, settings.settingsStore).orderStore,
       productStore: createMemoryProductStore(cart).productStore, salesStore: { listSales: async () => [] },
+      deliveryStore: { listDeliveries: async () => [] },
       payments: {
         async create({ amountCents }) { paidAmount = amountCents; return { clientSecret: "secret" }; },
         async retrieveSucceeded(id) { return { id, amountCents: paidAmount, userId: customerId }; },

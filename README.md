@@ -68,13 +68,13 @@ docker compose exec backend npm run create-manager -- manager@ofs.com yourpasswo
 ```
 
 Then log in at http://localhost:5173/manager-login.
-Managers land on the manager dashboard after signing in. The dashboard shows an overview of the current product catalog and links to the catalog and customer storefront.
+Managers land on the manager dashboard after signing in. The dashboard shows an overview of the current product catalog, links to the catalog and customer storefront, and a delivery table with each order's customer, progress, and ETA.
 
 ## Cart and checkout
 
 Customers' carts are saved in the database, so they persist across logins and devices. The API lives under `/api/cart` (`GET /`, `POST /items`, `PATCH /items/:productId`, `DELETE /items/:productId`) and only works for logged-in customers.
 
-Checkout (`POST /api/orders`) turns the cart into an order with a delivery address. It checks stock, takes the items out of inventory, and empties the cart in one transaction. Orders under 20 lbs ship free; 20 lbs or more adds a $10 fee. The card is charged through Stripe test mode. The order is saved only after Stripe confirms the payment, and the PaymentIntent id (`pi_…`) is stored on the payment as `transaction_reference`. Customers see their orders at http://localhost:5173/orders (`GET /api/orders/mine`).
+Checkout (`POST /api/orders`) turns the cart into an order with a delivery address. On future checkouts, the latest address used for one of that customer's orders is prefilled. It checks stock, takes the items out of inventory, and empties the cart in one transaction. Orders under 20 lbs ship free; 20 lbs or more adds a $10 fee. The card is charged through Stripe test mode. The order is saved only after Stripe confirms the payment, and the PaymentIntent id (`pi_…`) is stored on the payment as `transaction_reference`. Customers see their orders at http://localhost:5173/orders (`GET /api/orders/mine`).
 
 ### Stripe test mode
 
@@ -99,7 +99,7 @@ ZIP:     95192
 
 A successful card places the order and shows the payment in the Stripe test dashboard. The decline card shows an error and leaves the cart unchanged.
 
-Products come from the database through `GET /api/products` (public, active products only). The inventory page's search, category filters, and item counts all work off that list, so stock goes down there after a purchase. Catalog tables and starter products are defined in `db/init/003_products.sql`. Postgres runs files in `db/init` only when it creates a new data volume. If an existing database is missing catalog or application tables, apply both migrations in order without deleting accounts
+Products come from the database through `GET /api/products` (public, active products only). The inventory page's search, category filters, and item counts all work off that list, so stock goes down there after a purchase. Catalog tables and starter products are defined in `db/init/003_products.sql`. Postgres runs files in `db/init` only when it creates a new data volume. If an existing database is missing catalog or application tables, apply the relevant SQL files from `db/init` in order without deleting accounts.
 
 These scripts are safe to reapply: they add missing schema objects and skip categories/products that already exist. The backend also creates the global delivery settings table and default row at startup, so existing databases are upgraded without deleting data. To apply the settings schema manually, run `docker compose exec -T db psql -U ofs -d ofs < db/init/005_global_settings.sql`. To completely reset a local development database instead, use `docker compose down -v && docker compose up --build`; this deletes all database data, including accounts.
 

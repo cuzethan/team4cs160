@@ -44,6 +44,7 @@ describe("orders API", () => {
       orderStore: createMemoryOrderStore(cart).orderStore,
       productStore: createMemoryProductStore(cart).productStore,
       salesStore: { listSales: async () => [] },
+      deliveryStore: { listDeliveries: async () => [] },
       payments: {
         async create(input) {
           paymentRequests.push(input);
@@ -75,6 +76,14 @@ describe("orders API", () => {
     expect((await request(app).post("/api/orders").send({ address })).status).toBe(401);
     expect((await request(app).post("/api/orders/payment-intent")).status).toBe(401);
     expect((await request(app).get("/api/orders/mine")).status).toBe(401);
+    expect((await request(app).get("/api/orders/latest-address")).status).toBe(401);
+  });
+
+  it("returns no saved address until the customer has placed an order", async () => {
+    const { agent } = await loggedInCustomer();
+    const response = await agent.get("/api/orders/latest-address");
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ address: null });
   });
 
   it("creates a payment intent for the server-side cart total", async () => {
@@ -137,6 +146,7 @@ describe("orders API", () => {
 
     const mine = await agent.get("/api/orders/mine");
     expect(mine.body.orders.map((order: { orderId: string }) => order.orderId)).toEqual([res.body.order.orderId]);
+    expect((await agent.get("/api/orders/latest-address")).body.address).toEqual(address);
   });
 
   it("charges the delivery fee at 20 lbs or more", async () => {

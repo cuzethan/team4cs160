@@ -10,6 +10,7 @@ function memoryShopStores() {
     cartStore: cart.cartStore,
     orderStore: createMemoryOrderStore(cart).orderStore,
     productStore: createMemoryProductStore(cart).productStore,
+    deliveryStore: { listDeliveries: async () => [] },
   };
 }
 
@@ -33,6 +34,7 @@ describe("auth API", () => {
       store: memory.store,
       ...memoryShopStores(),
       salesStore: { listSales: async () => [] },
+      deliveryStore: { listDeliveries: async () => [] },
       appUrl: "http://localhost:5173",
       secureCookies: false,
       checkDatabase: async () => {},
