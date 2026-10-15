@@ -5,6 +5,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { fetchCart, type CartLine } from "../cart/api";
 import { deliveryFeeFor } from "../cart/delivery";
+import { fetchDeliverySettings, type DeliverySettings } from "../manager/api";
 import { SiteHeader } from "../components/SiteHeader";
 import { createPaymentIntent, placeOrder, type CheckoutAddress } from "../orders/api";
 
@@ -180,6 +181,7 @@ export function CheckoutPage() {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [deliverySettings, setDeliverySettings] = useState<DeliverySettings>({ deliveryFee: 10, freeDeliveryWeightThreshold: 20 });
 
   const loadPaymentIntent = async () => {
     setPaymentLoading(true);
@@ -214,12 +216,14 @@ export function CheckoutPage() {
     if (user) void loadCart();
   }, [user]);
 
+  useEffect(() => { void fetchDeliverySettings().then(setDeliverySettings).catch(() => {}); }, []);
+
   const updateField = (field: keyof CheckoutAddress) => (value: string) =>
     setAddress((current) => ({ ...current, [field]: value }));
 
   const subtotal = lines.reduce((total, line) => total + line.price * line.quantity, 0);
   const totalWeight = lines.reduce((total, line) => total + line.weightLbs * line.quantity, 0);
-  const deliveryFee = deliveryFeeFor(totalWeight);
+  const deliveryFee = deliveryFeeFor(totalWeight, deliverySettings);
 
   return (
     <div className="min-h-screen bg-[#fbfaf5] text-[#253b2d]">
