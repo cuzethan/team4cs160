@@ -1,5 +1,58 @@
 import type pg from "pg";
-import { deliveryFeeFor, roundCents } from "./pricing.js";
+import { DEFAULT_DELIVERY_SETTINGS, deliveryFeeFor, roundCents, type DeliverySettings } from "./pricing.js";
+
+export type { DeliverySettings } from "./pricing.js";
+export { DEFAULT_DELIVERY_SETTINGS } from "./pricing.js";
+
+export interface SettingsStore {
+  get(): Promise<DeliverySettings>;
+  update(settings: DeliverySettings): Promise<DeliverySettings>;
+}
+
+// Postgres only runs docker-entrypoint-initdb.d scripts for an empty data volume.
+// Create the singleton schema here too so upgrades work with persistent databases.
+export async function ensureGlobalSettingsSchema(pool: pg.Pool) {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS GlobalSettings (
+      settings_id SMALLINT PRIMARY KEY CHECK (settings_id = 1),
+      delivery_fee DECIMAL(10,2) NOT NULL CHECK (delivery_fee >= 0),
+      free_delivery_weight_threshold DECIMAL(10,2) NOT NULL CHECK (free_delivery_weight_threshold > 0),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await pool.query(`
+    INSERT INTO GlobalSettings (settings_id, delivery_fee, free_delivery_weight_threshold)
+    VALUES (1, 10, 20)
+    ON CONFLICT (settings_id) DO NOTHING
+  `);
+}
+
+export function createPgSettingsStore(pool: pg.Pool): SettingsStore {
+  return {
+    async get() {
+      const { rows } = await pool.query<DeliverySettings>(
+        `SELECT delivery_fee::float8 AS "deliveryFee",
+                free_delivery_weight_threshold::float8 AS "freeDeliveryWeightThreshold"
+         FROM GlobalSettings WHERE settings_id = 1`,
+      );
+      return rows[0] ?? DEFAULT_DELIVERY_SETTINGS;
+    },
+    async update(settings) {
+      const { rows } = await pool.query<DeliverySettings>(
+        `INSERT INTO GlobalSettings (settings_id, delivery_fee, free_delivery_weight_threshold)
+         VALUES (1, $1, $2)
+         ON CONFLICT (settings_id) DO UPDATE
+           SET delivery_fee = EXCLUDED.delivery_fee,
+               free_delivery_weight_threshold = EXCLUDED.free_delivery_weight_threshold,
+               updated_at = now()
+         RETURNING delivery_fee::float8 AS "deliveryFee",
+                   free_delivery_weight_threshold::float8 AS "freeDeliveryWeightThreshold"`,
+        [settings.deliveryFee, settings.freeDeliveryWeightThreshold],
+      );
+      return rows[0];
+    },
+  };
+}
 
 export type Role = "customer" | "admin";
 
@@ -448,7 +501,7 @@ type PricedLine = {
 };
 
 // Same stock and pricing rules as placing an order, without writing anything.
-export function quoteFromLines(lines: PricedLine[]): CheckoutQuote {
+export function quoteFromLines(lines: PricedLine[], settings: DeliverySettings = DEFAULT_DELIVERY_SETTINGS): CheckoutQuote {
   if (lines.length === 0) throw new CheckoutError("Your cart is empty.");
   for (const line of lines) {
     if (!line.active) throw new CheckoutError(`${line.name} is no longer available. Remove it to continue.`);
@@ -459,7 +512,7 @@ export function quoteFromLines(lines: PricedLine[]): CheckoutQuote {
 
   const subtotal = roundCents(lines.reduce((sum, line) => sum + line.price * line.quantity, 0));
   const totalWeight = roundCents(lines.reduce((sum, line) => sum + line.weight * line.quantity, 0));
-  const deliveryFee = deliveryFeeFor(totalWeight);
+  const deliveryFee = deliveryFeeFor(totalWeight, settings);
   return { subtotal, deliveryFee, grandTotal: roundCents(subtotal + deliveryFee), totalWeight };
 }
 
@@ -529,7 +582,7 @@ async function loadCheckoutLines(client: pg.Pool | pg.PoolClient, userId: string
   return rows;
 }
 
-export function createPgOrderStore(pool: pg.Pool): OrderStore {
+export function createPgOrderStore(pool: pg.Pool, settingsStore: SettingsStore = createPgSettingsStore(pool)): OrderStore {
   return {
     async getLatestAddress(userId) {
       const { rows } = await pool.query<SavedAddress>(
@@ -546,7 +599,7 @@ export function createPgOrderStore(pool: pg.Pool): OrderStore {
     },
 
     async quoteOrder(userId) {
-      return quoteFromLines(await loadCheckoutLines(pool, userId, false));
+      return quoteFromLines(await loadCheckoutLines(pool, userId, false), await settingsStore.get());
     },
 
     async placeOrder(userId, address, payment) {
@@ -556,7 +609,7 @@ export function createPgOrderStore(pool: pg.Pool): OrderStore {
 
         // Lock the products being bought so two checkouts can't oversell the same stock.
         const lines = await loadCheckoutLines(client, userId, true);
-        const { subtotal, totalWeight, deliveryFee, grandTotal } = quoteFromLines(lines);
+        const { subtotal, totalWeight, deliveryFee, grandTotal } = quoteFromLines(lines, await settingsStore.get());
         if (Math.round(grandTotal * 100) !== payment.amountCents) {
           throw new CheckoutError("Your cart total changed. Refresh checkout and pay again.");
         }

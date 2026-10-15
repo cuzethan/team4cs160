@@ -13,7 +13,18 @@ import {
   type ProductStore,
   type SavedAddress,
   type User,
+  DEFAULT_DELIVERY_SETTINGS,
+  type SettingsStore,
 } from "../src/store.js";
+
+export function createMemorySettingsStore() {
+  let settings = { ...DEFAULT_DELIVERY_SETTINGS };
+  const settingsStore: SettingsStore = {
+    async get() { return { ...settings }; },
+    async update(next) { settings = { ...next }; return { ...settings }; },
+  };
+  return { settingsStore };
+}
 // In-memory stand-ins for the Postgres stores, so tests run without a database.
 export function createMemoryStore() {
   const users = new Map<string, User>();
@@ -115,7 +126,7 @@ export function createMemoryCartStore(products: CartProduct[]) {
   return { cartStore, products: productsById, carts };
 }
 
-export function createMemoryOrderStore({ cartStore, products, carts }: ReturnType<typeof createMemoryCartStore>) {
+export function createMemoryOrderStore({ cartStore, products, carts }: ReturnType<typeof createMemoryCartStore>, settingsStore?: SettingsStore) {
   const orders: (OrderRecord & { userId: string; address: SavedAddress })[] = [];
 
   async function pricedLines(userId: string) {
@@ -139,11 +150,11 @@ export function createMemoryOrderStore({ cartStore, products, carts }: ReturnTyp
       return latestOrder ? { ...latestOrder.address } : null;
     },
     async quoteOrder(userId) {
-      return quoteFromLines(await pricedLines(userId));
+      return quoteFromLines(await pricedLines(userId), await settingsStore?.get() ?? DEFAULT_DELIVERY_SETTINGS);
     },
     async placeOrder(userId, address, payment) {
       const lines = await cartStore.listCartItems(userId);
-      const { subtotal, deliveryFee, grandTotal, totalWeight } = quoteFromLines(await pricedLines(userId));
+      const { subtotal, deliveryFee, grandTotal, totalWeight } = quoteFromLines(await pricedLines(userId), await settingsStore?.get() ?? DEFAULT_DELIVERY_SETTINGS);
       if (Math.round(grandTotal * 100) !== payment.amountCents) {
         throw new CheckoutError("Your cart total changed. Refresh checkout and pay again.");
       }

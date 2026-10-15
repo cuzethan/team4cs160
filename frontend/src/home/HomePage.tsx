@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { SiteHeader } from "../components/SiteHeader";
@@ -7,7 +7,8 @@ import { ProductDetailPage } from "../inventory/ProductDetailPage";
 import type { InventoryProduct } from "../inventory/types";
 import { useProducts } from "../inventory/useProducts";
 import { useAddToCart } from "../cart/useAddToCart";
-import { DELIVERY_FEE, FREE_DELIVERY_LIMIT_LBS } from "../cart/delivery";
+import { fetchDeliverySettings, type DeliverySettings } from "../manager/api";
+import { DEFAULT_DELIVERY_SETTINGS } from "../cart/delivery";
 
 const categories = [
   { name: "Fruits", emoji: "🍎", blurb: "Apples, berries, bananas and more" },
@@ -34,7 +35,7 @@ const steps = [
 const featuredProductNames = ["Fresh Strawberries", "Hass Avocados", "Baby Spinach", "Whole Grain Bread"];
 const FEATURED_COUNT = 4;
 
-function Hero() {
+function Hero({ threshold }: { threshold: number }) {
   const { user, loading } = useAuth();
 
   return (
@@ -59,7 +60,7 @@ function Hero() {
           </h1>
           <p className="mt-4 max-w-xl text-lg text-[#e4eedb]">
             Shop online and our delivery robot brings your order to you. Delivery is free
-            for orders under {FREE_DELIVERY_LIMIT_LBS} lbs.
+            for orders under {threshold} lbs.
           </p>
           <Link
             to="/inventory"
@@ -131,7 +132,7 @@ function HowItWorks() {
   );
 }
 
-function DeliveryInfo() {
+function DeliveryInfo({ settings }: { settings: DeliverySettings }) {
   return (
     <section
       aria-labelledby="delivery-heading"
@@ -142,12 +143,12 @@ function DeliveryInfo() {
       </h2>
       <dl className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="rounded-xl bg-[#e9f1df] p-4">
-          <dt className="text-sm font-bold text-[#416449]">Under {FREE_DELIVERY_LIMIT_LBS} lbs</dt>
+          <dt className="text-sm font-bold text-[#416449]">Under {settings.freeDeliveryWeightThreshold} lbs</dt>
           <dd className="mt-1 text-2xl font-extrabold text-[#253b2d]">Free delivery</dd>
         </div>
         <div className="rounded-xl bg-[#fbf1d6] p-4">
-          <dt className="text-sm font-bold text-[#7a5b12]">{FREE_DELIVERY_LIMIT_LBS} lbs or more</dt>
-          <dd className="mt-1 text-2xl font-extrabold text-[#253b2d]">${DELIVERY_FEE} fee</dd>
+          <dt className="text-sm font-bold text-[#7a5b12]">{settings.freeDeliveryWeightThreshold} lbs or more</dt>
+          <dd className="mt-1 text-2xl font-extrabold text-[#253b2d]">${settings.deliveryFee.toFixed(2)} fee</dd>
         </div>
         <div className="rounded-xl bg-[#f3f5e9] p-4">
           <dt className="text-sm font-bold text-[#55705b]">Drop-off spot</dt>
@@ -257,6 +258,8 @@ function NoticeBanner() {
 export function HomePage() {
   const { user, loading } = useAuth();
   const location = useLocation();
+  const [deliverySettings, setDeliverySettings] = useState<DeliverySettings>(DEFAULT_DELIVERY_SETTINGS);
+  useEffect(() => { void fetchDeliverySettings().then(setDeliverySettings).catch(() => {}); }, []);
 
   if (loading) {
     return <main className="p-8 text-center text-[#5f6b61]" aria-live="polite">Loading your account...</main>;
@@ -270,11 +273,11 @@ export function HomePage() {
       <SiteHeader />
       <main className="mx-auto flex max-w-7xl flex-col gap-12 px-5 py-8 sm:px-8 sm:py-12">
         <NoticeBanner />
-        <Hero />
+        <Hero threshold={deliverySettings.freeDeliveryWeightThreshold} />
         <CategoryTiles />
         <FeaturedProducts />
         <HowItWorks />
-        <DeliveryInfo />
+        <DeliveryInfo settings={deliverySettings} />
         <OrdersBanner />
       </main>
       <footer className="border-t border-[#ecebe2] py-6 text-center text-sm text-[#5f6b61]">

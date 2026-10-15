@@ -1,12 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { fetchCustomers, type Customer } from "../auth/api";
 import { SiteHeader } from "../components/SiteHeader";
 import { useProducts } from "../inventory/useProducts";
-import { fetchDeliveries, fetchSales, type ManagerDelivery, type SalesBucket, type SalesRange } from "./api";
+import { fetchDeliveries, fetchDeliverySettings, fetchSales, saveDeliverySettings, type DeliverySettings, type ManagerDelivery, type SalesBucket, type SalesRange } from "./api";
 
-const tabs = ["Overview", "Customers", "Inventory", "Delivery", "Robot", "Sales"] as const;
+const tabs = ["Overview", "Customers", "Inventory", "Delivery", "Robot", "Sales", "Settings"] as const;
 type DashboardTab = (typeof tabs)[number];
 const dateRanges = ["Today", "Last week", "Last 30 days", "All time"] as const;
 type DateRange = (typeof dateRanges)[number];
@@ -72,6 +72,8 @@ export function ManagerDashboard() {
             <InventoryPanel />
           ) : activeTab === "Customers" ? (
             <CustomersPanel />
+          ) : activeTab === "Settings" ? (
+            <SettingsPanel />
           ) : activeTab === "Delivery" ? (
             <DeliveriesPanel />
           ) : (
@@ -81,6 +83,48 @@ export function ManagerDashboard() {
       </main>
     </div>
   );
+}
+
+function SettingsPanel() {
+  const [settings, setSettings] = useState<DeliverySettings>({ deliveryFee: 10, freeDeliveryWeightThreshold: 20 });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    fetchDeliverySettings().then((value) => { if (active) setSettings(value); })
+      .catch((e: unknown) => { if (active) setError(e instanceof Error ? e.message : "Unable to load settings."); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault(); setSaving(true); setError(""); setSuccess("");
+    try {
+      setSettings(await saveDeliverySettings(settings));
+      setSuccess("Delivery settings saved.");
+    } catch (e) { setError(e instanceof Error ? e.message : "Unable to save settings."); }
+    finally { setSaving(false); }
+  };
+
+  return <div>
+    <div className="mb-5"><h2 className="text-2xl font-extrabold text-[#294332]">Settings</h2><p className="mt-1 text-sm text-[#667269]">Configure delivery pricing for every customer order.</p></div>
+    {loading ? <p role="status" className="rounded-xl border border-[#e8e7dc] bg-white p-5 text-sm text-[#667269]">Loading settings...</p> : (
+      <form onSubmit={submit} className="max-w-xl space-y-5 rounded-2xl border border-[#e8e7dc] bg-white p-6 shadow-[0_3px_12px_rgba(42,65,48,0.04)]">
+        <label className="block text-sm font-semibold text-[#536459]">Delivery fee ($)
+          <input aria-label="Delivery fee" type="number" min="0" step="0.01" required value={settings.deliveryFee} onChange={(e) => setSettings({ ...settings, deliveryFee: Number(e.target.value) })} className="mt-1 w-full rounded-xl border border-[#dedfd5] px-4 py-3" />
+        </label>
+        <label className="block text-sm font-semibold text-[#536459]">Free-delivery threshold (lb)
+          <input aria-label="Free-delivery weight threshold" type="number" min="0.01" step="0.01" required value={settings.freeDeliveryWeightThreshold} onChange={(e) => setSettings({ ...settings, freeDeliveryWeightThreshold: Number(e.target.value) })} className="mt-1 w-full rounded-xl border border-[#dedfd5] px-4 py-3" />
+        </label>
+        {error && <p role="alert" className="text-sm text-red-800">{error}</p>}
+        {success && <p role="status" className="text-sm text-green-800">{success}</p>}
+        <button disabled={saving} className="rounded-xl bg-[#416449] px-5 py-3 font-bold text-white disabled:opacity-60">{saving ? "Saving..." : "Save settings"}</button>
+      </form>
+    )}
+  </div>;
 }
 
 function CustomersPanel() {

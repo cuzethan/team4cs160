@@ -6,6 +6,7 @@ import { fetchCart, removeCartItem, updateCartItem, type CartLine } from "./api"
 import { CartItemCard } from "./CartItemCard";
 import { CartSummary } from "./CartSummary";
 import { deliveryFeeFor } from "./delivery";
+import { fetchDeliverySettings, type DeliverySettings } from "../manager/api";
 import { toCartItem, type CartItem } from "./types";
 
 export function CartPage() {
@@ -16,6 +17,7 @@ export function CartPage() {
   const [error, setError] = useState<string | null>(null);
   // Problems with a single change (e.g. not enough stock). The cart itself still shows.
   const [updateError, setUpdateError] = useState<string | null>(null);
+  const [deliverySettings, setDeliverySettings] = useState<DeliverySettings>({ deliveryFee: 10, freeDeliveryWeightThreshold: 20 });
 
   const showCart = (lines: CartLine[]) => {
     setCartItems(lines.map(toCartItem));
@@ -36,6 +38,8 @@ export function CartPage() {
   useEffect(() => {
     if (user) void fetchCartItems();
   }, [user]);
+
+  useEffect(() => { void fetchDeliverySettings().then(setDeliverySettings).catch(() => {}); }, []);
 
   const changeCart = async (change: () => Promise<CartLine[]>) => {
     setUpdateError(null);
@@ -76,7 +80,7 @@ export function CartPage() {
   const calculateTotalWeight = () =>
     cartItems.reduce((total, item) => total + item.weightLbs * item.quantity, 0);
 
-  const deliveryFee = deliveryFeeFor(calculateTotalWeight());
+  const deliveryFee = deliveryFeeFor(calculateTotalWeight(), deliverySettings);
 
   return (
     <div className="min-h-screen bg-[#fbfaf5] text-[#253b2d]">
