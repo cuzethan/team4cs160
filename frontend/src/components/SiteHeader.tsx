@@ -76,6 +76,14 @@ export function SiteHeader() {
           >
             {user?.role === "manager" ? "Dashboard" : "Shop"}
           </Link>
+          {user?.role === "customer" && (
+            <Link
+              to="/orders"
+              className="rounded-full px-4 py-2.5 text-sm font-bold text-[#426149] hover:bg-[#f0f3e8]"
+            >
+              Order history
+            </Link>
+          )}
           {user?.role === "manager" && (
             <>
               <Link
