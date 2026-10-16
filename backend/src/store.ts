@@ -27,6 +27,16 @@ export async function ensureGlobalSettingsSchema(pool: pg.Pool) {
   `);
 }
 
+// Same reason as above: links price history rows to their product and the manager
+// who changed it, on databases created before db/init/006_inventory_management.sql.
+export async function ensureInventoryManagementSchema(pool: pg.Pool) {
+  await pool.query(`
+    ALTER TABLE PriceHistory
+      ADD COLUMN IF NOT EXISTS product_id UUID REFERENCES Product(product_id) ON DELETE CASCADE,
+      ADD COLUMN IF NOT EXISTS changed_by UUID REFERENCES Users(user_id) ON DELETE SET NULL
+  `);
+}
+
 export function createPgSettingsStore(pool: pg.Pool): SettingsStore {
   return {
     async get() {
@@ -211,12 +221,42 @@ export type CatalogProduct = {
   imageUrl: string | null;
 };
 
+// A product as managers see it: includes deactivated products and the category id.
+export type ManagedProduct = CatalogProduct & {
+  categoryId: string | null;
+  active: boolean;
+};
+
+export type ProductCategory = { id: string; name: string };
+
+export type NewProduct = {
+  name: string;
+  description: string;
+  price: number;
+  weightLbs: number;
+  unit: string;
+  categoryId: string;
+  quantityInStock: number;
+};
+
+export type ProductChanges = Partial<Omit<NewProduct, "quantityInStock">> & { active?: boolean };
+
+// Who changed stock and why; saved to the Transactions table.
+export type StockChange = { userId: string; reason: string };
+
 export interface ProductStore {
   // Active products only, ordered by category then name.
   listProducts(): Promise<CatalogProduct[]>;
+  // Every product, including deactivated ones, for the manager dashboard.
+  listManagedProducts(): Promise<ManagedProduct[]>;
+  listCategories(): Promise<ProductCategory[]>;
+  createProduct(userId: string, product: NewProduct): Promise<ManagedProduct>;
+  // Null when the product doesn't exist. Price changes are saved to PriceHistory.
+  updateProduct(userId: string, productId: string, changes: ProductChanges): Promise<ManagedProduct | null>;
   adjustStock(
     productId: string,
     adjustment: number,
+    change: StockChange,
   ): Promise<
     | { status: "updated"; quantityInStock: number }
     | { status: "not-found" }
@@ -248,6 +288,38 @@ export interface DeliveryStore {
   listDeliveries(): Promise<ManagerDelivery[]>;
 }
 
+// Postgres rejects malformed UUIDs with an error, so treat them as "not found" up front.
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const managedProductColumns = `
+  p.product_id AS id, p.product_name AS name, COALESCE(c.category_name, 'Other') AS category,
+  COALESCE(p.description, '') AS description, p.price::float8 AS price,
+  p.weight::float8 AS "weightLbs", p.unit, p.quantity_in_stock AS "quantityInStock",
+  p.image_url AS "imageUrl", p.category_id AS "categoryId", p.active`;
+
+async function findManagedProduct(pool: pg.Pool, productId: string) {
+  const { rows } = await pool.query<ManagedProduct>(
+    `SELECT ${managedProductColumns}
+     FROM Product p LEFT JOIN Category c ON c.category_id = p.category_id
+     WHERE p.product_id = $1`,
+    [productId],
+  );
+  return rows[0] ?? null;
+}
+
+// A short, readable summary for the audit log, e.g. "price $1.49 → $1.79, deactivated".
+export function describeProductChanges(before: ManagedProduct, after: ManagedProduct) {
+  const changes: string[] = [];
+  if (after.name !== before.name) changes.push(`renamed to ${after.name}`);
+  if (after.price !== before.price) changes.push(`price $${before.price.toFixed(2)} → $${after.price.toFixed(2)}`);
+  if (after.weightLbs !== before.weightLbs) changes.push(`weight ${before.weightLbs} → ${after.weightLbs} lb`);
+  if (after.unit !== before.unit) changes.push(`unit ${before.unit} → ${after.unit}`);
+  if (after.categoryId !== before.categoryId) changes.push("category changed");
+  if (after.description !== before.description) changes.push("description updated");
+  if (after.active !== before.active) changes.push(after.active ? "reactivated" : "deactivated");
+  return changes.join(", ");
+}
+
 export function createPgProductStore(pool: pg.Pool): ProductStore {
   return {
     async listProducts() {
@@ -263,20 +335,129 @@ export function createPgProductStore(pool: pg.Pool): ProductStore {
       return rows;
     },
 
-    async adjustStock(productId, adjustment) {
+    async listManagedProducts() {
+      const { rows } = await pool.query<ManagedProduct>(
+        `SELECT ${managedProductColumns}
+         FROM Product p LEFT JOIN Category c ON c.category_id = p.category_id
+         ORDER BY p.active DESC, category, p.product_name`,
+      );
+      return rows;
+    },
+
+    async listCategories() {
+      const { rows } = await pool.query<ProductCategory>(
+        "SELECT category_id AS id, category_name AS name FROM Category ORDER BY category_name",
+      );
+      return rows;
+    },
+
+    async createProduct(userId, product) {
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const { rows: [{ productId }] } = await client.query<{ productId: string }>(
+          `INSERT INTO Product (product_name, description, price, weight, unit, category_id, quantity_in_stock)
+           VALUES ($1, NULLIF($2, ''), $3, $4, $5, $6, $7)
+           RETURNING product_id AS "productId"`,
+          [product.name, product.description, product.price, product.weightLbs, product.unit,
+            product.categoryId, product.quantityInStock],
+        );
+        if (product.quantityInStock > 0) {
+          await client.query(
+            `INSERT INTO Transactions (user_id, product_id, transaction_type, quantity_changed, quantity_after_change, reason)
+             VALUES ($1, $2, 'restock', $3, $3, 'Initial stock')`,
+            [userId, productId, product.quantityInStock],
+          );
+        }
+        await client.query(
+          `INSERT INTO AuditLog (user_id, affected_table, affected_record_id, description)
+           VALUES ($1, 'Product', $2, $3)`,
+          [userId, productId, `Added product ${product.name}`],
+        );
+        await client.query("COMMIT");
+        return (await findManagedProduct(pool, productId))!;
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+
+    async updateProduct(userId, productId, changes) {
+      if (!UUID_PATTERN.test(productId)) return null;
+
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const { rows: [current] } = await client.query<ManagedProduct>(
+          `SELECT ${managedProductColumns}
+           FROM Product p LEFT JOIN Category c ON c.category_id = p.category_id
+           WHERE p.product_id = $1 FOR UPDATE OF p`,
+          [productId],
+        );
+        if (!current) {
+          await client.query("ROLLBACK");
+          return null;
+        }
+
+        const next = { ...current, ...changes };
+        await client.query(
+          `UPDATE Product
+           SET product_name = $2, description = NULLIF($3, ''), price = $4, weight = $5, unit = $6,
+               category_id = $7, active = $8, updated_at = now()
+           WHERE product_id = $1`,
+          [productId, next.name, next.description, next.price, next.weightLbs, next.unit, next.categoryId, next.active],
+        );
+        if (next.price !== current.price) {
+          await client.query(
+            "INSERT INTO PriceHistory (product_id, changed_by, old_price, new_price) VALUES ($1, $2, $3, $4)",
+            [productId, userId, current.price, next.price],
+          );
+        }
+        const summary = describeProductChanges(current, next);
+        if (summary) {
+          await client.query(
+            `INSERT INTO AuditLog (user_id, affected_table, affected_record_id, description)
+             VALUES ($1, 'Product', $2, $3)`,
+            [userId, productId, `${current.name}: ${summary}`],
+          );
+        }
+        await client.query("COMMIT");
+        return (await findManagedProduct(pool, productId))!;
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+
+    async adjustStock(productId, adjustment, change) {
+      if (!UUID_PATTERN.test(productId)) return { status: "not-found" };
+
+      // Deactivated products can be restocked too, so they're ready when turned back on.
       const { rows } = await pool.query<{ quantityInStock: number }>(
-        `UPDATE Product
-         SET quantity_in_stock = (quantity_in_stock::bigint + $2::bigint)::integer
-         WHERE product_id = $1 AND active
-           AND quantity_in_stock::bigint + $2::bigint BETWEEN 0 AND 2147483647
-         RETURNING quantity_in_stock AS "quantityInStock"`,
-        [productId, adjustment],
+        `WITH updated AS (
+           UPDATE Product
+           SET quantity_in_stock = (quantity_in_stock::bigint + $2::bigint)::integer, updated_at = now()
+           WHERE product_id = $1
+             AND quantity_in_stock::bigint + $2::bigint BETWEEN 0 AND 2147483647
+           RETURNING product_id, quantity_in_stock
+         ), logged AS (
+           INSERT INTO Transactions (user_id, product_id, transaction_type, quantity_changed, quantity_after_change, reason)
+           SELECT $3, product_id, CASE WHEN $2::integer > 0 THEN 'restock' ELSE 'removal' END,
+                  $2::integer, quantity_in_stock, $4
+           FROM updated
+         )
+         SELECT quantity_in_stock AS "quantityInStock" FROM updated`,
+        [productId, adjustment, change.userId, change.reason],
       );
       if (rows[0]) return { status: "updated", quantityInStock: rows[0].quantityInStock };
 
       const product = await pool.query<{ quantityInStock: number }>(
         `SELECT quantity_in_stock AS "quantityInStock"
-         FROM Product WHERE product_id = $1 AND active`,
+         FROM Product WHERE product_id = $1`,
         [productId],
       );
       if (!product.rows[0]) return { status: "not-found" };

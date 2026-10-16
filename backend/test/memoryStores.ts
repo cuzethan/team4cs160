@@ -6,6 +6,7 @@ import {
   type CartProduct,
   type CartStore,
   type CustomerRecord,
+  type ManagedProduct,
   CheckoutError,
   quoteFromLines,
   type OrderRecord,
@@ -195,29 +196,86 @@ export function createMemoryOrderStore({ cartStore, products, carts }: ReturnTyp
   return { orderStore };
 }
 
+// Categories are keyed "cat-<name>". Stock changes and price changes are kept in
+// `transactions` and `priceHistory` so tests can check what was logged.
 export function createMemoryProductStore({ products }: ReturnType<typeof createMemoryCartStore>) {
+  const descriptions = new Map<string, string>();
+  const categories = new Map<string, string>(
+    [...products.values()].map((product) => [`cat-${product.category}`, product.category]),
+  );
+  const transactions: { userId: string; productId: string; quantityChanged: number; quantityAfterChange: number; reason: string }[] = [];
+  const priceHistory: { productId: string; changedBy: string; oldPrice: number; newPrice: number }[] = [];
+
+  const managed = (product: CartProduct): ManagedProduct => {
+    const { productId, ...rest } = product;
+    return {
+      ...rest,
+      id: productId,
+      description: descriptions.get(productId) ?? "",
+      imageUrl: null,
+      categoryId: `cat-${product.category}`,
+    };
+  };
+  const byCategoryThenName = (a: ManagedProduct, b: ManagedProduct) =>
+    a.category.localeCompare(b.category) || a.name.localeCompare(b.name);
+
   const productStore: ProductStore = {
     async listProducts() {
       return [...products.values()]
         .filter((product) => product.active)
-        .map(({ productId, active: _active, ...product }) => ({
-          ...product,
-          id: productId,
-          description: "",
-          imageUrl: null,
-        }))
-        .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name));
+        .map((product) => {
+          const { categoryId: _categoryId, active: _active, ...catalog } = managed(product);
+          return catalog;
+        })
+        .sort(byCategoryThenName);
     },
-    async adjustStock(productId, adjustment) {
+    async listManagedProducts() {
+      return [...products.values()].map(managed).sort((a, b) => Number(b.active) - Number(a.active) || byCategoryThenName(a, b));
+    },
+    async listCategories() {
+      return [...categories].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+    },
+    async createProduct(userId, input) {
+      const productId = randomUUID();
+      products.set(productId, {
+        productId,
+        name: input.name,
+        category: categories.get(input.categoryId)!,
+        unit: input.unit,
+        price: input.price,
+        weightLbs: input.weightLbs,
+        quantityInStock: input.quantityInStock,
+        active: true,
+      });
+      descriptions.set(productId, input.description);
+      if (input.quantityInStock > 0) {
+        transactions.push({ userId, productId, quantityChanged: input.quantityInStock, quantityAfterChange: input.quantityInStock, reason: "Initial stock" });
+      }
+      return managed(products.get(productId)!);
+    },
+    async updateProduct(userId, productId, changes) {
       const product = products.get(productId);
-      if (!product || !product.active) return { status: "not-found" };
+      if (!product) return null;
+      if (changes.price !== undefined && changes.price !== product.price) {
+        priceHistory.push({ productId, changedBy: userId, oldPrice: product.price, newPrice: changes.price });
+      }
+      const { categoryId, description, ...rest } = changes;
+      Object.assign(product, rest);
+      if (categoryId !== undefined) product.category = categories.get(categoryId)!;
+      if (description !== undefined) descriptions.set(productId, description);
+      return managed(product);
+    },
+    async adjustStock(productId, adjustment, change) {
+      const product = products.get(productId);
+      if (!product) return { status: "not-found" };
       const nextQuantity = product.quantityInStock + adjustment;
       if (nextQuantity < 0) return { status: "insufficient-stock" };
       if (nextQuantity > 2147483647) return { status: "maximum-stock" };
       product.quantityInStock = nextQuantity;
+      transactions.push({ userId: change.userId, productId, quantityChanged: adjustment, quantityAfterChange: nextQuantity, reason: change.reason });
       return { status: "updated", quantityInStock: nextQuantity };
     },
   };
 
-  return { productStore };
+  return { productStore, transactions, priceHistory };
 }
