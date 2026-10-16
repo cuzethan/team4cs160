@@ -5,6 +5,8 @@ import type { CartLine } from "./api";
 export type CartItem = InventoryProduct & {
   cartItemId: string;
   quantity: number;
+  // False when the product was taken off the store after it went into the cart.
+  available: boolean;
 };
 
 export function toCartItem(line: CartLine): CartItem {
@@ -21,5 +23,6 @@ export function toCartItem(line: CartLine): CartItem {
     imageUrl: null,
     cartItemId: line.cartItemId,
     quantity: line.quantity,
+    available: line.active,
   };
 }

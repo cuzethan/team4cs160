@@ -58,9 +58,13 @@ export function ProductDetailPage({ product, onClose, onAddToCart }: ProductDeta
             ${product.price.toFixed(2)} <span className="text-sm font-medium text-[#788078]">/ {product.unit}</span>
           </p>
           <p className="mt-5 leading-7 text-[#69756b]">{product.description}</p>
-          <p className="mt-5 text-sm font-semibold text-[#536459]">
-            {product.quantityInStock} {product.unit === "each" ? "available" : "in stock"}
-          </p>
+          {product.quantityInStock === 0 ? (
+            <p className="mt-5 text-sm font-bold text-[#8b5145]">Out of stock</p>
+          ) : (
+            <p className="mt-5 text-sm font-semibold text-[#536459]">
+              {product.quantityInStock} {product.unit === "each" ? "available" : "in stock"}
+            </p>
+          )}
 
           <div className="mt-auto flex flex-col gap-3 pt-8 sm:flex-row">
             <label className="flex items-center justify-between gap-3 rounded-xl border border-[#dedfd5] px-4 py-3 text-sm font-semibold text-[#536459]">

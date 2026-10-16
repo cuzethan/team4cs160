@@ -48,13 +48,14 @@ export async function fetchProducts(): Promise<InventoryProduct[]> {
   }));
 }
 
-export async function adjustProductStock(productId: string, adjustment: number): Promise<number> {
+// The reason is saved with the stock change; the server uses "Manual adjustment" when it's left out.
+export async function adjustProductStock(productId: string, adjustment: number, reason?: string): Promise<number> {
   let response: Response;
   try {
     response = await fetch(`/api/manager/inventory/${encodeURIComponent(productId)}/stock`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ adjustment }),
+      body: JSON.stringify({ adjustment, reason }),
       credentials: "same-origin",
     });
   } catch {

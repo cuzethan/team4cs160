@@ -1,7 +1,7 @@
 import pg from "pg";
 import { createApp } from "./app.js";
 import { createStripePayments } from "./payments.js";
-import { createPgCartStore, createPgDeliveryStore, createPgOrderStore, createPgProductStore, createPgSalesStore, createPgSettingsStore, createPgStore, ensureGlobalSettingsSchema } from "./store.js";
+import { createPgCartStore, createPgDeliveryStore, createPgOrderStore, createPgProductStore, createPgSalesStore, createPgSettingsStore, createPgStore, ensureGlobalSettingsSchema, ensureInventoryManagementSchema } from "./store.js";
 
 const port = Number(process.env.PORT ?? 3001);
 const pool = new pg.Pool({
@@ -9,6 +9,7 @@ const pool = new pg.Pool({
 });
 
 await ensureGlobalSettingsSchema(pool);
+await ensureInventoryManagementSchema(pool);
 const settingsStore = createPgSettingsStore(pool);
 const app = createApp({
   store: createPgStore(pool),

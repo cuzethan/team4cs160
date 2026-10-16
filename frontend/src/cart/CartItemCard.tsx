@@ -21,6 +21,11 @@ export function CartItemCard({ item, onIncrease, onDecrease, onRemove }: CartIte
         <h2 className="truncate text-lg font-bold">{item.name}</h2>
         <p className="mt-1 text-sm text-[#788078]">${item.price.toFixed(2)} / {item.unit}</p>
         <p className="mt-1 text-sm text-[#788078]">{(item.weightLbs * item.quantity).toFixed(1)} lb total</p>
+        {!item.available && (
+          <p className="mt-2 w-fit rounded-full bg-[#fbeee9] px-3 py-1 text-xs font-bold text-[#8b5145]">
+            No longer available. Remove it to check out.
+          </p>
+        )}
       </div>
       <div className="flex items-center gap-3">
         <button
@@ -37,7 +42,7 @@ export function CartItemCard({ item, onIncrease, onDecrease, onRemove }: CartIte
         <button
           type="button"
           onClick={handleIncreaseClick}
-          disabled={item.quantity >= item.quantityInStock}
+          disabled={!item.available || item.quantity >= item.quantityInStock}
           aria-label={`Increase ${item.name} quantity`}
           className="flex h-9 w-9 items-center justify-center rounded-full border border-[#dce2d5] font-bold hover:bg-[#f3f5e9] disabled:cursor-not-allowed disabled:opacity-40"
         >
