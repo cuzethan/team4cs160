@@ -9,6 +9,8 @@ export type CartLine = {
   weightLbs: number;
   quantityInStock: number;
   quantity: number;
+  // False once a manager deactivates the product.
+  active: boolean;
 };
 
 // Calls the cart API and throws an Error with the server's message when the request fails.

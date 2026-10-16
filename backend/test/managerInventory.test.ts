@@ -65,11 +65,14 @@ describe("manager inventory API", () => {
 });
 
 describe("manager product management API", () => {
+  const APPLES = "00000000-0000-4000-8000-000000000001";
+  const RICE = "00000000-0000-4000-8000-000000000010";
+
   async function setup() {
     const memory = createMemoryStore();
     const cart = createMemoryCartStore([
-      { productId: "p-apples", name: "Gala Apples", category: "Fruits", unit: "lb", price: 1.49, weightLbs: 1, quantityInStock: 10, active: true },
-      { productId: "p-rice", name: "Jasmine Rice", category: "Grains", unit: "bag", price: 5.99, weightLbs: 2, quantityInStock: 4, active: true },
+      { productId: APPLES, name: "Gala Apples", category: "Fruits", unit: "lb", price: 1.49, weightLbs: 1, quantityInStock: 10, active: true },
+      { productId: RICE, name: "Jasmine Rice", category: "Grains", unit: "bag", price: 5.99, weightLbs: 2, quantityInStock: 4, active: true },
     ]);
     const products = createMemoryProductStore(cart);
     const app = createApp({
@@ -126,7 +129,7 @@ describe("manager product management API", () => {
     expect((await request(app).get("/api/manager/inventory")).status).toBe(401);
     expect((await customer.get("/api/manager/inventory")).status).toBe(403);
     expect((await customer.post("/api/manager/inventory").send(newProduct)).status).toBe(403);
-    expect((await customer.patch("/api/manager/inventory/p-apples").send({ price: 2 })).status).toBe(403);
+    expect((await customer.patch(`/api/manager/inventory/${APPLES}`).send({ price: 2 })).status).toBe(403);
   });
 
   it("lists every product with the categories to choose from", async () => {
@@ -168,45 +171,49 @@ describe("manager product management API", () => {
 
   it("edits a product and records price changes", async () => {
     const { manager, managerUser, products } = await setup();
-    const res = await manager.patch("/api/manager/inventory/p-apples").send({ price: 1.79, weightLbs: 1.5, categoryId: "cat-Grains" });
+    const res = await manager.patch(`/api/manager/inventory/${APPLES}`).send({ price: 1.79, weightLbs: 1.5, categoryId: "cat-Grains" });
     expect(res.status).toBe(200);
     expect(res.body.product).toMatchObject({ name: "Gala Apples", price: 1.79, weightLbs: 1.5, category: "Grains" });
-    expect(products.priceHistory).toEqual([{ productId: "p-apples", changedBy: managerUser.userId, oldPrice: 1.49, newPrice: 1.79 }]);
+    expect(products.priceHistory).toEqual([{ productId: APPLES, changedBy: managerUser.userId, oldPrice: 1.49, newPrice: 1.79 }]);
 
-    expect((await manager.patch("/api/manager/inventory/p-apples").send({ name: "Gala Apples" })).status).toBe(200);
+    expect((await manager.patch(`/api/manager/inventory/${APPLES}`).send({ name: "Gala Apples" })).status).toBe(200);
     expect(products.priceHistory).toHaveLength(1);
   });
 
   it("refuses empty or invalid edits and unknown products", async () => {
     const { manager } = await setup();
-    expect((await manager.patch("/api/manager/inventory/p-apples").send({})).status).toBe(400);
-    expect((await manager.patch("/api/manager/inventory/p-apples").send({ price: -2 })).status).toBe(400);
-    expect((await manager.patch("/api/manager/inventory/p-apples").send({ active: "no" })).status).toBe(400);
+    expect((await manager.patch(`/api/manager/inventory/${APPLES}`).send({})).status).toBe(400);
+    expect((await manager.patch(`/api/manager/inventory/${APPLES}`).send({ price: -2 })).status).toBe(400);
+    expect((await manager.patch(`/api/manager/inventory/${APPLES}`).send({ active: "no" })).status).toBe(400);
     expect((await manager.patch("/api/manager/inventory/missing").send({ price: 2 })).status).toBe(404);
   });
 
   it("deactivates a product so shoppers can't see or buy it, then restores it", async () => {
     const { manager, customer } = await setup();
-    const res = await manager.patch("/api/manager/inventory/p-rice").send({ active: false });
+    await customer.post("/api/cart/items").send({ productId: RICE });
+    expect((await customer.get("/api/cart")).body.items[0].active).toBe(true);
+
+    const res = await manager.patch(`/api/manager/inventory/${RICE}`).send({ active: false });
     expect(res.body.product.active).toBe(false);
+    expect((await customer.get("/api/cart")).body.items[0]).toMatchObject({ name: "Jasmine Rice", active: false });
 
     const catalog = (await customer.get("/api/products")).body.products;
     expect(catalog.map((product: { name: string }) => product.name)).toEqual(["Gala Apples"]);
-    expect((await customer.post("/api/cart/items").send({ productId: "p-rice" })).status).toBe(404);
+    expect((await customer.post("/api/cart/items").send({ productId: RICE })).status).toBe(404);
     expect((await manager.get("/api/manager/inventory")).body.products.at(-1)).toMatchObject({ name: "Jasmine Rice", active: false });
 
-    await manager.patch("/api/manager/inventory/p-rice").send({ active: true });
+    await manager.patch(`/api/manager/inventory/${RICE}`).send({ active: true });
     expect((await customer.get("/api/products")).body.products).toHaveLength(2);
   });
 
   it("logs who changed stock and why", async () => {
     const { manager, managerUser, products } = await setup();
-    await manager.patch("/api/manager/inventory/p-apples/stock").send({ adjustment: 100, reason: " Weekly delivery " });
-    await manager.patch("/api/manager/inventory/p-apples/stock").send({ adjustment: -3 });
+    await manager.patch(`/api/manager/inventory/${APPLES}/stock`).send({ adjustment: 100, reason: " Weekly delivery " });
+    await manager.patch(`/api/manager/inventory/${APPLES}/stock`).send({ adjustment: -3 });
     expect(products.transactions).toEqual([
-      { userId: managerUser.userId, productId: "p-apples", quantityChanged: 100, quantityAfterChange: 110, reason: "Weekly delivery" },
-      { userId: managerUser.userId, productId: "p-apples", quantityChanged: -3, quantityAfterChange: 107, reason: "Manual adjustment" },
+      { userId: managerUser.userId, productId: APPLES, quantityChanged: 100, quantityAfterChange: 110, reason: "Weekly delivery" },
+      { userId: managerUser.userId, productId: APPLES, quantityChanged: -3, quantityAfterChange: 107, reason: "Manual adjustment" },
     ]);
-    expect((await manager.patch("/api/manager/inventory/p-apples/stock").send({ adjustment: 1, reason: "x".repeat(201) })).status).toBe(400);
+    expect((await manager.patch(`/api/manager/inventory/${APPLES}/stock`).send({ adjustment: 1, reason: "x".repeat(201) })).status).toBe(400);
   });
 });

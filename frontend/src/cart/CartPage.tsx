@@ -70,6 +70,8 @@ export function CartPage() {
     if (item) void changeCart(() => removeCartItem(item.id));
   };
 
+  const hasUnavailableItems = cartItems.some((item) => !item.available);
+
   const handleCheckoutClick = () => {
     navigate("/checkout");
   };
@@ -133,7 +135,19 @@ export function CartPage() {
                 totalWeight={calculateTotalWeight()}
                 deliveryStatus={deliveryFee === 0 ? "Free" : `$${deliveryFee.toFixed(2)}`}
               />
-              <button type="button" onClick={handleCheckoutClick} className="mt-6 w-full rounded-xl bg-[#416449] px-5 py-3 font-bold text-white transition hover:bg-[#35563c]">Checkout</button>
+              {hasUnavailableItems && (
+                <p role="alert" className="mt-5 text-sm text-[#8b5145]">
+                  Remove items that are no longer available to check out.
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={handleCheckoutClick}
+                disabled={hasUnavailableItems}
+                className="mt-6 w-full rounded-xl bg-[#416449] px-5 py-3 font-bold text-white transition hover:bg-[#35563c] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Checkout
+              </button>
             </aside>
           </div>
         )}

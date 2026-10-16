@@ -109,6 +109,7 @@ export function createMemoryCartStore(products: CartProduct[]) {
             weightLbs: product.weightLbs,
             quantityInStock: product.quantityInStock,
             quantity: line.quantity,
+            active: product.active,
           };
         })
         .sort((a, b) => a.name.localeCompare(b.name));

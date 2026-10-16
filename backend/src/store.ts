@@ -565,6 +565,8 @@ export type CartLine = {
   weightLbs: number;
   quantityInStock: number;
   quantity: number;
+  // False once a manager deactivates the product; checkout refuses it until it's removed.
+  active: boolean;
 };
 
 // Everything the cart routes need from the database. Each user has at most one cart,
@@ -595,7 +597,7 @@ export function createPgCartStore(pool: pg.Pool): CartStore {
       const { rows } = await pool.query<CartLine>(
         `SELECT ci.cart_item_id AS "cartItemId", p.product_id AS "productId", p.product_name AS name,
                 COALESCE(c.category_name, 'Other') AS category, p.unit, p.price::float8 AS price, p.weight::float8 AS "weightLbs",
-                p.quantity_in_stock AS "quantityInStock", ci.quantity
+                p.quantity_in_stock AS "quantityInStock", ci.quantity, p.active
          FROM ShoppingCart sc
          JOIN CartItems ci ON ci.cart_id = sc.cart_id
          JOIN Product p ON p.product_id = ci.product_id
