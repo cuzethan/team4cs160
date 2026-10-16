@@ -48,7 +48,9 @@ export function ProductTable({ products, busyIds, onEdit, onToggleActive }: Prod
                 ${product.price.toFixed(2)} <span className="text-[#899188]">/ {product.unit}</span>
               </td>
               <td className="px-4 py-4 text-right text-sm tabular-nums">{product.weightLbs} lb</td>
-              <td className="px-4 py-4 text-right font-bold tabular-nums">{product.quantityInStock}</td>
+              <td className="px-4 py-4 text-right font-bold tabular-nums">
+                {product.quantityInStock === 0 ? <span className="text-[#8b5145]">Out of stock</span> : product.quantityInStock}
+              </td>
               <td className="px-5 py-4 sm:px-7">
                 <div className="flex justify-end gap-2">
                   <button
@@ -241,7 +243,12 @@ function StockAdjuster({ product, onSaved }: { product: ManagedProduct; onSaved:
   return (
     <section aria-labelledby="stock-adjust-heading" className="mt-6 border-t border-[#ecebe2] pt-5">
       <h3 id="stock-adjust-heading" className="font-extrabold text-[#294332]">
-        Stock <span className="font-semibold text-[#667269]">· {quantityInStock} in stock</span>
+        Stock{" "}
+        {quantityInStock === 0 ? (
+          <span className="font-semibold text-[#8b5145]">· Out of stock</span>
+        ) : (
+          <span className="font-semibold text-[#667269]">· {quantityInStock} in stock</span>
+        )}
       </h3>
       <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-[8rem_minmax(0,1fr)]">
         <label className={labelClassName}>

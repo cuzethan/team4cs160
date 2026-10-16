@@ -48,9 +48,11 @@ export function ProductCard({
         </div>
         <div className="px-4 pb-2 pt-4">
           <h3 className="truncate text-base font-bold text-[#253b2d]">{product.name}</h3>
-          <p className="mt-1 text-sm text-[#788078]">
-            {product.quantityInStock} in stock
-          </p>
+          {product.quantityInStock === 0 ? (
+            <p className="mt-1 text-sm font-bold text-[#8b5145]">Out of stock</p>
+          ) : (
+            <p className="mt-1 text-sm text-[#788078]">{product.quantityInStock} in stock</p>
+          )}
         </div>
       </button>
       <div className="flex items-center justify-between px-4 pb-4 pt-2">

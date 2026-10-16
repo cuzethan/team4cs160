@@ -659,7 +659,7 @@ function InventoryOverview({ products }: { products: InventoryProduct[] }) {
                   </th>
                   <td className="px-5 py-4 text-sm text-[#667269]">{product.category}</td>
                   <td className="px-5 py-4 text-right font-bold tabular-nums text-[#253b2d] sm:px-7">
-                    {product.quantityInStock}
+                    {product.quantityInStock === 0 ? <span className="text-[#8b5145]">Out of stock</span> : product.quantityInStock}
                   </td>
                 </tr>
               ))}
