@@ -1,16 +1,27 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { fetchCustomers, type Customer } from "../auth/api";
 import { SiteHeader } from "../components/SiteHeader";
 import { emojiFor } from "../inventory/api";
 import type { InventoryProduct } from "../inventory/types";
-import { useProducts } from "../inventory/useProducts";
 import { fetchDeliveries, fetchDeliverySettings, fetchManagedInventory, fetchSales, saveDeliverySettings, updateProduct, type DeliverySettings, type ManagedProduct, type ManagerDelivery, type ProductCategory, type SalesBucket, type SalesRange } from "./api";
 import { ProductFormDialog, ProductTable } from "./ProductManager";
 
 const tabs = ["Overview", "Customers", "Inventory", "Delivery", "Robot", "Sales", "Settings"] as const;
 type DashboardTab = (typeof tabs)[number];
+
+// Sidebar sections. A null heading means the tab stands on its own.
+const tabGroups: { heading: string | null; tabs: DashboardTab[] }[] = [
+  { heading: null, tabs: ["Overview"] },
+  { heading: "Store", tabs: ["Inventory", "Customers"] },
+  { heading: "Orders", tabs: ["Delivery", "Robot"] },
+  { heading: "Reports", tabs: ["Sales"] },
+  { heading: null, tabs: ["Settings"] },
+];
+
+// Products at or below this count are listed as running low.
+const LOW_STOCK = 10;
 const dateRanges = ["Today", "Last week", "Last 30 days", "All time"] as const;
 type DateRange = (typeof dateRanges)[number];
 
@@ -23,7 +34,11 @@ const salesRangeFor: Record<DateRange, SalesRange> = {
 
 export function ManagerDashboard() {
   const { user, loading } = useAuth();
-  const [activeTab, setActiveTab] = useState<DashboardTab>("Overview");
+  // The open tab lives in the URL (?tab=inventory) so refresh and Back keep it.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = tabs.find((tab) => tab.toLowerCase() === searchParams.get("tab")) ?? "Overview";
+  const setActiveTab = (tab: DashboardTab) =>
+    setSearchParams(tab === "Overview" ? {} : { tab: tab.toLowerCase() });
   const [dateRange, setDateRange] = useState<DateRange>("Last week");
 
   if (loading) {
@@ -39,38 +54,41 @@ export function ManagerDashboard() {
       <main className="flex min-h-[calc(100vh-4.75rem)] flex-col md:flex-row md:items-stretch">
         <aside
           aria-label="Manager dashboard sections"
-          className="w-full shrink-0 border-b border-[#e8e7dc] bg-white p-3 md:sticky md:top-0 md:h-[calc(100vh-4.75rem)] md:w-56 md:border-b-0 md:border-r md:px-4 md:py-5"
+          className="w-full shrink-0 border-b border-[#e8e7dc] bg-white p-3 md:sticky md:top-0 md:h-[calc(100vh-4.75rem)] md:w-56 md:overflow-y-auto md:border-b-0 md:border-r md:px-4 md:py-5"
         >
-          <p className="px-3 py-2 text-xs font-bold uppercase tracking-[0.14em] text-[#899188]">
-            Operations
-          </p>
-          <nav aria-label="Dashboard tabs" className="flex gap-1 overflow-x-auto md:flex-col">
-            {tabs.map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                aria-current={activeTab === tab ? "page" : undefined}
-                onClick={() => setActiveTab(tab)}
-                className={`shrink-0 rounded-xl px-3 py-3 text-left text-sm font-bold transition md:w-full ${
-                  activeTab === tab
-                    ? "bg-[#e9f1df] text-[#2e4935]"
-                    : "text-[#667269] hover:bg-[#f6f7f1] hover:text-[#2e4935]"
-                }`}
-              >
-                {tab}
-              </button>
+          <nav aria-label="Dashboard tabs" className="flex gap-1 overflow-x-auto md:flex-col md:gap-4">
+            {tabGroups.map((group) => (
+              <div key={group.heading ?? group.tabs[0]} className="flex shrink-0 gap-1 md:flex-col">
+                {group.heading && (
+                  <p className="hidden px-3 pb-1 text-xs font-bold uppercase tracking-[0.14em] text-[#899188] md:block">
+                    {group.heading}
+                  </p>
+                )}
+                {group.tabs.map((tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    aria-current={activeTab === tab ? "page" : undefined}
+                    onClick={() => setActiveTab(tab)}
+                    className={`shrink-0 rounded-xl px-3 py-2.5 text-left text-sm font-bold transition md:w-full ${
+                      activeTab === tab
+                        ? "bg-[#e9f1df] text-[#2e4935]"
+                        : "text-[#667269] hover:bg-[#f6f7f1] hover:text-[#2e4935]"
+                    }`}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </div>
             ))}
           </nav>
         </aside>
 
         <section className="min-w-0 flex-1 px-4 pb-8 pt-4 sm:px-6 md:pt-7" aria-live="polite">
-          {activeTab === "Overview" || activeTab === "Sales" ? (
-            <SalesOverview
-              title={activeTab}
-              dateRange={dateRange}
-              onDateRangeChange={setDateRange}
-              showOverviewContent={activeTab === "Overview"}
-            />
+          {activeTab === "Overview" ? (
+            <OverviewPanel onOpenTab={setActiveTab} />
+          ) : activeTab === "Sales" ? (
+            <SalesOverview dateRange={dateRange} onDateRangeChange={setDateRange} />
           ) : activeTab === "Inventory" ? (
             <ManageInventoryPanel />
           ) : activeTab === "Customers" ? (
@@ -85,6 +103,182 @@ export function ManagerDashboard() {
         </section>
       </main>
     </div>
+  );
+}
+
+// First thing a manager sees: last week's sales and what needs attention.
+// Each card opens the tab with the details.
+function OverviewPanel({ onOpenTab }: { onOpenTab: (tab: DashboardTab) => void }) {
+  const [sales, setSales] = useState<SalesBucket[] | null>(null);
+  const [deliveries, setDeliveries] = useState<ManagerDelivery[] | null>(null);
+  const [products, setProducts] = useState<InventoryProduct[] | null>(null);
+  const [customerCount, setCustomerCount] = useState<number | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    // Each section loads on its own, so one failing request doesn't blank the page.
+    void Promise.allSettled([
+      fetchSales("week").then((value) => active && setSales(value)),
+      fetchDeliveries().then((value) => active && setDeliveries(value)),
+      fetchManagedInventory().then(({ products: all }) => active && setProducts(
+        all
+          .filter((product) => product.active)
+          .map((product) => ({ ...product, emoji: emojiFor(product.name, product.category) })),
+      )),
+      fetchCustomers().then((value) => active && setCustomerCount(value.length)),
+    ]).then((results) => {
+      if (active && results.some((result) => result.status === "rejected")) {
+        setError("Some numbers couldn't be loaded. Refresh to try again.");
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const revenue = sales?.reduce((total, bucket) => total + bucket.revenue, 0);
+  const paidOrders = sales?.reduce((total, bucket) => total + bucket.paidOrders, 0);
+  const waiting = deliveries?.filter((delivery) => !isFinishedDelivery(delivery.deliveryProgress));
+  const outOfStock = products?.filter((product) => product.quantityInStock === 0).length;
+  const runningLow = products?.filter((product) => product.quantityInStock > 0 && product.quantityInStock <= LOW_STOCK).length;
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h2 className="text-2xl font-extrabold text-[#294332]">Overview</h2>
+        <p className="mt-1 text-sm text-[#667269]">The last 7 days, and what needs attention.</p>
+      </div>
+      {error && <p role="alert" className="rounded-xl border border-red-200 bg-white p-4 text-sm text-red-700">{error}</p>}
+
+      <section aria-label="Summary" className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <SummaryCard
+          label="Revenue"
+          value={revenue === undefined ? null : `$${revenue.toFixed(2)}`}
+          detail={paidOrders === undefined ? "Last 7 days" : `${paidOrders} paid ${paidOrders === 1 ? "order" : "orders"} · last 7 days`}
+          onClick={() => onOpenTab("Sales")}
+        />
+        <SummaryCard
+          label="Awaiting delivery"
+          value={waiting ? String(waiting.length) : null}
+          detail={waiting?.length === 1 ? "order" : "orders"}
+          onClick={() => onOpenTab("Delivery")}
+        />
+        <SummaryCard
+          label="Out of stock"
+          value={outOfStock === undefined ? null : String(outOfStock)}
+          detail={runningLow === undefined ? "products" : `${runningLow} running low (${LOW_STOCK} or fewer)`}
+          tone={outOfStock ? "warning" : "normal"}
+          onClick={() => onOpenTab("Inventory")}
+        />
+        <SummaryCard
+          label="Customers"
+          value={customerCount === null ? null : String(customerCount)}
+          detail="registered accounts"
+          onClick={() => onOpenTab("Customers")}
+        />
+      </section>
+
+      <div className="grid items-start gap-6 xl:grid-cols-2">
+        {products ? (
+          <LowStockTable
+            products={products}
+            action={<OpenTabButton label="Manage inventory" onClick={() => onOpenTab("Inventory")} />}
+          />
+        ) : (
+          <p role="status" className="rounded-2xl border border-[#e8e7dc] bg-white p-6 text-sm text-[#667269]">Loading stock…</p>
+        )}
+        <section
+          aria-labelledby="waiting-heading"
+          className="overflow-hidden rounded-2xl border border-[#e8e7dc] bg-white shadow-[0_3px_12px_rgba(42,65,48,0.04)]"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#ecebe2] px-5 py-5 sm:px-7">
+            <div>
+              <h3 id="waiting-heading" className="text-xl font-extrabold text-[#294332]">Awaiting delivery</h3>
+              <p className="mt-1 text-sm text-[#667269]">Paid orders that haven't been delivered yet.</p>
+            </div>
+            <OpenTabButton label="View deliveries" onClick={() => onOpenTab("Delivery")} />
+          </div>
+          {!waiting ? (
+            <p role="status" className="px-5 py-6 text-sm text-[#667269] sm:px-7">Loading orders…</p>
+          ) : waiting.length === 0 ? (
+            <p className="px-5 py-6 text-sm text-[#667269] sm:px-7">Nothing waiting. All orders are delivered.</p>
+          ) : (
+            <ul className="divide-y divide-[#ecebe2]">
+              {waiting.slice(0, 5).map((delivery) => (
+                <li key={delivery.orderId} className="flex items-center justify-between gap-4 px-5 py-3.5 sm:px-7">
+                  <span className="min-w-0">
+                    <span className="block truncate font-semibold text-[#253b2d]">{delivery.customerName}</span>
+                    <span className="font-mono text-xs text-[#899188]">{shortOrderId(delivery.orderId)}</span>
+                  </span>
+                  <span className="shrink-0 text-sm capitalize text-[#667269]">{delivery.deliveryProgress}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
+
+      <section aria-labelledby="robot-map-heading">
+        <h3 id="robot-map-heading" className="text-xl font-extrabold text-[#294332]">Robot map</h3>
+        <div
+          role="img"
+          aria-label="Blank map canvas for delivery locations"
+          className="mt-3 flex min-h-48 items-center justify-center rounded-2xl border border-dashed border-[#dce2d5] bg-white text-sm text-[#899188] shadow-[0_3px_12px_rgba(42,65,48,0.04)]"
+        >
+          The delivery map will appear here.
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function isFinishedDelivery(progress: string) {
+  return ["delivered", "confirmed", "cancelled", "returned_undelivered"].includes(progress.toLowerCase());
+}
+
+// "f5cc53ee-d9e9-…" → "#F5CC53EE": short enough to read out, unique enough to find.
+function shortOrderId(orderId: string) {
+  return `#${orderId.slice(0, 8).toUpperCase()}`;
+}
+
+function SummaryCard({
+  label,
+  value,
+  detail,
+  tone = "normal",
+  onClick,
+}: {
+  label: string;
+  value: string | null;
+  detail: string;
+  tone?: "normal" | "warning";
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-2xl border border-[#e8e7dc] bg-white p-4 text-left shadow-[0_3px_12px_rgba(42,65,48,0.04)] transition hover:border-[#c9d6bf] hover:shadow-[0_6px_18px_rgba(42,65,48,0.08)] sm:p-5"
+    >
+      <span className="block text-sm font-bold text-[#667269]">{label}</span>
+      <span className={`mt-2 block text-2xl font-extrabold tabular-nums sm:text-3xl ${tone === "warning" ? "text-[#8b5145]" : "text-[#294332]"}`}>
+        {value ?? "—"}
+      </span>
+      <span className="mt-1 block text-xs text-[#7d887b] sm:text-sm">{detail}</span>
+    </button>
+  );
+}
+
+function OpenTabButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="shrink-0 rounded-full border border-[#d9e2d2] px-4 py-1.5 text-sm font-bold text-[#416449] hover:bg-[#f1f5eb]"
+    >
+      {label} →
+    </button>
   );
 }
 
@@ -170,11 +364,10 @@ function CustomersPanel() {
         </p>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-[#e8e7dc] bg-white shadow-[0_3px_12px_rgba(42,65,48,0.04)]">
-          <table className="w-full min-w-[48rem] text-left">
+          <table className="w-full min-w-[42rem] text-left">
             <thead className="bg-[#f6f7f1] text-xs uppercase tracking-wide text-[#667269]">
               <tr>
-                <th scope="col" className="px-5 py-3 font-bold">First name</th>
-                <th scope="col" className="px-5 py-3 font-bold">Last name</th>
+                <th scope="col" className="px-5 py-3 font-bold">Name</th>
                 <th scope="col" className="px-5 py-3 font-bold">Email</th>
                 <th scope="col" className="px-5 py-3 font-bold">Phone</th>
                 <th scope="col" className="px-5 py-3 font-bold">Status</th>
@@ -184,8 +377,7 @@ function CustomersPanel() {
             <tbody className="divide-y divide-[#ecebe2]">
               {customers.map((customer) => (
                 <tr key={customer.id}>
-                  <td className="px-5 py-4 font-semibold text-[#253b2d]">{customer.firstName}</td>
-                  <td className="px-5 py-4 font-semibold text-[#253b2d]">{customer.lastName}</td>
+                  <th scope="row" className="px-5 py-4 font-semibold text-[#253b2d]">{customer.firstName} {customer.lastName}</th>
                   <td className="px-5 py-4 text-sm text-[#667269]">{customer.email}</td>
                   <td className="px-5 py-4 text-sm text-[#667269]">{customer.phone}</td>
                   <td className="px-5 py-4 text-sm capitalize text-[#667269]">{customer.accountStatus}</td>
@@ -196,7 +388,7 @@ function CustomersPanel() {
               ))}
               {customers.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-5 py-8 text-center text-sm text-[#667269]">
+                  <td colSpan={5} className="px-5 py-8 text-center text-sm text-[#667269]">
                     No customer accounts found.
                   </td>
                 </tr>
@@ -249,10 +441,10 @@ function DeliveriesPanel() {
         </p>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-[#e8e7dc] bg-white shadow-[0_3px_12px_rgba(42,65,48,0.04)]">
-          <table className="w-full min-w-[44rem] text-left">
+          <table className="w-full min-w-[36rem] text-left">
             <thead className="bg-[#f6f7f1] text-xs uppercase tracking-wide text-[#667269]">
               <tr>
-                <th scope="col" className="px-5 py-3 font-bold">Order ID</th>
+                <th scope="col" className="px-5 py-3 font-bold">Order</th>
                 <th scope="col" className="px-5 py-3 font-bold">Customer</th>
                 <th scope="col" className="px-5 py-3 font-bold">Delivery progress</th>
                 <th scope="col" className="px-5 py-3 font-bold">ETA</th>
@@ -261,7 +453,9 @@ function DeliveriesPanel() {
             <tbody className="divide-y divide-[#ecebe2]">
               {deliveries.map((delivery) => (
                 <tr key={delivery.orderId}>
-                  <th scope="row" className="px-5 py-4 font-mono text-xs text-[#253b2d]">{delivery.orderId}</th>
+                  <th scope="row" className="px-5 py-4 font-mono text-sm text-[#253b2d]" title={delivery.orderId}>
+                    {shortOrderId(delivery.orderId)}
+                  </th>
                   <td className="px-5 py-4 font-semibold text-[#253b2d]">{delivery.customerName}</td>
                   <td className="px-5 py-4 text-sm capitalize text-[#667269]">{delivery.deliveryProgress}</td>
                   <td className="px-5 py-4 text-sm text-[#667269]">
@@ -285,15 +479,11 @@ function DeliveriesPanel() {
 }
 
 function SalesOverview({
-  title,
   dateRange,
   onDateRangeChange,
-  showOverviewContent,
 }: {
-  title: "Overview" | "Sales";
   dateRange: DateRange;
   onDateRangeChange: (dateRange: DateRange) => void;
-  showOverviewContent: boolean;
 }) {
   const [sales, setSales] = useState<SalesBucket[]>([]);
   const [salesLoading, setSalesLoading] = useState(true);
@@ -322,8 +512,8 @@ function SalesOverview({
     <>
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-extrabold text-[#294332]">{title}</h2>
-          <p className="mt-1 text-sm text-[#667269]">Sales &amp; revenue overview</p>
+          <h2 className="text-2xl font-extrabold text-[#294332]">Sales</h2>
+          <p className="mt-1 text-sm text-[#667269]">Paid orders and revenue over time.</p>
         </div>
         <label className="flex items-center gap-2 text-sm font-semibold text-[#426149]">
           Date range
@@ -344,21 +534,6 @@ function SalesOverview({
         <div className="grid gap-4 xl:grid-cols-2">
           <SalesChart title="Paid orders" buckets={sales} range={salesRangeFor[dateRange]} metric="paidOrders" />
           <SalesChart title="Payment revenue" buckets={sales} range={salesRangeFor[dateRange]} metric="revenue" />
-        </div>
-      )}
-      {showOverviewContent && (
-        <div className="mt-6 flex flex-col gap-6">
-          <InventoryPanel />
-          <section aria-labelledby="robot-map-heading">
-            <h2 id="robot-map-heading" className="text-2xl font-extrabold text-[#294332]">
-              Robot
-            </h2>
-            <div
-              role="img"
-              aria-label="Blank map canvas for delivery locations"
-              className="mt-1 min-h-80 rounded-2xl border border-[#e8e7dc] bg-white shadow-[0_3px_12px_rgba(42,65,48,0.04)]"
-            />
-          </section>
         </div>
       )}
     </>
@@ -437,35 +612,6 @@ function formatBucketLabel(bucketStart: string, range: SalesRange) {
   if (range === "today") return date.toLocaleTimeString([], { hour: "numeric" });
   if (range === "all") return date.toLocaleDateString([], { month: "short", year: "2-digit" });
   return date.toLocaleDateString([], { month: "short", day: "numeric" });
-}
-
-function InventoryPanel() {
-  const { products, isLoading, error } = useProducts();
-
-  if (isLoading) {
-    return <p role="status" className="rounded-2xl bg-white p-6 text-[#5f6b61]">Loading inventory…</p>;
-  }
-  if (error) {
-    return <p role="alert" className="rounded-2xl border border-red-200 bg-white p-6 text-red-800">{error}</p>;
-  }
-
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-extrabold text-[#294332]">Inventory</h2>
-          <p className="mt-1 text-sm text-[#667269]">Catalog and stock overview.</p>
-        </div>
-        <Link
-          to="/inventory"
-          className="rounded-full bg-[#2e4935] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#253b2d]"
-        >
-          Open product catalog
-        </Link>
-      </div>
-      <InventoryOverview products={products} />
-    </div>
-  );
 }
 
 // The Inventory tab: the overview plus adding, editing, deactivating, and restocking products.
@@ -556,10 +702,10 @@ function ManageInventoryPanel() {
           to="/inventory"
           className="rounded-full border-2 border-[#2e4935] px-5 py-2 text-sm font-bold text-[#2e4935] hover:bg-[#2e4935] hover:text-white"
         >
-          Open product catalog
+          View in store
         </Link>
       </div>
-      <InventoryOverview products={activeProducts} />
+      <InventorySummary products={activeProducts} />
 
       <section
         aria-labelledby="manage-products-heading"
@@ -613,61 +759,62 @@ function ManageInventoryPanel() {
   );
 }
 
-// Totals and the lowest-stock list for the products shoppers can currently buy.
-function InventoryOverview({ products }: { products: InventoryProduct[] }) {
+// Totals for the products shoppers can currently buy.
+function InventorySummary({ products }: { products: InventoryProduct[] }) {
   const categoryCount = new Set(products.map((product) => product.category)).size;
   const totalUnits = products.reduce((total, product) => total + product.quantityInStock, 0);
+
+  return (
+    <section aria-label="Catalog overview" className="grid gap-4 sm:grid-cols-3">
+      <OverviewCard label="Catalog products" value={products.length} detail="Products currently listed" />
+      <OverviewCard label="Categories" value={categoryCount} detail="Across the catalog" />
+      <OverviewCard label="Units in stock" value={totalUnits} detail="Combined listed quantities" />
+    </section>
+  );
+}
+
+// The five products closest to running out.
+function LowStockTable({ products, action }: { products: InventoryProduct[]; action: ReactNode }) {
   const lowestStockProducts = [...products]
     .sort((first, second) => first.quantityInStock - second.quantityInStock)
     .slice(0, 5);
 
   return (
-    <>
-      <section aria-label="Catalog overview" className="grid gap-4 sm:grid-cols-3">
-        <OverviewCard label="Catalog products" value={products.length} detail="Products currently listed" />
-        <OverviewCard label="Categories" value={categoryCount} detail="Across the catalog" />
-        <OverviewCard label="Units in stock" value={totalUnits} detail="Combined listed quantities" />
-      </section>
-
-      <section
-        aria-labelledby="stock-heading"
-        className="overflow-hidden rounded-2xl border border-[#e8e7dc] bg-white shadow-[0_3px_12px_rgba(42,65,48,0.04)]"
-      >
-        <div className="border-b border-[#ecebe2] px-5 py-5 sm:px-7">
-          <h3 id="stock-heading" className="text-xl font-extrabold text-[#294332]">
-            Lowest stock in catalog
-          </h3>
-          <p className="mt-1 text-sm text-[#667269]">
-            Items with the fewest listed units, shown for a quick inventory check.
-          </p>
+    <section
+      aria-labelledby="stock-heading"
+      className="overflow-hidden rounded-2xl border border-[#e8e7dc] bg-white shadow-[0_3px_12px_rgba(42,65,48,0.04)]"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#ecebe2] px-5 py-5 sm:px-7">
+        <div>
+          <h3 id="stock-heading" className="text-xl font-extrabold text-[#294332]">Lowest stock</h3>
+          <p className="mt-1 text-sm text-[#667269]">Products shoppers can buy that are closest to running out.</p>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[28rem] text-left">
-            <thead className="bg-[#f6f7f1] text-xs uppercase tracking-wide text-[#667269]">
-              <tr>
-                <th scope="col" className="px-5 py-3 font-bold sm:px-7">Product</th>
-                <th scope="col" className="px-5 py-3 font-bold">Category</th>
-                <th scope="col" className="px-5 py-3 text-right font-bold sm:px-7">Units listed</th>
+        {action}
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[22rem] text-left">
+          <thead className="bg-[#f6f7f1] text-xs uppercase tracking-wide text-[#667269]">
+            <tr>
+              <th scope="col" className="px-5 py-3 font-bold sm:px-7">Product</th>
+              <th scope="col" className="px-5 py-3 text-right font-bold sm:px-7">In stock</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#ecebe2]">
+            {lowestStockProducts.map((product) => (
+              <tr key={product.id}>
+                <th scope="row" className="px-5 py-3.5 font-semibold text-[#253b2d] sm:px-7">
+                  <span aria-hidden="true" className="mr-2">{product.emoji}</span>
+                  {product.name}
+                </th>
+                <td className="px-5 py-3.5 text-right font-bold tabular-nums text-[#253b2d] sm:px-7">
+                  {product.quantityInStock === 0 ? <span className="text-[#8b5145]">Out of stock</span> : product.quantityInStock}
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-[#ecebe2]">
-              {lowestStockProducts.map((product) => (
-                <tr key={product.id}>
-                  <th scope="row" className="px-5 py-4 font-semibold text-[#253b2d] sm:px-7">
-                    <span aria-hidden="true" className="mr-2">{product.emoji}</span>
-                    {product.name}
-                  </th>
-                  <td className="px-5 py-4 text-sm text-[#667269]">{product.category}</td>
-                  <td className="px-5 py-4 text-right font-bold tabular-nums text-[#253b2d] sm:px-7">
-                    {product.quantityInStock === 0 ? <span className="text-[#8b5145]">Out of stock</span> : product.quantityInStock}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 
