@@ -3,8 +3,11 @@ import { Link, Navigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { fetchCustomers, type Customer } from "../auth/api";
 import { SiteHeader } from "../components/SiteHeader";
+import { emojiFor } from "../inventory/api";
+import type { InventoryProduct } from "../inventory/types";
 import { useProducts } from "../inventory/useProducts";
-import { fetchDeliveries, fetchDeliverySettings, fetchSales, saveDeliverySettings, type DeliverySettings, type ManagerDelivery, type SalesBucket, type SalesRange } from "./api";
+import { fetchDeliveries, fetchDeliverySettings, fetchManagedInventory, fetchSales, saveDeliverySettings, updateProduct, type DeliverySettings, type ManagedProduct, type ManagerDelivery, type ProductCategory, type SalesBucket, type SalesRange } from "./api";
+import { ProductFormDialog, ProductTable } from "./ProductManager";
 
 const tabs = ["Overview", "Customers", "Inventory", "Delivery", "Robot", "Sales", "Settings"] as const;
 type DashboardTab = (typeof tabs)[number];
@@ -69,7 +72,7 @@ export function ManagerDashboard() {
               showOverviewContent={activeTab === "Overview"}
             />
           ) : activeTab === "Inventory" ? (
-            <InventoryPanel />
+            <ManageInventoryPanel />
           ) : activeTab === "Customers" ? (
             <CustomersPanel />
           ) : activeTab === "Settings" ? (
@@ -438,11 +441,6 @@ function formatBucketLabel(bucketStart: string, range: SalesRange) {
 
 function InventoryPanel() {
   const { products, isLoading, error } = useProducts();
-  const categoryCount = new Set(products.map((product) => product.category)).size;
-  const totalUnits = products.reduce((total, product) => total + product.quantityInStock, 0);
-  const lowestStockProducts = [...products]
-    .sort((first, second) => first.quantityInStock - second.quantityInStock)
-    .slice(0, 5);
 
   if (isLoading) {
     return <p role="status" className="rounded-2xl bg-white p-6 text-[#5f6b61]">Loading inventory…</p>;
@@ -465,7 +463,166 @@ function InventoryPanel() {
           Open product catalog
         </Link>
       </div>
+      <InventoryOverview products={products} />
+    </div>
+  );
+}
 
+// The Inventory tab: the overview plus adding, editing, deactivating, and restocking products.
+function ManageInventoryPanel() {
+  const [products, setProducts] = useState<ManagedProduct[]>([]);
+  const [categories, setCategories] = useState<ProductCategory[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [editing, setEditing] = useState<ManagedProduct | "new" | null>(null);
+  const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
+
+  const load = async () => {
+    setIsLoading(true);
+    setLoadError(null);
+    try {
+      const inventory = await fetchManagedInventory();
+      setProducts(inventory.products);
+      setCategories(inventory.categories);
+    } catch (error) {
+      setLoadError((error as Error).message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  // Keeps the same order as the server: active first, then by category and name.
+  const handleSaved = (saved: ManagedProduct) => {
+    setProducts((current) =>
+      [...current.filter((product) => product.id !== saved.id), saved].sort(
+        (a, b) =>
+          Number(b.active) - Number(a.active) ||
+          a.category.localeCompare(b.category) ||
+          a.name.localeCompare(b.name),
+      ),
+    );
+  };
+
+  const handleToggleActive = async (product: ManagedProduct) => {
+    setActionError(null);
+    setBusyIds((current) => new Set(current).add(product.id));
+    try {
+      handleSaved(await updateProduct(product.id, { active: !product.active }));
+    } catch (error) {
+      setActionError((error as Error).message);
+    } finally {
+      setBusyIds((current) => {
+        const next = new Set(current);
+        next.delete(product.id);
+        return next;
+      });
+    }
+  };
+
+  if (isLoading) {
+    return <p role="status" className="rounded-2xl bg-white p-6 text-[#5f6b61]">Loading inventory…</p>;
+  }
+  if (loadError) {
+    return (
+      <div role="alert" className="rounded-2xl border border-red-200 bg-white p-6">
+        <p className="text-red-800">{loadError}</p>
+        <button type="button" onClick={() => void load()} className="mt-4 font-bold text-[#416449] underline">Try again</button>
+      </div>
+    );
+  }
+
+  const activeProducts = products
+    .filter((product) => product.active)
+    .map((product) => ({ ...product, emoji: emojiFor(product.name, product.category) }));
+  const query = search.trim().toLowerCase();
+  const visibleProducts = products.filter(
+    (product) => product.name.toLowerCase().includes(query) || product.category.toLowerCase().includes(query),
+  );
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-extrabold text-[#294332]">Inventory</h2>
+          <p className="mt-1 text-sm text-[#667269]">Add, edit, and restock products.</p>
+        </div>
+        <Link
+          to="/inventory"
+          className="rounded-full border-2 border-[#2e4935] px-5 py-2 text-sm font-bold text-[#2e4935] hover:bg-[#2e4935] hover:text-white"
+        >
+          Open product catalog
+        </Link>
+      </div>
+      <InventoryOverview products={activeProducts} />
+
+      <section
+        aria-labelledby="manage-products-heading"
+        className="overflow-hidden rounded-2xl border border-[#e8e7dc] bg-white shadow-[0_3px_12px_rgba(42,65,48,0.04)]"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#ecebe2] px-5 py-5 sm:px-7">
+          <div>
+            <h3 id="manage-products-heading" className="text-xl font-extrabold text-[#294332]">All products</h3>
+            <p className="mt-1 text-sm text-[#667269]">
+              Deactivated products are hidden from shoppers but kept for past orders.
+            </p>
+          </div>
+          <div className="flex w-full flex-wrap gap-3 sm:w-auto">
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search products"
+              aria-label="Search products"
+              className="min-w-0 flex-1 rounded-full border border-[#dedfd5] px-4 py-2 text-sm outline-none focus:border-[#416449] sm:w-56 sm:flex-none"
+            />
+            <button
+              type="button"
+              onClick={() => setEditing("new")}
+              className="rounded-full bg-[#2e4935] px-5 py-2 text-sm font-bold text-white hover:bg-[#253b2d]"
+            >
+              Add product
+            </button>
+          </div>
+        </div>
+        {actionError && (
+          <p role="alert" className="border-b border-red-200 bg-red-50 px-5 py-3 text-sm text-red-800 sm:px-7">{actionError}</p>
+        )}
+        <ProductTable
+          products={visibleProducts}
+          busyIds={busyIds}
+          onEdit={setEditing}
+          onToggleActive={(product) => void handleToggleActive(product)}
+        />
+      </section>
+
+      {editing && (
+        <ProductFormDialog
+          product={editing === "new" ? undefined : editing}
+          categories={categories}
+          onClose={() => setEditing(null)}
+          onSaved={handleSaved}
+        />
+      )}
+    </div>
+  );
+}
+
+// Totals and the lowest-stock list for the products shoppers can currently buy.
+function InventoryOverview({ products }: { products: InventoryProduct[] }) {
+  const categoryCount = new Set(products.map((product) => product.category)).size;
+  const totalUnits = products.reduce((total, product) => total + product.quantityInStock, 0);
+  const lowestStockProducts = [...products]
+    .sort((first, second) => first.quantityInStock - second.quantityInStock)
+    .slice(0, 5);
+
+  return (
+    <>
       <section aria-label="Catalog overview" className="grid gap-4 sm:grid-cols-3">
         <OverviewCard label="Catalog products" value={products.length} detail="Products currently listed" />
         <OverviewCard label="Categories" value={categoryCount} detail="Across the catalog" />
@@ -510,7 +667,7 @@ function InventoryPanel() {
           </table>
         </div>
       </section>
-    </div>
+    </>
   );
 }
 

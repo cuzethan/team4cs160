@@ -44,4 +44,14 @@ describe("products api client", () => {
       credentials: "same-origin",
     });
   });
+
+  it("sends the reason for a stock change", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ quantityInStock: 135 }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(adjustProductStock("p-1", 100, "Weekly delivery")).resolves.toBe(135);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ adjustment: 100, reason: "Weekly delivery" });
+  });
 });
