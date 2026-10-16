@@ -70,6 +70,17 @@ docker compose exec backend npm run create-manager -- manager@ofs.com yourpasswo
 Then log in at http://localhost:5173/manager-login.
 Managers land on the manager dashboard after signing in. The dashboard shows an overview of the current product catalog, links to the catalog and customer storefront, and a delivery table with each order's customer, progress, and ETA.
 
+### Managing products
+
+The dashboard's **Inventory** tab lists every product, including deactivated ones (`/api/manager/inventory`, managers only). From there a manager can:
+
+- **Add a product** with its name, description, category, unit, price, weight, and starting stock.
+- **Edit a product**. Price changes are saved to `PriceHistory` with the manager who made them.
+- **Deactivate or reactivate a product**. Deactivated products disappear from the store and can't be added to carts, but past orders that include them are kept.
+- **Add or remove stock in bulk with a reason** ("Weekly delivery", "Spoiled"). Each change is saved to `Transactions` with the manager and the reason. The quick +/- controls on the catalog page save "Manual adjustment" as the reason.
+
+Every add, edit, and (de)activation is also written to `AuditLog`. The backend adds the `PriceHistory.product_id` and `changed_by` columns at startup, so existing databases keep working without a reset (`db/init/006_inventory_management.sql` does the same for new ones).
+
 ## Cart and checkout
 
 Customers' carts are saved in the database, so they persist across logins and devices. The API lives under `/api/cart` (`GET /`, `POST /items`, `PATCH /items/:productId`, `DELETE /items/:productId`) and only works for logged-in customers.
