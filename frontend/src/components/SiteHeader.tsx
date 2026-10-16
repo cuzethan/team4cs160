@@ -69,40 +69,35 @@ export function SiteHeader() {
         >
           OFS
         </Link>
-        <nav aria-label="Main" className="flex items-center gap-2 sm:gap-3">
+        <nav aria-label="Main" className="flex items-center gap-1 sm:gap-3">
           <Link
             to={user?.role === "manager" ? "/manager-dashboard" : "/inventory"}
-            className="rounded-full px-4 py-2.5 text-sm font-bold text-[#426149] hover:bg-[#f0f3e8]"
+            className="whitespace-nowrap rounded-full px-3 py-2.5 text-sm font-bold text-[#426149] hover:bg-[#f0f3e8] sm:px-4"
           >
             {user?.role === "manager" ? "Dashboard" : "Shop"}
           </Link>
           {user?.role === "customer" && (
             <Link
               to="/orders"
-              className="rounded-full px-4 py-2.5 text-sm font-bold text-[#426149] hover:bg-[#f0f3e8]"
+              className="whitespace-nowrap rounded-full px-3 py-2.5 text-sm font-bold text-[#426149] hover:bg-[#f0f3e8] sm:px-4"
             >
-              Order history
+              <span className="sm:hidden">Orders</span>
+              <span className="hidden sm:inline">Order history</span>
             </Link>
           )}
           {user?.role === "manager" && (
-            <>
-              <Link
-                to="/inventory"
-                className="rounded-full px-4 py-2.5 text-sm font-bold text-[#426149] hover:bg-[#f0f3e8]"
-              >
-                Catalog
-              </Link>
-              <Link
-                to="/customer-storefront"
-                className="rounded-full px-4 py-2.5 text-sm font-bold text-[#426149] hover:bg-[#f0f3e8]"
-              >
-                Customer Storefront
-              </Link>
-            </>
+            // The shop pages as customers see them, with the manager's quick stock controls.
+            <Link
+              to="/inventory"
+              className="whitespace-nowrap rounded-full px-3 py-2.5 text-sm font-bold text-[#426149] hover:bg-[#f0f3e8] sm:px-4"
+            >
+              View store
+            </Link>
           )}
           {user ? (
             <>
-              <span className="flex items-center gap-2 rounded-full bg-[#eef6e8] px-3 py-2 text-sm font-bold text-[#2e4935]">
+              {/* Hidden on phones to leave room for the links. */}
+              <span className="hidden items-center gap-2 rounded-full bg-[#eef6e8] px-3 py-2 text-sm font-bold text-[#2e4935] sm:flex">
                 <span aria-hidden="true" className="flex h-6 w-6 items-center justify-center rounded-full bg-[#2e4935] text-xs text-white">
                   {user.firstName.charAt(0).toUpperCase()}
                 </span>
@@ -114,7 +109,7 @@ export function SiteHeader() {
               <button
                 type="button"
                 onClick={() => setConfirmingLogout(true)}
-                className="cursor-pointer rounded-full px-4 py-2.5 text-sm font-bold text-[#426149] hover:bg-[#f0f3e8]"
+                className="cursor-pointer whitespace-nowrap rounded-full px-3 py-2.5 text-sm font-bold text-[#426149] hover:bg-[#f0f3e8] sm:px-4"
               >
                 Log out
               </button>
@@ -122,18 +117,21 @@ export function SiteHeader() {
           ) : (
             <Link
               to="/login"
-              className="rounded-full px-4 py-2.5 text-sm font-bold text-[#426149] hover:bg-[#f0f3e8]"
+              className="whitespace-nowrap rounded-full px-3 py-2.5 text-sm font-bold text-[#426149] hover:bg-[#f0f3e8] sm:px-4"
             >
               Log in
             </Link>
           )}
-          <Link
-            to="/cart"
-            className="flex h-11 items-center gap-2 rounded-full border border-[#e5e7dc] bg-white px-4 text-sm font-bold text-[#426149] shadow-sm"
-          >
-            <span aria-hidden="true">🛒</span>
-            <span className="hidden sm:inline">Your cart</span>
-          </Link>
+          {/* Managers can't shop, so they don't get a cart. */}
+          {user?.role !== "manager" && (
+            <Link
+              to="/cart"
+              className="flex h-11 items-center gap-2 rounded-full border border-[#e5e7dc] bg-white px-4 text-sm font-bold text-[#426149] shadow-sm"
+            >
+              <span aria-hidden="true">🛒</span>
+              <span className="hidden sm:inline">Your cart</span>
+            </Link>
+          )}
         </nav>
       </div>
       {confirmingLogout && (

@@ -21,7 +21,9 @@ export function ProductTable({ products, busyIds, onEdit, onToggleActive }: Prod
   }
 
   return (
-    <div className="overflow-x-auto">
+    // `relative` keeps the screen-reader-only "Actions" label inside this scroll box;
+    // otherwise its absolute position widens the whole page on phones.
+    <div className="relative overflow-x-auto">
       <table className="w-full min-w-[44rem] text-left">
         <thead className="bg-[#f6f7f1] text-xs uppercase tracking-wide text-[#667269]">
           <tr>
