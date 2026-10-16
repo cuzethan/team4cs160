@@ -1,4 +1,13 @@
+import { useState } from "react";
 import type { InventoryProduct } from "./types";
+
+// Managers restock in bulk, so the +/- buttons move stock by the typed amount.
+// Returns null unless the text is a whole number from 1 up to Postgres' integer limit.
+export function parseStockAmount(text: string): number | null {
+  if (!/^\d+$/.test(text.trim())) return null;
+  const amount = Number(text);
+  return amount >= 1 && amount <= 2147483647 ? amount : null;
+}
 
 type ProductCardProps = {
   product: InventoryProduct;
@@ -17,6 +26,8 @@ export function ProductCard({
   isUpdatingStock = false,
   onAdjustStock,
 }: ProductCardProps) {
+  const [amountText, setAmountText] = useState("1");
+  const amount = parseStockAmount(amountText);
   const handleCardClick = () => onClick(product.id);
   const handleAddToCartClick = () => onAddToCart(product, 1);
 
@@ -62,19 +73,29 @@ export function ProductCard({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => onAdjustStock(product, -1)}
-              disabled={isUpdatingStock || product.quantityInStock === 0}
+              onClick={() => amount && onAdjustStock(product, -amount)}
+              disabled={isUpdatingStock || !amount || amount > product.quantityInStock}
               className="flex h-8 w-8 items-center justify-center rounded-full border border-[#d9e2d2] text-base font-bold text-[#416449] hover:bg-[#f1f5eb] disabled:cursor-not-allowed disabled:opacity-40"
-              aria-label={`Subtract one ${product.unit} of ${product.name} from stock`}
+              aria-label={`Subtract ${amount ?? ""} ${product.unit} of ${product.name} from stock`}
             >
               −
             </button>
+            <input
+              type="number"
+              inputMode="numeric"
+              min={1}
+              step={1}
+              value={amountText}
+              onChange={(event) => setAmountText(event.target.value)}
+              className="h-8 w-16 rounded-lg border border-[#d9e2d2] px-2 text-center text-sm text-[#253b2d] outline-none focus:border-[#416449]"
+              aria-label={`Amount to add or subtract for ${product.name}`}
+            />
             <button
               type="button"
-              onClick={() => onAdjustStock(product, 1)}
-              disabled={isUpdatingStock}
+              onClick={() => amount && onAdjustStock(product, amount)}
+              disabled={isUpdatingStock || !amount}
               className="flex h-8 w-8 items-center justify-center rounded-full border border-[#d9e2d2] text-base font-bold text-[#416449] hover:bg-[#f1f5eb] disabled:cursor-not-allowed disabled:opacity-40"
-              aria-label={`Add one ${product.unit} of ${product.name} to stock`}
+              aria-label={`Add ${amount ?? ""} ${product.unit} of ${product.name} to stock`}
             >
               +
             </button>
