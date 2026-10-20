@@ -13,7 +13,9 @@ import { emojiFor } from "../inventory/api";
 import type { InventoryProduct } from "../inventory/types";
 import { fetchDeliveries, fetchDeliverySettings, fetchManagedInventory, fetchSales, saveDeliverySettings, updateProduct, type DeliverySettings, type ManagedProduct, type ManagerDelivery, type ProductCategory, type SalesBucket, type SalesRange } from "./api";
 import { ProductFormDialog, ProductTable } from "./ProductManager";
-
+import  Map  from '@vis.gl/react-maplibre';
+import 'maplibre-gl/dist/maplibre-gl.css';
+import * as maplibregl from 'maplibre-gl';
 const tabs = ["Overview", "Customers", "Inventory", "Delivery", "Robot", "Sales", "Settings"] as const;
 type DashboardTab = (typeof tabs)[number];
 
@@ -104,7 +106,7 @@ export function ManagerDashboard() {
           ) : activeTab === "Delivery" ? (
             <DeliveriesPanel />
           ) : (
-            <ComingSoonPanel tab={activeTab} />
+            <RobotPanel tab={activeTab} />
           )}
         </section>
       </main>
@@ -227,13 +229,33 @@ function OverviewPanel({ onOpenTab }: { onOpenTab: (tab: DashboardTab) => void }
 
       <section aria-labelledby="robot-map-heading">
         <h3 id="robot-map-heading" className="text-xl font-extrabold text-[#294332]">Robot map</h3>
+        
         <div
           role="img"
           aria-label="Blank map canvas for delivery locations"
           className="mt-3 flex min-h-48 items-center justify-center rounded-2xl border border-dashed border-[#dce2d5] bg-white text-sm text-[#899188] shadow-[0_3px_12px_rgba(42,65,48,0.04)]"
         >
-          The delivery map will appear here.
+        
+          <div style={{ width: '100vw', height: '40vh' }}>
+            <Map
+              mapLib={maplibregl}
+              initialViewState={{
+                longitude: -121.8863, 
+                latitude: 37.3382,
+                zoom: 10
+              }}
+              // 1. Cap client zoom to match OpenFreeMap's standard layout limit
+              maxZoom={19} 
+  
+               // 2. Allow MapLibre to overscale local vector tiles if it pushes past the limit
+               maxPitch={85}
+            mapStyle="https://tiles.openfreemap.org/styles/liberty"
+              />
+          </div>
+        
+        
         </div>
+        
       </section>
     </div>
   );
@@ -1116,20 +1138,25 @@ function LowStockTable({ products, action }: { products: InventoryProduct[]; act
   );
 }
 
-function ComingSoonPanel({ tab }: { tab: "Robot" | "Revenue" }) {
+function RobotPanel({ tab }: { tab: "Robot" | "Revenue" }) {
   const descriptions: Record<"Robot" | "Revenue", string> = {
     Robot: "Robot status and fleet controls will be available here.",
     Revenue: "Revenue reports will be available here when payment reporting is connected.",
   };
 
   return (
-    <div className="rounded-2xl border border-[#e8e7dc] bg-white p-6 shadow-[0_3px_12px_rgba(42,65,48,0.04)] sm:p-8">
-      <h2 className="text-2xl font-extrabold text-[#294332]">{tab}</h2>
-      <p className="mt-2 text-[#667269]">{descriptions[tab]}</p>
-      <p className="mt-5 rounded-xl bg-[#f6f7f1] px-4 py-3 text-sm text-[#667269]">
-        This section does not have connected data yet.
-      </p>
+    <div style={{ width: '100vw', height: '100vh' }}>
+      <Map
+        initialViewState={{
+          longitude: -121.8863, // New York coordinates
+          latitude: 37.3382,
+          zoom: 10
+        }}
+        // Use the free, public tile schema from OpenFreeMap
+        mapStyle="https://tiles.openfreemap.org/styles/liberty"
+      />
     </div>
+    
   );
 }
 
