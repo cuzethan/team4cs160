@@ -49,6 +49,25 @@ export function createMemoryStore() {
           createdAt: new Date("2026-01-01T00:00:00.000Z"),
         }));
     },
+    async findCustomer(customerId) {
+      const user = users.get(customerId);
+      if (!user || user.role !== "customer") return null;
+      return {
+        id: user.userId,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        phone: user.phone,
+        accountStatus: user.accountStatus,
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      };
+    },
+    async setCustomerAccountStatus(customerId, accountStatus) {
+      const user = users.get(customerId);
+      if (!user || user.role !== "customer") return null;
+      user.accountStatus = accountStatus;
+      return store.findCustomer(customerId);
+    },
     async createUser(user) {
       if (await store.findUserByEmail(user.email)) throw new EmailTakenError();
       const created: User = { ...user, userId: randomUUID(), accountStatus: "active" };

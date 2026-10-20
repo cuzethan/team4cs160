@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import { createHash, randomBytes } from "node:crypto";
 import express, { type Request, type Response } from "express";
-import { EmailTakenError, type AuthStore, type User } from "./store.js";
+import { EmailTakenError, type AuthStore, type OrderStore, type User } from "./store.js";
 
 export const SESSION_COOKIE = "ofs_session";
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -20,6 +20,8 @@ export type AuthOptions = {
   store: AuthStore;
   appUrl: string;
   secureCookies: boolean;
+  // Used by manager customer-order lookup; tests can omit it when unused.
+  orderStore?: OrderStore;
 };
 
 // What the frontend sees. "admin" in the database is the manager login.
@@ -85,7 +87,7 @@ export async function findCurrentUser(store: AuthStore, req: Request) {
   return user && user.accountStatus === "active" ? user : null;
 }
 
-export function createAuthRouter({ store, secureCookies }: AuthOptions) {
+export function createAuthRouter({ store, secureCookies, orderStore }: AuthOptions) {
   const router = express.Router();
 
   async function startSession(res: Response, user: User) {
@@ -98,6 +100,19 @@ export function createAuthRouter({ store, secureCookies }: AuthOptions) {
       maxAge: SESSION_TTL_MS,
       path: "/",
     });
+  }
+
+  async function requireManager(req: Request, res: Response) {
+    const user = await findCurrentUser(store, req);
+    if (!user) {
+      res.status(401).json({ error: "Not logged in." });
+      return null;
+    }
+    if (user.role !== "admin") {
+      res.status(403).json({ error: "Manager access is required." });
+      return null;
+    }
+    return user;
   }
 
   router.post("/register", handle(async (req, res) => {
@@ -190,16 +205,42 @@ export function createAuthRouter({ store, secureCookies }: AuthOptions) {
   }));
 
   router.get("/customers", handle(async (req, res) => {
-    const user = await findCurrentUser(store, req);
-    if (!user) {
-      return res.status(401).json({ error: "Not logged in." });
-    }
-    if (user.role !== "admin") {
-      return res.status(403).json({ error: "Manager access is required." });
+    if (!(await requireManager(req, res))) return;
+    res.json({ customers: await store.listCustomers() });
+  }));
+
+  // Suspend or restore a customer account. Suspending ends their sessions immediately.
+  router.patch("/customers/:customerId", handle(async (req, res) => {
+    if (!(await requireManager(req, res))) return;
+
+    const accountStatus = req.body?.accountStatus;
+    if (accountStatus !== "active" && accountStatus !== "disabled") {
+      return res.status(400).json({ error: "Choose active or disabled." });
     }
 
-    const customers = await store.listCustomers();
-    res.json({ customers });
+    const customer = await store.setCustomerAccountStatus(req.params.customerId, accountStatus);
+    if (!customer) {
+      return res.status(404).json({ error: "Customer not found." });
+    }
+    if (accountStatus === "disabled") {
+      await store.deleteUserSessions(customer.id);
+    }
+    res.json({ customer });
+  }));
+
+  // Order history for one customer (manager view of what that shopper has placed).
+  router.get("/customers/:customerId/orders", handle(async (req, res) => {
+    if (!(await requireManager(req, res))) return;
+    if (!orderStore) {
+      return res.status(503).json({ error: "Order history is unavailable." });
+    }
+
+    const customer = await store.findCustomer(req.params.customerId);
+    if (!customer) {
+      return res.status(404).json({ error: "Customer not found." });
+    }
+
+    res.json({ customer, orders: await orderStore.listOrders(customer.id) });
   }));
 
   // Password recovery, step 1: look up the account's security question.
