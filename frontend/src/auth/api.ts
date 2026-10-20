@@ -34,12 +34,32 @@ export const SECURITY_QUESTIONS = [
   "What is your dream car?",
 ];
 
+export type CustomerOrderSummary = {
+  orderId: string;
+  createdAt: string;
+  orderStatus: string;
+  paymentStatus: string;
+  subtotal: number;
+  deliveryFee: number;
+  grandTotal: number;
+  totalWeight: number;
+  items: {
+    orderItemId: string;
+    productId: string;
+    productName: string;
+    quantity: number;
+    priceAtPurchase: number;
+    weightAtPurchase: number;
+  }[];
+};
+
 // Calls the backend and throws an Error with the server's message when the request fails.
-async function request<T>(path: string, body?: unknown): Promise<T> {
+async function request<T>(path: string, body?: unknown, method?: string): Promise<T> {
+  const verb = method ?? (body === undefined ? "GET" : "POST");
   let response: Response;
   try {
     response = await fetch(`/api/auth${path}`, {
-      method: body === undefined ? "GET" : "POST",
+      method: verb,
       headers: body === undefined ? undefined : { "Content-Type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
       credentials: "same-origin",
@@ -69,6 +89,21 @@ export async function logout() {
 
 export async function fetchCustomers() {
   return (await request<{ customers: Customer[] }>("/customers")).customers;
+}
+
+export async function setCustomerAccountStatus(
+  customerId: string,
+  accountStatus: Customer["accountStatus"],
+) {
+  return (
+    await request<{ customer: Customer }>(`/customers/${encodeURIComponent(customerId)}`, { accountStatus }, "PATCH")
+  ).customer;
+}
+
+export async function fetchCustomerOrders(customerId: string) {
+  return request<{ customer: Customer; orders: CustomerOrderSummary[] }>(
+    `/customers/${encodeURIComponent(customerId)}/orders`,
+  );
 }
 
 // Returns the logged-in user, or null if there isn't one.

@@ -1,7 +1,13 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { fetchCustomers, type Customer } from "../auth/api";
+import {
+  fetchCustomerOrders,
+  fetchCustomers,
+  setCustomerAccountStatus,
+  type Customer,
+  type CustomerOrderSummary,
+} from "../auth/api";
 import { SiteHeader } from "../components/SiteHeader";
 import { emojiFor } from "../inventory/api";
 import type { InventoryProduct } from "../inventory/types";
@@ -324,10 +330,20 @@ function SettingsPanel() {
   </div>;
 }
 
+type CustomerStatusFilter = "all" | Customer["accountStatus"];
+
 function CustomersPanel() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<CustomerStatusFilter>("all");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [orders, setOrders] = useState<CustomerOrderSummary[] | null>(null);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersError, setOrdersError] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -348,12 +364,126 @@ function CustomersPanel() {
     };
   }, []);
 
+  const selected = customers.find((customer) => customer.id === selectedId) ?? null;
+
+  useEffect(() => {
+    if (!selectedId) {
+      setOrders(null);
+      setOrdersError("");
+      setOrdersLoading(false);
+      return;
+    }
+
+    let active = true;
+    setOrdersLoading(true);
+    setOrdersError("");
+    fetchCustomerOrders(selectedId)
+      .then((result) => {
+        if (!active) return;
+        setOrders(result.orders);
+        // Keep the list row in sync if the detail payload has a fresher status.
+        setCustomers((current) =>
+          current.map((customer) => (customer.id === result.customer.id ? result.customer : customer)),
+        );
+      })
+      .catch((requestError: unknown) => {
+        if (active) {
+          setOrders(null);
+          setOrdersError(requestError instanceof Error ? requestError.message : "Unable to load orders.");
+        }
+      })
+      .finally(() => {
+        if (active) setOrdersLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedId]);
+
+  const query = search.trim().toLowerCase();
+  const visibleCustomers = customers.filter((customer) => {
+    if (statusFilter !== "all" && customer.accountStatus !== statusFilter) return false;
+    if (!query) return true;
+    const haystack = `${customer.firstName} ${customer.lastName} ${customer.email} ${customer.phone}`.toLowerCase();
+    return haystack.includes(query);
+  });
+
+  const handleToggleStatus = async (customer: Customer) => {
+    const nextStatus = customer.accountStatus === "active" ? "disabled" : "active";
+    setActionError("");
+    setBusyId(customer.id);
+    try {
+      const updated = await setCustomerAccountStatus(customer.id, nextStatus);
+      setCustomers((current) => current.map((row) => (row.id === updated.id ? updated : row)));
+    } catch (requestError: unknown) {
+      setActionError(requestError instanceof Error ? requestError.message : "Unable to update account status.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  if (selected) {
+    return (
+      <CustomerDetailPanel
+        customer={selected}
+        orders={orders}
+        ordersLoading={ordersLoading}
+        ordersError={ordersError}
+        actionError={actionError}
+        busy={busyId === selected.id}
+        onBack={() => {
+          setSelectedId(null);
+          setActionError("");
+        }}
+        onToggleStatus={() => void handleToggleStatus(selected)}
+      />
+    );
+  }
+
   return (
     <div>
-      <div className="mb-5">
-        <h2 className="text-2xl font-extrabold text-[#294332]">Customers</h2>
-        <p className="mt-1 text-sm text-[#667269]">Customer account directory.</p>
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-extrabold text-[#294332]">Customers</h2>
+          <p className="mt-1 text-sm text-[#667269]">Search accounts, open order history, and suspend or restore access.</p>
+        </div>
+        <p className="text-sm font-semibold text-[#667269]">
+          {visibleCustomers.length} of {customers.length}
+        </p>
       </div>
+
+      <div className="mb-4 flex flex-wrap gap-3">
+        <label className="flex h-11 min-w-[14rem] flex-1 items-center gap-2 rounded-xl border border-[#e6e6dc] bg-white px-4 text-[#899188] shadow-sm">
+          <span className="sr-only">Search customers</span>
+          <input
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search name, email, or phone"
+            className="w-full bg-transparent text-sm text-[#304336] outline-none placeholder:text-[#a3aaa1]"
+          />
+        </label>
+        <label className="flex items-center gap-2 text-sm font-semibold text-[#426149]">
+          Status
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value as CustomerStatusFilter)}
+            className="rounded-lg border border-[#dce2d5] bg-white px-3 py-2.5 text-[#253b2d] shadow-sm"
+          >
+            <option value="all">All</option>
+            <option value="active">Active</option>
+            <option value="disabled">Disabled</option>
+          </select>
+        </label>
+      </div>
+
+      {actionError && (
+        <p className="mb-4 rounded-xl border border-red-200 bg-white p-4 text-sm text-red-700" role="alert">
+          {actionError}
+        </p>
+      )}
+
       {loading ? (
         <p className="rounded-xl border border-[#e8e7dc] bg-white p-5 text-sm text-[#667269]" role="status">
           Loading customers...
@@ -364,7 +494,7 @@ function CustomersPanel() {
         </p>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-[#e8e7dc] bg-white shadow-[0_3px_12px_rgba(42,65,48,0.04)]">
-          <table className="w-full min-w-[42rem] text-left">
+          <table className="w-full min-w-[48rem] text-left">
             <thead className="bg-[#f6f7f1] text-xs uppercase tracking-wide text-[#667269]">
               <tr>
                 <th scope="col" className="px-5 py-3 font-bold">Name</th>
@@ -372,24 +502,58 @@ function CustomersPanel() {
                 <th scope="col" className="px-5 py-3 font-bold">Phone</th>
                 <th scope="col" className="px-5 py-3 font-bold">Status</th>
                 <th scope="col" className="px-5 py-3 font-bold">Joined</th>
+                <th scope="col" className="px-5 py-3 font-bold"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#ecebe2]">
-              {customers.map((customer) => (
+              {visibleCustomers.map((customer) => (
                 <tr key={customer.id}>
-                  <th scope="row" className="px-5 py-4 font-semibold text-[#253b2d]">{customer.firstName} {customer.lastName}</th>
+                  <th scope="row" className="px-5 py-4 font-semibold text-[#253b2d]">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedId(customer.id)}
+                      className="text-left hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#416449]"
+                    >
+                      {customer.firstName} {customer.lastName}
+                    </button>
+                  </th>
                   <td className="px-5 py-4 text-sm text-[#667269]">{customer.email}</td>
                   <td className="px-5 py-4 text-sm text-[#667269]">{customer.phone}</td>
-                  <td className="px-5 py-4 text-sm capitalize text-[#667269]">{customer.accountStatus}</td>
+                  <td className="px-5 py-4">
+                    <CustomerStatusBadge status={customer.accountStatus} />
+                  </td>
                   <td className="px-5 py-4 text-sm text-[#667269]">
                     {new Date(customer.createdAt).toLocaleDateString()}
                   </td>
+                  <td className="px-5 py-4 text-right">
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedId(customer.id)}
+                        className="rounded-full border border-[#d9e2d2] px-3 py-1.5 text-xs font-bold text-[#416449] hover:bg-[#f1f5eb]"
+                      >
+                        Orders
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busyId === customer.id}
+                        onClick={() => void handleToggleStatus(customer)}
+                        className="rounded-full border border-[#d9e2d2] px-3 py-1.5 text-xs font-bold text-[#667269] hover:bg-[#f6f7f1] disabled:cursor-wait disabled:opacity-50"
+                      >
+                        {busyId === customer.id
+                          ? "Saving..."
+                          : customer.accountStatus === "active"
+                            ? "Suspend"
+                            : "Restore"}
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
-              {customers.length === 0 && (
+              {visibleCustomers.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-5 py-8 text-center text-sm text-[#667269]">
-                    No customer accounts found.
+                  <td colSpan={6} className="px-5 py-8 text-center text-sm text-[#667269]">
+                    {customers.length === 0 ? "No customer accounts found." : "No customers match this search."}
                   </td>
                 </tr>
               )}
@@ -397,6 +561,140 @@ function CustomersPanel() {
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+function CustomerStatusBadge({ status }: { status: Customer["accountStatus"] }) {
+  const active = status === "active";
+  return (
+    <span
+      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold capitalize ${
+        active ? "bg-[#e9f1df] text-[#416449]" : "bg-[#f3e6e3] text-[#8b5145]"
+      }`}
+    >
+      {status}
+    </span>
+  );
+}
+
+function CustomerDetailPanel({
+  customer,
+  orders,
+  ordersLoading,
+  ordersError,
+  actionError,
+  busy,
+  onBack,
+  onToggleStatus,
+}: {
+  customer: Customer;
+  orders: CustomerOrderSummary[] | null;
+  ordersLoading: boolean;
+  ordersError: string;
+  actionError: string;
+  busy: boolean;
+  onBack: () => void;
+  onToggleStatus: () => void;
+}) {
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={onBack}
+        className="mb-4 text-sm font-bold text-[#416449] underline-offset-4 hover:underline"
+      >
+        ← Back to customers
+      </button>
+
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-extrabold text-[#294332]">
+            {customer.firstName} {customer.lastName}
+          </h2>
+          <p className="mt-1 text-sm text-[#667269]">{customer.email} · {customer.phone}</p>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <CustomerStatusBadge status={customer.accountStatus} />
+            <span className="text-sm text-[#7d887b]">
+              Joined {new Date(customer.createdAt).toLocaleDateString()}
+            </span>
+          </div>
+        </div>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onToggleStatus}
+          className="rounded-xl border border-[#d9e2d2] bg-white px-4 py-2.5 text-sm font-bold text-[#416449] hover:bg-[#f1f5eb] disabled:cursor-wait disabled:opacity-50"
+        >
+          {busy ? "Saving..." : customer.accountStatus === "active" ? "Suspend account" : "Restore account"}
+        </button>
+      </div>
+
+      {actionError && (
+        <p className="mb-4 rounded-xl border border-red-200 bg-white p-4 text-sm text-red-700" role="alert">
+          {actionError}
+        </p>
+      )}
+
+      <section aria-labelledby="customer-orders-heading">
+        <h3 id="customer-orders-heading" className="mb-3 text-lg font-extrabold text-[#294332]">
+          Order history
+        </h3>
+        {ordersLoading ? (
+          <p className="rounded-xl border border-[#e8e7dc] bg-white p-5 text-sm text-[#667269]" role="status">
+            Loading orders...
+          </p>
+        ) : ordersError ? (
+          <p className="rounded-xl border border-red-200 bg-white p-5 text-sm text-red-700" role="alert">
+            {ordersError}
+          </p>
+        ) : !orders || orders.length === 0 ? (
+          <p className="rounded-xl border border-[#e8e7dc] bg-white p-5 text-sm text-[#667269]">
+            This customer has not placed any orders yet.
+          </p>
+        ) : (
+          <ul className="space-y-3">
+            {orders.map((order) => (
+              <li
+                key={order.orderId}
+                className="rounded-2xl border border-[#e8e7dc] bg-white p-5 shadow-[0_3px_12px_rgba(42,65,48,0.04)]"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="font-mono text-sm font-bold text-[#253b2d]">
+                      #{order.orderId.slice(0, 8).toUpperCase()}
+                    </p>
+                    <p className="mt-1 text-sm text-[#667269]">
+                      {new Date(order.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-extrabold tabular-nums text-[#294332]">
+                      ${order.grandTotal.toFixed(2)}
+                    </p>
+                    <p className="mt-1 text-xs font-bold uppercase tracking-wide text-[#7d887b]">
+                      {order.orderStatus.replaceAll("_", " ")} · {order.paymentStatus}
+                    </p>
+                  </div>
+                </div>
+                <ul className="mt-4 space-y-1 border-t border-[#ecebe2] pt-3 text-sm text-[#5f6b61]">
+                  {order.items.map((item) => (
+                    <li key={item.orderItemId} className="flex justify-between gap-4">
+                      <span>
+                        {item.productName}{" "}
+                        <span className="text-[#899188]">× {item.quantity}</span>
+                      </span>
+                      <span className="shrink-0 tabular-nums">
+                        ${(item.priceAtPurchase * item.quantity).toFixed(2)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }
