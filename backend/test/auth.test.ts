@@ -181,6 +181,140 @@ describe("auth API", () => {
     expect(login.status).toBe(403);
   });
 
+  async function managerAgent() {
+    await memory.store.createUser({
+      firstName: "Max",
+      lastName: "Boss",
+      phone: "000",
+      email: "manager@ofs.com",
+      passwordHash: await bcrypt.hash("manager123", 4),
+      role: "admin",
+      questionChoice: "What is your dream car?",
+      answerHash: await bcrypt.hash("tesla", 4),
+    });
+    const agent = request.agent(app);
+    await agent.post("/api/auth/login").send({
+      email: "manager@ofs.com",
+      password: "manager123",
+      role: "manager",
+    });
+    return agent;
+  }
+
+  it("lets managers suspend and restore a customer, ending their session", async () => {
+    const customerAgent = request.agent(app);
+    const registered = await customerAgent.post("/api/auth/register").send(customer);
+    expect((await customerAgent.get("/api/auth/me")).status).toBe(200);
+
+    const manager = await managerAgent();
+    const suspended = await manager
+      .patch(`/api/auth/customers/${registered.body.user.id}`)
+      .send({ accountStatus: "disabled" });
+    expect(suspended.status).toBe(200);
+    expect(suspended.body.customer.accountStatus).toBe("disabled");
+    expect((await customerAgent.get("/api/auth/me")).status).toBe(401);
+
+    const loginWhileDisabled = await request(app)
+      .post("/api/auth/login")
+      .send({ email: customer.email, password: customer.password, role: "customer" });
+    expect(loginWhileDisabled.status).toBe(403);
+
+    const restored = await manager
+      .patch(`/api/auth/customers/${registered.body.user.id}`)
+      .send({ accountStatus: "active" });
+    expect(restored.status).toBe(200);
+    expect(restored.body.customer.accountStatus).toBe("active");
+
+    const loginAgain = await request(app)
+      .post("/api/auth/login")
+      .send({ email: customer.email, password: customer.password, role: "customer" });
+    expect(loginAgain.status).toBe(200);
+  });
+
+  it("rejects bad status values and unknown customers on suspend/restore", async () => {
+    const manager = await managerAgent();
+    const bad = await manager.patch("/api/auth/customers/not-a-customer").send({ accountStatus: "paused" });
+    expect(bad.status).toBe(400);
+
+    const missing = await manager
+      .patch("/api/auth/customers/00000000-0000-4000-8000-000000000099")
+      .send({ accountStatus: "disabled" });
+    expect(missing.status).toBe(404);
+  });
+
+  it("returns a customer's order history to managers only", async () => {
+    const registered = await request(app).post("/api/auth/register").send(customer);
+    const customerId = registered.body.user.id as string;
+    const shops = memoryShopStores();
+    shops.orderStore.listOrders = async (userId) => {
+      expect(userId).toBe(customerId);
+      return [{
+        orderId: "order-1",
+        createdAt: new Date("2026-10-01T12:00:00.000Z"),
+        orderStatus: "placed",
+        paymentStatus: "paid",
+        subtotal: 5,
+        deliveryFee: 0,
+        grandTotal: 5,
+        totalWeight: 1,
+        items: [{
+          orderItemId: "item-1",
+          productId: "p-1",
+          productName: "Apples",
+          quantity: 2,
+          priceAtPurchase: 2.5,
+          weightAtPurchase: 0.5,
+        }],
+      }];
+    };
+    const orderApp = createApp({
+      store: memory.store,
+      ...shops,
+      salesStore: { listSales: async () => [] },
+      deliveryStore: { listDeliveries: async () => [] },
+      appUrl: "http://localhost:5173",
+      secureCookies: false,
+      checkDatabase: async () => {},
+    });
+
+    const manager = await (async () => {
+      await memory.store.createUser({
+        firstName: "Max",
+        lastName: "Boss",
+        phone: "000",
+        email: "manager2@ofs.com",
+        passwordHash: await bcrypt.hash("manager123", 4),
+        role: "admin",
+        questionChoice: "What is your dream car?",
+        answerHash: await bcrypt.hash("tesla", 4),
+      });
+      const agent = request.agent(orderApp);
+      await agent.post("/api/auth/login").send({
+        email: "manager2@ofs.com",
+        password: "manager123",
+        role: "manager",
+      });
+      return agent;
+    })();
+
+    const response = await manager.get(`/api/auth/customers/${customerId}/orders`);
+    expect(response.status).toBe(200);
+    expect(response.body.customer.email).toBe("Lee@ofs.com");
+    expect(response.body.orders).toHaveLength(1);
+    expect(response.body.orders[0].orderId).toBe("order-1");
+
+    // A customer session cannot read another shopper's orders through this route.
+    const shopper = request.agent(orderApp);
+    await shopper.post("/api/auth/login").send({
+      email: "Lee@ofs.com",
+      password: customer.password,
+      role: "customer",
+    });
+    expect((await shopper.get(`/api/auth/customers/${customerId}/orders`)).status).toBe(403);
+
+    expect((await manager.get("/api/auth/customers/00000000-0000-4000-8000-000000000099/orders")).status).toBe(404);
+  });
+
   it("logs out and ends the session", async () => {
     const agent = request.agent(app);
     await agent.post("/api/auth/register").send(customer);

@@ -40,11 +40,11 @@ export function createApp({ checkDatabase, cartStore, orderStore, productStore, 
     }
   });
 
-  app.use("/api/auth", createAuthRouter(authOptions));
   const settings = settingsStore ?? {
     async get(): Promise<DeliverySettings> { return DEFAULT_DELIVERY_SETTINGS; },
     async update(value: DeliverySettings) { return value; },
   };
+  app.use("/api/auth", createAuthRouter({ ...authOptions, orderStore }));
   app.use("/api/settings", createSettingsRouter(authOptions.store, settings));
   app.use("/api/products", createProductRouter(productStore));
   app.use("/api/cart", createCartRouter({ store: authOptions.store, cartStore }));

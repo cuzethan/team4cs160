@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchCurrentUser, fetchCustomers, login, logout } from "../src/auth/api";
+import {
+  fetchCurrentUser,
+  fetchCustomerOrders,
+  fetchCustomers,
+  login,
+  logout,
+  setCustomerAccountStatus,
+} from "../src/auth/api";
 
 function mockFetch(status: number, body: unknown) {
   const fetchMock = vi.fn().mockResolvedValue(
@@ -59,6 +66,54 @@ describe("auth api client", () => {
 
     await expect(fetchCustomers()).resolves.toEqual(customers);
     expect(fetchMock.mock.calls[0][0]).toBe("/api/auth/customers");
+    expect(fetchMock.mock.calls[0][1].method).toBe("GET");
+  });
+
+  it("patches a customer account status", async () => {
+    const customer = {
+      id: "1",
+      firstName: "Lee",
+      lastName: "Nguyen",
+      email: "lee@ofs.com",
+      phone: "408-555-0100",
+      accountStatus: "disabled",
+      createdAt: "2026-01-01T00:00:00.000Z",
+    };
+    const fetchMock = mockFetch(200, { customer });
+
+    await expect(setCustomerAccountStatus("1", "disabled")).resolves.toEqual(customer);
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/auth/customers/1");
+    expect(fetchMock.mock.calls[0][1].method).toBe("PATCH");
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ accountStatus: "disabled" });
+  });
+
+  it("fetches one customer's orders", async () => {
+    const body = {
+      customer: {
+        id: "1",
+        firstName: "Lee",
+        lastName: "Nguyen",
+        email: "lee@ofs.com",
+        phone: "408-555-0100",
+        accountStatus: "active",
+        createdAt: "2026-01-01T00:00:00.000Z",
+      },
+      orders: [{
+        orderId: "order-1",
+        createdAt: "2026-10-01T12:00:00.000Z",
+        orderStatus: "placed",
+        paymentStatus: "paid",
+        subtotal: 5,
+        deliveryFee: 0,
+        grandTotal: 5,
+        totalWeight: 1,
+        items: [],
+      }],
+    };
+    const fetchMock = mockFetch(200, body);
+
+    await expect(fetchCustomerOrders("1")).resolves.toEqual(body);
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/auth/customers/1/orders");
     expect(fetchMock.mock.calls[0][1].method).toBe("GET");
   });
 });

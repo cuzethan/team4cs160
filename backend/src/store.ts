@@ -102,6 +102,12 @@ export class EmailTakenError extends Error {
 export interface AuthStore {
   findUserByEmail(email: string): Promise<User | null>;
   listCustomers(): Promise<CustomerRecord[]>;
+  findCustomer(customerId: string): Promise<CustomerRecord | null>;
+  // Suspends or restores a customer. Returns null when the id is not a customer.
+  setCustomerAccountStatus(
+    customerId: string,
+    accountStatus: CustomerRecord["accountStatus"],
+  ): Promise<CustomerRecord | null>;
   createUser(user: NewUser): Promise<User>;
   updatePassword(userId: string, passwordHash: string): Promise<void>;
 
@@ -140,6 +146,31 @@ export function createPgStore(pool: pg.Pool): AuthStore {
          ORDER BY last_name, first_name, email`,
       );
       return rows;
+    },
+
+    async findCustomer(customerId) {
+      if (!UUID_PATTERN.test(customerId)) return null;
+      const { rows } = await pool.query<CustomerRecord>(
+        `SELECT user_id AS id, first_name AS "firstName", last_name AS "lastName",
+                email, phone, account_status AS "accountStatus", created_at AS "createdAt"
+         FROM users
+         WHERE user_id = $1 AND role = 'customer'`,
+        [customerId],
+      );
+      return rows[0] ?? null;
+    },
+
+    async setCustomerAccountStatus(customerId, accountStatus) {
+      if (!UUID_PATTERN.test(customerId)) return null;
+      const { rows } = await pool.query<CustomerRecord>(
+        `UPDATE users
+         SET account_status = $2, updated_at = now()
+         WHERE user_id = $1 AND role = 'customer'
+         RETURNING user_id AS id, first_name AS "firstName", last_name AS "lastName",
+                   email, phone, account_status AS "accountStatus", created_at AS "createdAt"`,
+        [customerId, accountStatus],
+      );
+      return rows[0] ?? null;
     },
 
     async createUser(user) {
