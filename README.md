@@ -68,13 +68,14 @@ docker compose exec backend npm run create-manager -- manager@ofs.com yourpasswo
 ```
 
 Then log in at http://localhost:5173/manager-login.
-Managers land on the manager dashboard after signing in. The dashboard shows an overview of the current product catalog, links to the catalog and customer storefront, and a delivery table with each order's customer, progress, and ETA.
+Managers land on the manager dashboard after signing in. The **Sales** tab includes revenue breakdown pies for the top items and categories, sales and gross-profit bar charts, and a range-filtered table of all catalog items with quantities, revenue, costs, profits, and stock.
 
 ### Managing products
 
 The dashboard's **Inventory** tab lists every product, including deactivated ones (`/api/manager/inventory`, managers only). From there a manager can:
 
 - **Add a product** with its name, description, category, unit, price, weight, and starting stock.
+- **Record each product's unit cost**. Sales reports use the cost captured at checkout to calculate profit; orders placed before cost tracking was introduced are marked as unknown.
 - **Edit a product**. Price changes are saved to `PriceHistory` with the manager who made them.
 - **Deactivate or reactivate a product**. Deactivated products disappear from the store and can't be added to carts, but past orders that include them are kept.
 - **Add or remove stock in bulk with a reason** ("Weekly delivery", "Spoiled"). Each change is saved to `Transactions` with the manager and the reason. The quick +/- controls on the catalog page save "Manual adjustment" as the reason.
@@ -112,6 +113,6 @@ A successful card places the order and shows the payment in the Stripe test dash
 
 Products come from the database through `GET /api/products` (public, active products only). The inventory page's search, category filters, and item counts all work off that list, so stock goes down there after a purchase. Catalog tables and starter products are defined in `db/init/003_products.sql`. Postgres runs files in `db/init` only when it creates a new data volume. If an existing database is missing catalog or application tables, apply the relevant SQL files from `db/init` in order without deleting accounts.
 
-These scripts are safe to reapply: they add missing schema objects and skip categories/products that already exist. The backend also creates the global delivery settings table and default row at startup, so existing databases are upgraded without deleting data. To apply the settings schema manually, run `docker compose exec -T db psql -U ofs -d ofs < db/init/005_global_settings.sql`. To completely reset a local development database instead, use `docker compose down -v && docker compose up --build`; this deletes all database data, including accounts.
+These scripts are safe to reapply: they add missing schema objects and skip categories/products that already exist. The backend creates the global delivery settings table and default row and upgrades the inventory and item-cost columns at startup, so existing databases are upgraded without deleting data. Existing products start with no recorded cost; enter their unit costs in **Inventory** to include new orders in profit reporting. Historical orders without cost snapshots remain unknown. To apply the schemas manually, run `docker compose exec -T db psql -U ofs -d ofs < db/init/005_global_settings.sql` or `docker compose exec -T db psql -U ofs -d ofs < db/init/007_product_costs.sql`. To completely reset a local development database instead, use `docker compose down -v && docker compose up --build`; this deletes all database data, including accounts.
 
 **Forgot password:** users answer the security question they picked at sign-up, then choose a new password. Manager accounts don't have a usable security answer; make a new manager account instead.

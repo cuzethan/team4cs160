@@ -20,7 +20,7 @@ describe("manager deliveries API", () => {
       cartStore: cart.cartStore,
       orderStore: createMemoryOrderStore(cart).orderStore,
       productStore: createMemoryProductStore(cart).productStore,
-      salesStore: { listSales: async () => [] },
+      salesStore: { listSales: async () => [], listSalesAnalytics: async () => ({ profitBuckets: [], items: [], categories: [] }) },
       deliveryStore: { listDeliveries },
       appUrl: "http://localhost:5173",
       secureCookies: false,

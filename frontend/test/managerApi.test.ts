@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createProduct, fetchDeliveries, fetchManagedInventory, fetchSales, updateProduct } from "../src/manager/api";
+import { createProduct, fetchDeliveries, fetchManagedInventory, fetchSales, fetchSalesAnalytics, updateProduct } from "../src/manager/api";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -48,11 +48,21 @@ describe("manager sales API client", () => {
     ));
     await expect(fetchSales("all")).rejects.toThrow("Manager access is required.");
   });
+
+  it("requests item and profit analytics for the selected range", async () => {
+    const analytics = { profitBuckets: [], items: [], categories: [] };
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ analytics }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(fetchSalesAnalytics("month")).resolves.toEqual(analytics);
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/manager/sales/analytics?range=month");
+    expect(fetchMock.mock.calls[0][1].credentials).toBe("same-origin");
+  });
 });
 describe("manager product API client", () => {
   const product = {
     id: "p-1", name: "Red Lentils", category: "Grains", categoryId: "c-1", description: "",
-    price: 3.25, weightLbs: 1, unit: "bag", quantityInStock: 200, imageUrl: null, active: true,
+    price: 3.25, unitCost: 1.75, weightLbs: 1, unit: "bag", quantityInStock: 200, imageUrl: null, active: true,
   };
 
   it("loads every product with the categories", async () => {
@@ -68,7 +78,7 @@ describe("manager product API client", () => {
   it("adds a product with its starting stock", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ product }), { status: 201 }));
     vi.stubGlobal("fetch", fetchMock);
-    const input = { name: "Red Lentils", description: "", price: 3.25, weightLbs: 1, unit: "bag", categoryId: "c-1", quantityInStock: 200 };
+    const input = { name: "Red Lentils", description: "", price: 3.25, unitCost: 1.75, weightLbs: 1, unit: "bag", categoryId: "c-1", quantityInStock: 200 };
 
     await expect(createProduct(input)).resolves.toEqual(product);
     expect(fetchMock.mock.calls[0][1].method).toBe("POST");

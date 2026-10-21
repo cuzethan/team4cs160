@@ -15,7 +15,7 @@ describe("manager inventory API", () => {
       cartStore: cart.cartStore,
       orderStore: createMemoryOrderStore(cart).orderStore,
       productStore: createMemoryProductStore(cart).productStore,
-      salesStore: { listSales: async () => [] },
+      salesStore: { listSales: async () => [], listSalesAnalytics: async () => ({ profitBuckets: [], items: [], categories: [] }) },
       deliveryStore: { listDeliveries: async () => [] },
       appUrl: "http://localhost:5173",
       secureCookies: false,
@@ -80,7 +80,7 @@ describe("manager product management API", () => {
       cartStore: cart.cartStore,
       orderStore: createMemoryOrderStore(cart).orderStore,
       productStore: products.productStore,
-      salesStore: { listSales: async () => [] },
+      salesStore: { listSales: async () => [], listSalesAnalytics: async () => ({ profitBuckets: [], items: [], categories: [] }) },
       deliveryStore: { listDeliveries: async () => [] },
       appUrl: "http://localhost:5173",
       secureCookies: false,
@@ -118,6 +118,7 @@ describe("manager product management API", () => {
     name: "Red Lentils",
     description: "Split red lentils",
     price: 3.25,
+    unitCost: 1.75,
     weightLbs: 1,
     unit: "bag",
     categoryId: "cat-Grains",
@@ -145,7 +146,7 @@ describe("manager product management API", () => {
     const { manager, managerUser, products } = await setup();
     const res = await manager.post("/api/manager/inventory").send(newProduct);
     expect(res.status).toBe(201);
-    expect(res.body.product).toMatchObject({ name: "Red Lentils", category: "Grains", price: 3.25, quantityInStock: 200, active: true });
+    expect(res.body.product).toMatchObject({ name: "Red Lentils", category: "Grains", price: 3.25, unitCost: 1.75, quantityInStock: 200, active: true });
 
     const catalog = (await manager.get("/api/products")).body.products;
     expect(catalog.map((product: { name: string }) => product.name)).toContain("Red Lentils");
@@ -160,6 +161,9 @@ describe("manager product management API", () => {
     expect((await post({ name: "  " })).status).toBe(400);
     expect((await post({ price: -1 })).status).toBe(400);
     expect((await post({ price: "3" })).status).toBe(400);
+    expect((await post({ unitCost: -1 })).status).toBe(400);
+    const { unitCost: _unitCost, ...noUnitCost } = newProduct;
+    expect((await manager.post("/api/manager/inventory").send(noUnitCost)).status).toBe(400);
     expect((await post({ weightLbs: 0 })).status).toBe(400);
     expect((await post({ unit: "" })).status).toBe(400);
     expect((await post({ categoryId: "cat-Candy" })).status).toBe(400);

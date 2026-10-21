@@ -11,7 +11,7 @@ import {
 import { SiteHeader } from "../components/SiteHeader";
 import { emojiFor } from "../inventory/api";
 import type { InventoryProduct } from "../inventory/types";
-import { fetchDeliveries, fetchDeliverySettings, fetchManagedInventory, fetchSales, saveDeliverySettings, updateProduct, type DeliverySettings, type ManagedProduct, type ManagerDelivery, type ProductCategory, type SalesBucket, type SalesRange } from "./api";
+import { fetchDeliveries, fetchDeliverySettings, fetchManagedInventory, fetchSales, fetchSalesAnalytics, saveDeliverySettings, updateProduct, type DeliverySettings, type ManagedProduct, type ManagerDelivery, type ProductCategory, type SalesAnalytics, type SalesBucket, type SalesRange } from "./api";
 import { ProductFormDialog, ProductTable } from "./ProductManager";
 
 const tabs = ["Overview", "Customers", "Inventory", "Delivery", "Robot", "Sales", "Settings"] as const;
@@ -784,6 +784,7 @@ function SalesOverview({
   onDateRangeChange: (dateRange: DateRange) => void;
 }) {
   const [sales, setSales] = useState<SalesBucket[]>([]);
+  const [analytics, setAnalytics] = useState<SalesAnalytics | null>(null);
   const [salesLoading, setSalesLoading] = useState(true);
   const [salesError, setSalesError] = useState("");
 
@@ -791,12 +792,18 @@ function SalesOverview({
     let active = true;
     setSalesLoading(true);
     setSalesError("");
-    fetchSales(salesRangeFor[dateRange])
-      .then((buckets) => {
-        if (active) setSales(buckets);
+    Promise.all([
+      fetchSales(salesRangeFor[dateRange]),
+      fetchSalesAnalytics(salesRangeFor[dateRange]),
+    ])
+      .then(([buckets, details]) => {
+        if (active) {
+          setSales(buckets);
+          setAnalytics(details);
+        }
       })
       .catch((requestError: unknown) => {
-        if (active) setSalesError(requestError instanceof Error ? requestError.message : "Unable to load sales data.");
+        if (active) setSalesError(requestError instanceof Error ? requestError.message : "Unable to load sales analytics.");
       })
       .finally(() => {
         if (active) setSalesLoading(false);
@@ -811,7 +818,7 @@ function SalesOverview({
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-2xl font-extrabold text-[#294332]">Sales</h2>
-          <p className="mt-1 text-sm text-[#667269]">Paid orders and revenue over time.</p>
+          <p className="mt-1 text-sm text-[#667269]">Revenue breakdown, gross profit, and item performance over time.</p>
         </div>
         <label className="flex items-center gap-2 text-sm font-semibold text-[#426149]">
           Date range
@@ -828,39 +835,134 @@ function SalesOverview({
         <p role="status" className="rounded-xl border border-[#e8e7dc] bg-white p-5 text-sm text-[#667269]">Loading sales data...</p>
       ) : salesError ? (
         <p role="alert" className="rounded-xl border border-red-200 bg-white p-5 text-sm text-red-700">{salesError}</p>
-      ) : (
-        <div className="grid gap-4 xl:grid-cols-2">
-          <SalesChart title="Paid orders" buckets={sales} range={salesRangeFor[dateRange]} metric="paidOrders" />
-          <SalesChart title="Payment revenue" buckets={sales} range={salesRangeFor[dateRange]} metric="revenue" />
+      ) : analytics && (
+        <div className="space-y-4">
+          <div className="grid gap-4 xl:grid-cols-2">
+            <SalesPieChart title="Revenue by top 8 items" values={topSlices(analytics.items.map((item) => ({ name: item.name, value: item.revenue })), 8)} />
+            <SalesPieChart title="Revenue by top 3 categories" values={topSlices(analytics.categories.map((category) => ({ name: category.name, value: category.revenue })), 3)} />
+          </div>
+          <div className="grid gap-4 xl:grid-cols-2">
+            <SalesBarChart
+              title="Sales"
+              buckets={sales.map((bucket) => ({ bucketStart: bucket.bucketStart, value: bucket.revenue }))}
+              range={salesRangeFor[dateRange]}
+              formatValue={(value) => `$${value.toFixed(0)}`}
+            />
+            <SalesBarChart
+              title="Profit"
+              buckets={analytics.profitBuckets.map((bucket) => ({
+                bucketStart: bucket.bucketStart,
+                value: bucket.profit,
+                unknownCostQuantity: bucket.unknownCostQuantity,
+              }))}
+              range={salesRangeFor[dateRange]}
+              formatValue={(value) => `$${value.toFixed(0)}`}
+              notice={
+                analytics.profitBuckets.some((bucket) => bucket.unknownCostQuantity > 0)
+                  ? "Some orders have no saved item cost; profit shown excludes those items."
+                  : undefined
+              }
+            />
+          </div>
+          <SalesItemsTable items={analytics.items} />
         </div>
       )}
     </>
   );
 }
 
-function SalesChart({
+type PieSlice = { name: string; value: number };
+
+function topSlices(values: PieSlice[], limit: number): PieSlice[] {
+  const sorted = values.filter((item) => item.value > 0).sort((a, b) => b.value - a.value);
+  const shown = sorted.slice(0, limit);
+  const remainder = sorted.slice(limit).reduce((total, item) => total + item.value, 0);
+  if (remainder > 0) shown.push({ name: limit === 8 ? "Other items" : "Other categories", value: remainder });
+  return shown;
+}
+
+const chartColors = ["#438254", "#91a95b", "#d4a449", "#cf7658", "#6e8da7", "#9c7bb4", "#4f9b91", "#b67b91", "#a8ad9b"];
+
+function SalesPieChart({ title, values }: { title: string; values: PieSlice[] }) {
+  const total = values.reduce((sum, item) => sum + item.value, 0);
+  let angle = -90;
+
+  return (
+    <section className="min-w-0 rounded-2xl border border-[#e8e7dc] bg-white p-4 shadow-[0_3px_12px_rgba(42,65,48,0.04)] sm:p-5" aria-label={title}>
+      <h3 className="text-lg font-extrabold text-[#294332]">{title}</h3>
+      {total <= 0 ? (
+        <p className="py-12 text-center text-sm text-[#7d887b]">No item sales in this range.</p>
+      ) : (
+        <div className="mt-4 flex flex-col items-center gap-5 sm:flex-row">
+          <svg viewBox="0 0 200 200" role="img" aria-label={`${title}, total $${total.toFixed(2)}`} className="h-44 w-44 shrink-0">
+            {values.length === 1 ? (
+              <circle cx="100" cy="100" r="98" fill={chartColors[0]} />
+            ) : values.map((item, index) => {
+              const start = angle;
+              const sweep = (item.value / total) * 360;
+              angle += sweep;
+              const end = angle;
+              const startPoint = polarPoint(100, 100, 98, start);
+              const endPoint = polarPoint(100, 100, 98, end);
+              const largeArc = sweep > 180 ? 1 : 0;
+              return (
+                <path
+                  key={item.name}
+                  d={`M 100 100 L ${startPoint.x} ${startPoint.y} A 98 98 0 ${largeArc} 1 ${endPoint.x} ${endPoint.y} Z`}
+                  fill={chartColors[index % chartColors.length]}
+                  stroke="white"
+                  strokeWidth="1.5"
+                />
+              );
+            })}
+          </svg>
+          <ul className="grid w-full gap-2 text-sm">
+            {values.map((item, index) => (
+              <li key={item.name} className="flex items-center justify-between gap-3">
+                <span className="flex min-w-0 items-center gap-2 text-[#536459]">
+                  <span aria-hidden="true" className="h-3 w-3 shrink-0 rounded-sm" style={{ backgroundColor: chartColors[index % chartColors.length] }} />
+                  <span className="truncate">{item.name}</span>
+                </span>
+                <span className="shrink-0 tabular-nums font-semibold text-[#294332]">
+                  ${item.value.toFixed(2)} <span className="text-[#899188]">{((item.value / total) * 100).toFixed(1)}%</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function polarPoint(cx: number, cy: number, radius: number, angle: number) {
+  const radians = (angle * Math.PI) / 180;
+  return { x: cx + radius * Math.cos(radians), y: cy + radius * Math.sin(radians) };
+}
+
+function SalesBarChart({
   title,
   buckets,
   range,
-  metric,
+  formatValue,
+  notice,
 }: {
   title: string;
-  buckets: SalesBucket[];
+  buckets: { bucketStart: string; value: number; unknownCostQuantity?: number }[];
   range: SalesRange;
-  metric: "paidOrders" | "revenue";
+  formatValue: (value: number) => string;
+  notice?: string;
 }) {
-  const values = buckets.map((bucket) => bucket[metric]);
+  const values = buckets.map((bucket) => bucket.value);
   const maximum = Math.max(...values, 1);
-  const points = values.map((value, index) => ({
-    x: 54 + (index / Math.max(values.length - 1, 1)) * 556,
-    y: 174 - (value / maximum) * 142,
-  }));
-  const line = points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
+  const minimum = Math.min(...values, 0);
+  const span = maximum - minimum || 1;
+  const chartTop = 32;
+  const chartBottom = 174;
+  const baseline = chartTop + (maximum / span) * (chartBottom - chartTop);
   const labelInterval = Math.max(1, Math.ceil(buckets.length / 7));
-  const hasSales = values.some((value) => value > 0);
-  const formatValue = (value: number) => metric === "revenue"
-    ? `$${new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value)}`
-    : new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value);
+  const hasValues = values.some((value) => value !== 0) || buckets.some((bucket) => (bucket.unknownCostQuantity ?? 0) > 0);
+  const barWidth = Math.min(28, 420 / Math.max(values.length, 1));
 
   return (
     <section
@@ -869,38 +971,103 @@ function SalesChart({
     >
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-lg font-extrabold text-[#294332]">{title}</h2>
-        <span className="text-sm font-bold tabular-nums text-[#426149]">
-          {metric === "revenue" ? `$${values.reduce((sum, value) => sum + value, 0).toFixed(2)}` : values.reduce((sum, value) => sum + value, 0)}
-        </span>
+        <span className="text-sm font-bold tabular-nums text-[#426149]">{formatValue(values.reduce((sum, value) => sum + value, 0))}</span>
       </div>
       <svg
-        viewBox="0 0 640 220"
+        viewBox="0 0 640 230"
         role="img"
-        aria-label={`${title} graph for ${range}, showing ${buckets.length} time buckets`}
+        aria-label={`${title} bar chart for ${range}, showing ${buckets.length} time buckets`}
         className="mt-3 w-full"
       >
         {[0, 1, 2, 3].map((tick) => {
-          const y = 32 + tick * (142 / 3);
-          const value = maximum * (1 - tick / 3);
+          const y = chartTop + tick * ((chartBottom - chartTop) / 3);
+          const value = maximum - (tick / 3) * span;
           return (
             <g key={tick}>
-              <line x1="52" x2="612" y1={y} y2={y} stroke="#ecebe2" strokeDasharray="4 5" />
-              <text x="44" y={y + 4} textAnchor="end" fill="#7d887b" fontSize="11">{formatValue(value)}</text>
+              <line x1="56" x2="612" y1={y} y2={y} stroke="#ecebe2" strokeDasharray="4 5" />
+              <text x="50" y={y + 4} textAnchor="end" fill="#7d887b" fontSize="11">{formatValue(value)}</text>
             </g>
           );
         })}
-        {points.length > 0 && (
-          <path d={line} fill="none" stroke="#438254" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-        )}
-        {buckets.map((bucket, index) => index % labelInterval === 0 || index === buckets.length - 1 ? (
-          <text key={bucket.bucketStart} x={points[index].x} y="202" textAnchor="middle" fill="#7d887b" fontSize="11">
-            {formatBucketLabel(bucket.bucketStart, range)}
+        <line x1="56" x2="612" y1={baseline} y2={baseline} stroke="#9ba797" />
+        {buckets.map((bucket, index) => {
+          const centerX = 58 + ((index + 0.5) / Math.max(buckets.length, 1)) * 550;
+          const barHeight = Math.abs(bucket.value) * ((chartBottom - chartTop) / span);
+          return (
+            <g key={bucket.bucketStart}>
+              <rect
+                x={centerX - barWidth / 2}
+                y={bucket.value >= 0 ? baseline - barHeight : baseline}
+                width={barWidth}
+                height={barHeight}
+                rx="3"
+                fill={title === "Profit" ? (bucket.value < 0 ? "#b85d4a" : "#d4a449") : "#438254"}
+              >
+                <title>{`${formatBucketLabel(bucket.bucketStart, range)}: ${formatValue(bucket.value)}`}</title>
+              </rect>
+              {(index % labelInterval === 0 || index === buckets.length - 1) && (
+                <text x={centerX} y="204" textAnchor="middle" fill="#7d887b" fontSize="11">
+                  {formatBucketLabel(bucket.bucketStart, range)}
+                </text>
+              )}
+            </g>
+          );
+        })}
+        {!hasValues && (
+          <text x="332" y="112" textAnchor="middle" fill="#7d887b" fontSize="13">
+            {title === "Profit" ? "No known profit in this range" : "No paid sales in this range"}
           </text>
-        ) : null)}
-        {!hasSales && (
-          <text x="332" y="112" textAnchor="middle" fill="#7d887b" fontSize="13">No paid sales in this range</text>
         )}
       </svg>
+      {notice && <p className="mt-1 text-xs text-[#8b6841]">{notice}</p>}
+    </section>
+  );
+}
+
+function SalesItemsTable({ items }: { items: SalesAnalytics["items"] }) {
+  return (
+    <section className="overflow-hidden rounded-2xl border border-[#e8e7dc] bg-white shadow-[0_3px_12px_rgba(42,65,48,0.04)]">
+      <div className="border-b border-[#ecebe2] px-5 py-4 sm:px-7">
+        <h3 className="text-lg font-extrabold text-[#294332]">Item sales and inventory</h3>
+        <p className="mt-1 text-sm text-[#667269]">Units sold, revenue, cost, profit, and stock for every item.</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[74rem] text-left">
+          <thead className="bg-[#f6f7f1] text-xs uppercase tracking-wide text-[#667269]">
+            <tr>
+              <th scope="col" className="px-5 py-3 font-bold">Item</th>
+              <th scope="col" className="px-4 py-3 font-bold">Category</th>
+              <th scope="col" className="px-4 py-3 text-right font-bold">Quantity sold</th>
+              <th scope="col" className="px-4 py-3 text-right font-bold">Revenue</th>
+              <th scope="col" className="px-4 py-3 text-right font-bold">Cost of goods</th>
+              <th scope="col" className="px-4 py-3 text-right font-bold">Profit</th>
+              <th scope="col" className="px-4 py-3 text-right font-bold">Current price</th>
+              <th scope="col" className="px-4 py-3 text-right font-bold">Unit cost</th>
+              <th scope="col" className="px-5 py-3 text-right font-bold">On hand</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#ecebe2]">
+            {items.map((item) => (
+              <tr key={item.productId}>
+                <th scope="row" className="px-5 py-4 font-semibold text-[#253b2d]">{item.name}</th>
+                <td className="px-4 py-4 text-sm text-[#667269]">{item.category}</td>
+                <td className="px-4 py-4 text-right text-sm tabular-nums">{item.quantity} {item.unit}</td>
+                <td className="px-4 py-4 text-right text-sm tabular-nums">${item.revenue.toFixed(2)}</td>
+                <td className="px-4 py-4 text-right text-sm tabular-nums">{item.cost === null ? "Unknown" : `$${item.cost.toFixed(2)}`}</td>
+                <td className={`px-4 py-4 text-right text-sm font-semibold tabular-nums ${item.profit !== null && item.profit < 0 ? "text-[#a74f40]" : "text-[#426149]"}`}>
+                  {item.profit === null ? "Unknown" : `$${item.profit.toFixed(2)}`}
+                </td>
+                <td className="px-4 py-4 text-right text-sm tabular-nums">${item.currentPrice.toFixed(2)} / {item.unit}</td>
+                <td className="px-4 py-4 text-right text-sm tabular-nums">{item.unitCost === null ? "Not set" : `$${item.unitCost.toFixed(2)}`}</td>
+                <td className="px-5 py-4 text-right text-sm tabular-nums">{item.currentStock} {item.unit}</td>
+              </tr>
+            ))}
+            {items.length === 0 && (
+              <tr><td colSpan={9} className="px-5 py-8 text-center text-sm text-[#667269]">No catalog items found.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }
