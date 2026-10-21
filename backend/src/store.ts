@@ -64,7 +64,8 @@ export async function ensureDeliveryTrackingSchema(pool: pg.Pool) {
     CREATE INDEX IF NOT EXISTS notification_user_created_idx ON Notification(user_id, created_at DESC)
   `);
   await pool.query(`
-    CREATE UNIQUE INDEX IF NOT EXISTS delivery_single_assignment_idx ON Delivery(order_id)
+    DROP INDEX IF EXISTS delivery_single_assignment_idx;
+    CREATE UNIQUE INDEX delivery_single_assignment_idx ON Delivery(order_id) WHERE delivery_status <> 'cancelled'
   `);
   await pool.query(`
     COMMENT ON COLUMN DeliveryRun.route_distance IS 'Route distance in meters';
@@ -387,7 +388,7 @@ export type DeliveryRun = {
   routeSource: "valhalla" | "approximate" | null;
   startedAt: Date | null;
   completedAt: Date | null;
-  stops: { orderId: string; stopNumber: number; status: string; eta: Date | null }[];
+  stops: { orderId: string; stopNumber: number; status: string; eta: Date | null; latitude: number | null; longitude: number | null }[];
 };
 
 export type DeliveryTracking = {
@@ -416,6 +417,7 @@ export type DeliveryNotification = {
 };
 
 export type ReceiptResult = "completed" | "not-found" | "not-delivered";
+export type CancelRunResult = "cancelled" | "not-found" | "not-active";
 
 export type NewDeliveryRun = {
   robotId: string;
@@ -461,6 +463,7 @@ export interface DeliveryStore {
   listDeliveries(): Promise<ManagerDelivery[]>;
   listRobots?(): Promise<DeliveryRobot[]>;
   listRuns?(): Promise<DeliveryRun[]>;
+  cancelDeliveryRun?(runId: string): Promise<CancelRunResult>;
   getCustomerTracking?(userId: string, orderId: string): Promise<DeliveryTracking | null>;
   confirmOrderReceived?(userId: string, orderId: string): Promise<ReceiptResult>;
   listNotifications?(userId: string): Promise<DeliveryNotification[]>;
@@ -748,7 +751,7 @@ export function createPgDeliveryStore(pool: pg.Pool): DeliveryStore {
                 a.latitude::float8 AS latitude, a.longitude::float8 AS longitude
          FROM Orders o JOIN Address a ON a.address_id = o.address_id
          WHERE o.payment_status = 'paid'
-           AND NOT EXISTS (SELECT 1 FROM Delivery d WHERE d.order_id = o.order_id)
+           AND NOT EXISTS (SELECT 1 FROM Delivery d WHERE d.order_id = o.order_id AND d.delivery_status <> 'cancelled')
          ORDER BY o.created_at, o.order_id`,
       );
       return rows;
@@ -775,9 +778,11 @@ export function createPgDeliveryStore(pool: pg.Pool): DeliveryStore {
       );
       if (runs.length === 0) return [];
       const { rows: stops } = await pool.query<DeliveryRun["stops"][number] & { runId: string }>(
-        `SELECT run_id AS "runId", order_id AS "orderId", stop_number AS "stopNumber",
-                delivery_status AS status, estimated_delivery_time AS eta
-         FROM Delivery WHERE run_id = ANY($1) ORDER BY run_id, stop_number`,
+        `SELECT d.run_id AS "runId", d.order_id AS "orderId", d.stop_number AS "stopNumber",
+                d.delivery_status AS status, d.estimated_delivery_time AS eta,
+                a.latitude::float8 AS latitude, a.longitude::float8 AS longitude
+         FROM Delivery d JOIN Address a ON a.address_id = d.address_id
+         WHERE d.run_id = ANY($1) ORDER BY d.run_id, d.stop_number`,
         [runs.map(({ runId }) => runId)],
       );
       return runs.map((run) => ({
@@ -785,6 +790,50 @@ export function createPgDeliveryStore(pool: pg.Pool): DeliveryStore {
         routeSource: run.routeSource === "valhalla" || run.routeSource === "approximate" ? run.routeSource : null,
         stops: stops.filter((stop) => stop.runId === run.runId).map(({ runId: _runId, ...stop }) => stop),
       }));
+    },
+
+    async cancelDeliveryRun(runId) {
+      if (!UUID_PATTERN.test(runId)) return "not-found";
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const { rows } = await client.query<{ robotId: string; status: string }>(
+          `SELECT robot_id AS "robotId", run_status AS status FROM DeliveryRun WHERE run_id = $1 FOR UPDATE`,
+          [runId],
+        );
+        const run = rows[0];
+        if (!run) {
+          await client.query("COMMIT");
+          return "not-found";
+        }
+        if (!["assigned", "active"].includes(run.status)) {
+          await client.query("COMMIT");
+          return "not-active";
+        }
+
+        await client.query(
+          `UPDATE Delivery SET delivery_status = 'cancelled', updated_at = now()
+           WHERE run_id = $1 AND delivery_status <> 'delivered'`,
+          [runId],
+        );
+        await client.query(
+          `UPDATE Orders SET order_status = 'placed', updated_at = now()
+           WHERE order_id IN (SELECT order_id FROM Delivery WHERE run_id = $1 AND delivery_status = 'cancelled')`,
+          [runId],
+        );
+        await client.query(
+          `UPDATE DeliveryRun SET run_status = 'cancelled', completed_at = now(), updated_at = now() WHERE run_id = $1`,
+          [runId],
+        );
+        await client.query(`UPDATE Robot SET robot_status = 'available', last_updated = now() WHERE robot_id = $1`, [run.robotId]);
+        await client.query("COMMIT");
+        return "cancelled";
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
     },
 
     async getCustomerTracking(userId, orderId) {
@@ -796,7 +845,11 @@ export function createPgDeliveryStore(pool: pg.Pool): DeliveryStore {
                 dr.route_source AS "routeSource", r.robot_name AS "robotName", r.robot_status AS "robotStatus",
                 r.current_latitude::float8 AS "robotLatitude", r.current_longitude::float8 AS "robotLongitude"
          FROM Orders o
-         LEFT JOIN Delivery d ON d.order_id = o.order_id
+         LEFT JOIN LATERAL (
+           SELECT order_id, delivery_status, estimated_delivery_time, stop_number, run_id
+           FROM Delivery WHERE order_id = o.order_id
+           ORDER BY created_at DESC, delivery_id DESC LIMIT 1
+         ) d ON true
          LEFT JOIN DeliveryRun dr ON dr.run_id = d.run_id
          LEFT JOIN Robot r ON r.robot_id = dr.robot_id
          WHERE o.order_id = $1 AND o.user_id = $2`,
@@ -885,7 +938,7 @@ export function createPgDeliveryStore(pool: pg.Pool): DeliveryStore {
           `SELECT o.order_id AS "orderId", o.address_id AS "addressId", o.total_weight::float8 AS "totalWeight"
            FROM Orders o
            WHERE o.order_id = ANY($1) AND o.payment_status = 'paid'
-             AND NOT EXISTS (SELECT 1 FROM Delivery d WHERE d.order_id = o.order_id)
+             AND NOT EXISTS (SELECT 1 FROM Delivery d WHERE d.order_id = o.order_id AND d.delivery_status <> 'cancelled')
            FOR UPDATE OF o`,
           [orderIds],
         );

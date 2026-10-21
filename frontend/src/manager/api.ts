@@ -42,6 +42,55 @@ export type DispatchResult = {
   unavailableRobotIds: string[];
 };
 
+export type DeliveryRobot = {
+  robotId: string;
+  robotName: string;
+  status: string;
+  maximumOrders: number;
+  maximumWeight: number;
+  currentLatitude: number | null;
+  currentLongitude: number | null;
+  lastUpdated: string;
+};
+
+export type DeliveryRun = {
+  runId: string;
+  robotId: string;
+  robotName: string;
+  status: string;
+  routeDistanceMeters: number | null;
+  estimatedDurationSeconds: number | null;
+  routeGeometry: [number, number][] | null;
+  routeSource: "valhalla" | "approximate" | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  stops: { orderId: string; stopNumber: number; status: string; eta: string | null; latitude: number | null; longitude: number | null }[];
+};
+
+async function deliveryRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/manager/deliveries${path}`, { ...init, credentials: "same-origin" });
+  } catch {
+    throw new Error("Can't reach the server. Please try again.");
+  }
+  const data = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(data?.error ?? "Unable to load delivery data.");
+  return data as T;
+}
+
+export async function fetchDeliveryRobots() {
+  return (await deliveryRequest<{ robots: DeliveryRobot[] }>("/robots")).robots;
+}
+
+export async function fetchDeliveryRuns() {
+  return (await deliveryRequest<{ runs: DeliveryRun[] }>("/runs")).runs;
+}
+
+export function cancelDeliveryRun(runId: string) {
+  return deliveryRequest<{ runId: string; status: string }>(`/runs/${encodeURIComponent(runId)}/cancel`, { method: "POST" });
+}
+
 export async function dispatchDeliveries(): Promise<DispatchResult> {
   let response: Response;
   try {

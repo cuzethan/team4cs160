@@ -19,7 +19,8 @@ CREATE INDEX IF NOT EXISTS delivery_order_status_idx ON Delivery(delivery_status
 CREATE INDEX IF NOT EXISTS delivery_run_status_idx ON DeliveryRun(run_status, robot_id);
 CREATE INDEX IF NOT EXISTS delivery_run_simulation_idx ON DeliveryRun(run_status, created_at);
 CREATE INDEX IF NOT EXISTS notification_user_created_idx ON Notification(user_id, created_at DESC);
-CREATE UNIQUE INDEX IF NOT EXISTS delivery_single_assignment_idx ON Delivery(order_id);
+DROP INDEX IF EXISTS delivery_single_assignment_idx;
+CREATE UNIQUE INDEX delivery_single_assignment_idx ON Delivery(order_id) WHERE delivery_status <> 'cancelled';
 
 COMMENT ON COLUMN DeliveryRun.route_distance IS 'Route distance in meters';
 COMMENT ON COLUMN DeliveryRun.estimated_duration IS 'Estimated route duration in seconds';
