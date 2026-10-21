@@ -22,6 +22,10 @@ services:
       DATABASE_URL: postgres://ofs:ofs@db:5432/ofs
       APP_URL: http://localhost:5173
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      VALHALLA_URL: ${VALHALLA_URL:-}
+      PHOTON_URL: ${PHOTON_URL:-https://photon.komoot.io}
+      ROBOT_SIMULATOR_INTERVAL_MS: ${ROBOT_SIMULATOR_INTERVAL_MS:-1000}
+      ROBOT_SIMULATOR_SPEED_MULTIPLIER: ${ROBOT_SIMULATOR_SPEED_MULTIPLIER:-60}
     ports:
       - "${API_PORT:-3001}:3001"
     depends_on:

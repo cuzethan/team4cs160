@@ -49,6 +49,7 @@ export async function ensureDeliveryTrackingSchema(pool: pg.Pool) {
     ALTER TABLE DeliveryRun
       ADD COLUMN IF NOT EXISTS route_geometry JSONB,
       ADD COLUMN IF NOT EXISTS route_source VARCHAR(30),
+      ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
       ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
   `);
   await pool.query(`
@@ -59,6 +60,7 @@ export async function ensureDeliveryTrackingSchema(pool: pg.Pool) {
   await pool.query(`
     CREATE INDEX IF NOT EXISTS delivery_order_status_idx ON Delivery(delivery_status, order_id);
     CREATE INDEX IF NOT EXISTS delivery_run_status_idx ON DeliveryRun(run_status, robot_id);
+    CREATE INDEX IF NOT EXISTS delivery_run_simulation_idx ON DeliveryRun(run_status, created_at);
     CREATE INDEX IF NOT EXISTS notification_user_created_idx ON Notification(user_id, created_at DESC)
   `);
   await pool.query(`
@@ -67,6 +69,11 @@ export async function ensureDeliveryTrackingSchema(pool: pg.Pool) {
   await pool.query(`
     COMMENT ON COLUMN DeliveryRun.route_distance IS 'Route distance in meters';
     COMMENT ON COLUMN DeliveryRun.estimated_duration IS 'Estimated route duration in seconds'
+  `);
+  await pool.query(`
+    INSERT INTO Robot (robot_name, robot_status, maximum_orders, maximum_weight, current_latitude, current_longitude)
+    SELECT 'Demo Robot 1', 'available', 10, 200, 37.3382, -121.8863
+    WHERE NOT EXISTS (SELECT 1 FROM Robot)
   `);
 }
 
@@ -355,6 +362,20 @@ export type DeliveryRobot = {
   lastUpdated: Date;
 };
 
+export type UnassignedPaidOrder = {
+  orderId: string;
+  customerId: string;
+  addressId: string;
+  totalWeight: number;
+  createdAt: Date;
+  street: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  latitude: number | null;
+  longitude: number | null;
+};
+
 export type DeliveryRun = {
   runId: string;
   robotId: string;
@@ -405,6 +426,24 @@ export type NewDeliveryRun = {
   stops: { orderId: string; estimatedDeliveryTime: Date }[];
 };
 
+export type SimulatableDeliveryRun = {
+  runId: string;
+  robotId: string;
+  createdAt: Date;
+  estimatedDurationSeconds: number;
+  routeGeometry: [number, number][];
+  stops: { orderId: string; stopNumber: number; eta: Date; status: string }[];
+};
+
+export type SimulationTick = {
+  runId: string;
+  latitude: number;
+  longitude: number;
+  arrivedStopNumbers: number[];
+  completed: boolean;
+  occurredAt: Date;
+};
+
 export class DeliveryAssignmentError extends Error {
   constructor(readonly reason: "robot-unavailable" | "orders-unavailable" | "capacity-exceeded") {
     super(reason);
@@ -429,6 +468,10 @@ export interface DeliveryStore {
   createNotification?(userId: string, orderId: string | null, type: string, message: string): Promise<DeliveryNotification>;
   createDeliveryRun?(run: NewDeliveryRun): Promise<string>;
   updateRobotPosition?(robotId: string, latitude: number, longitude: number): Promise<boolean>;
+  listUnassignedPaidOrders?(): Promise<UnassignedPaidOrder[]>;
+  saveAddressCoordinates?(addressId: string, latitude: number, longitude: number): Promise<boolean>;
+  listSimulatableRuns?(): Promise<SimulatableDeliveryRun[]>;
+  recordSimulationTick?(tick: SimulationTick): Promise<void>;
 }
 
 // Postgres rejects malformed UUIDs with an error, so treat them as "not found" up front.
@@ -697,6 +740,30 @@ export function createPgDeliveryStore(pool: pg.Pool): DeliveryStore {
       return rows;
     },
 
+    async listUnassignedPaidOrders() {
+      const { rows } = await pool.query<UnassignedPaidOrder>(
+        `SELECT o.order_id AS "orderId", o.user_id AS "customerId", o.address_id AS "addressId",
+                o.total_weight::float8 AS "totalWeight", o.created_at AS "createdAt",
+                a.street, a.city, a.state, a.zip_code AS "zipCode",
+                a.latitude::float8 AS latitude, a.longitude::float8 AS longitude
+         FROM Orders o JOIN Address a ON a.address_id = o.address_id
+         WHERE o.payment_status = 'paid'
+           AND NOT EXISTS (SELECT 1 FROM Delivery d WHERE d.order_id = o.order_id)
+         ORDER BY o.created_at, o.order_id`,
+      );
+      return rows;
+    },
+
+    async saveAddressCoordinates(addressId, latitude, longitude) {
+      if (!UUID_PATTERN.test(addressId) || !Number.isFinite(latitude) || !Number.isFinite(longitude) ||
+          latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return false;
+      const { rowCount } = await pool.query(
+        "UPDATE Address SET latitude = $2, longitude = $3 WHERE address_id = $1",
+        [addressId, latitude, longitude],
+      );
+      return rowCount !== 0;
+    },
+
     async listRuns() {
       const { rows: runs } = await pool.query<Omit<DeliveryRun, "stops">>(
         `SELECT dr.run_id AS "runId", dr.robot_id AS "robotId", r.robot_name AS "robotName",
@@ -868,6 +935,105 @@ export function createPgDeliveryStore(pool: pg.Pool): DeliveryStore {
         [robotId, latitude, longitude],
       );
       return rowCount !== 0;
+    },
+
+    async listSimulatableRuns() {
+      const { rows: runs } = await pool.query<Omit<SimulatableDeliveryRun, "stops">>(
+        `SELECT run_id AS "runId", robot_id AS "robotId", created_at AS "createdAt",
+                estimated_duration AS "estimatedDurationSeconds", route_geometry AS "routeGeometry"
+         FROM DeliveryRun WHERE run_status IN ('assigned', 'active')
+         ORDER BY created_at, run_id`,
+      );
+      if (runs.length === 0) return [];
+      const { rows: stops } = await pool.query<SimulatableDeliveryRun["stops"][number] & { runId: string }>(
+        `SELECT run_id AS "runId", order_id AS "orderId", stop_number AS "stopNumber",
+                estimated_delivery_time AS eta, delivery_status AS status
+         FROM Delivery
+         WHERE run_id = ANY($1) AND delivery_status <> 'delivered'
+         ORDER BY run_id, stop_number`,
+        [runs.map(({ runId }) => runId)],
+      );
+      return runs.map((run) => ({
+        ...run,
+        routeGeometry: Array.isArray(run.routeGeometry) ? run.routeGeometry : [],
+        stops: stops.filter((stop) => stop.runId === run.runId).map(({ runId: _runId, ...stop }) => stop),
+      }));
+    },
+
+    async recordSimulationTick(tick) {
+      if (!UUID_PATTERN.test(tick.runId) || !Number.isFinite(tick.latitude) || !Number.isFinite(tick.longitude) ||
+          tick.latitude < -90 || tick.latitude > 90 || tick.longitude < -180 || tick.longitude > 180) return;
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const { rows: runs } = await client.query<{ robotId: string; status: string }>(
+          `SELECT robot_id AS "robotId", run_status AS status
+           FROM DeliveryRun WHERE run_id = $1 FOR UPDATE`,
+          [tick.runId],
+        );
+        const run = runs[0];
+        if (!run || !["assigned", "active"].includes(run.status)) {
+          await client.query("COMMIT");
+          return;
+        }
+
+        await client.query(
+          `UPDATE DeliveryRun SET run_status = 'active', started_at = COALESCE(started_at, $2), updated_at = $2
+           WHERE run_id = $1`,
+          [tick.runId, tick.occurredAt],
+        );
+        await client.query(
+          `UPDATE Robot SET current_latitude = $2, current_longitude = $3, last_updated = $4, robot_status = 'on_delivery'
+           WHERE robot_id = $1`,
+          [run.robotId, tick.latitude, tick.longitude, tick.occurredAt],
+        );
+
+        if (tick.arrivedStopNumbers.length > 0) {
+          const { rows: arrived } = await client.query<{ orderId: string; userId: string }>(
+            `UPDATE Delivery d
+             SET delivery_status = 'delivered', arrival_time = COALESCE(d.arrival_time, $3),
+                 actual_delivery_time = COALESCE(d.actual_delivery_time, $3), updated_at = $3
+             FROM Orders o
+             WHERE d.order_id = o.order_id AND d.run_id = $1
+               AND d.stop_number = ANY($2) AND d.delivery_status <> 'delivered'
+             RETURNING d.order_id AS "orderId", o.user_id AS "userId"`,
+            [tick.runId, tick.arrivedStopNumbers, tick.occurredAt],
+          );
+          for (const delivery of arrived) {
+            await client.query(
+              `INSERT INTO Notification (user_id, order_id, notification_type, message)
+               VALUES ($1, $2, 'delivery_arrived', $3)`,
+              [delivery.userId, delivery.orderId, `Your delivery for order #${delivery.orderId.slice(0, 8).toUpperCase()} has arrived. Please confirm you received it.`],
+            );
+          }
+        }
+
+        await client.query(
+          `UPDATE Delivery SET delivery_status = 'in_transit', updated_at = $2
+           WHERE run_id = $1 AND delivery_status = 'scheduled'
+             AND stop_number = (
+               SELECT MIN(stop_number) FROM Delivery WHERE run_id = $1 AND delivery_status = 'scheduled'
+             )`,
+          [tick.runId, tick.occurredAt],
+        );
+
+        if (tick.completed) {
+          await client.query(
+            `UPDATE DeliveryRun SET run_status = 'completed', completed_at = $2, updated_at = $2 WHERE run_id = $1`,
+            [tick.runId, tick.occurredAt],
+          );
+          await client.query(
+            `UPDATE Robot SET robot_status = 'available', last_updated = $2 WHERE robot_id = $1`,
+            [run.robotId, tick.occurredAt],
+          );
+        }
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
     },
   };
 }

@@ -1,5 +1,6 @@
 import express from "express";
 import { findCurrentUser, handle } from "./auth.js";
+import { dispatchPendingOrders } from "./batching.js";
 import type { AuthStore, DeliveryStore } from "./store.js";
 
 export type ManagerDeliveriesOptions = {
@@ -32,6 +33,14 @@ export function createManagerDeliveriesRouter({ store, deliveryStore }: ManagerD
     if (user.role !== "admin") return res.status(403).json({ error: "Manager access is required." });
     if (!deliveryStore.listRuns) return res.status(501).json({ error: "Delivery run data is not available." });
     res.json({ runs: await deliveryStore.listRuns() });
+  }));
+
+  router.post("/dispatch", handle(async (req, res) => {
+    const user = await findCurrentUser(store, req);
+    if (!user) return res.status(401).json({ error: "Not logged in." });
+    if (user.role !== "admin") return res.status(403).json({ error: "Manager access is required." });
+    const result = await dispatchPendingOrders(deliveryStore, { photonUrl: process.env.PHOTON_URL });
+    res.json(result);
   }));
 
   return router;

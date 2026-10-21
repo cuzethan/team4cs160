@@ -11,7 +11,7 @@ import {
 import { SiteHeader } from "../components/SiteHeader";
 import { emojiFor } from "../inventory/api";
 import type { InventoryProduct } from "../inventory/types";
-import { fetchDeliveries, fetchDeliverySettings, fetchManagedInventory, fetchSales, saveDeliverySettings, updateProduct, type DeliverySettings, type ManagedProduct, type ManagerDelivery, type ProductCategory, type SalesBucket, type SalesRange } from "./api";
+import { dispatchDeliveries, fetchDeliveries, fetchDeliverySettings, fetchManagedInventory, fetchSales, saveDeliverySettings, updateProduct, type DeliverySettings, type ManagedProduct, type ManagerDelivery, type ProductCategory, type SalesBucket, type SalesRange } from "./api";
 import { ProductFormDialog, ProductTable } from "./ProductManager";
 
 import Map from "react-map-gl/maplibre";
@@ -728,6 +728,8 @@ function CustomerDetailPanel({
 function DeliveriesPanel() {
   const [deliveries, setDeliveries] = useState<ManagerDelivery[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dispatching, setDispatching] = useState(false);
+  const [dispatchSummary, setDispatchSummary] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -749,19 +751,47 @@ function DeliveriesPanel() {
     };
   }, []);
 
+  const runDispatch = async () => {
+    setDispatching(true);
+    setError("");
+    setDispatchSummary("");
+    try {
+      const result = await dispatchDeliveries();
+      setDispatchSummary(
+        `${result.runs.length} run${result.runs.length === 1 ? "" : "s"} created. ` +
+        `${result.pendingOrderIds.length} order${result.pendingOrderIds.length === 1 ? " remains" : "s remain"} queued; ` +
+        `${result.unresolvedAddressOrderIds.length} address${result.unresolvedAddressOrderIds.length === 1 ? " needs" : "es need"} geocoding, ` +
+        `${result.overCapacityOrderIds.length} order${result.overCapacityOrderIds.length === 1 ? " exceeds" : "s exceed"} the 200 lb limit.`,
+      );
+      setDeliveries(await fetchDeliveries());
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Unable to dispatch paid orders.");
+    } finally {
+      setDispatching(false);
+    }
+  };
+
   return (
     <div>
-      <div className="mb-5">
-        <h2 className="text-2xl font-extrabold text-[#294332]">Delivery</h2>
-        <p className="mt-1 text-sm text-[#667269]">Orders and delivery progress.</p>
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-extrabold text-[#294332]">Delivery</h2>
+          <p className="mt-1 text-sm text-[#667269]">Orders and delivery progress.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void runDispatch()}
+          disabled={loading || dispatching}
+          className="rounded-full bg-[#416449] px-5 py-2.5 text-sm font-bold text-white transition hover:bg-[#35563c] disabled:cursor-wait disabled:opacity-60"
+        >
+          {dispatching ? "Dispatching…" : "Dispatch paid orders"}
+        </button>
       </div>
+      {dispatchSummary && <p role="status" className="mb-4 rounded-xl bg-[#e9f1df] px-4 py-3 text-sm text-[#416449]">{dispatchSummary}</p>}
+      {error && <p className="mb-4 rounded-xl border border-red-200 bg-white p-4 text-sm text-red-700" role="alert">{error}</p>}
       {loading ? (
         <p className="rounded-xl border border-[#e8e7dc] bg-white p-5 text-sm text-[#667269]" role="status">
           Loading deliveries...
-        </p>
-      ) : error ? (
-        <p className="rounded-xl border border-red-200 bg-white p-5 text-sm text-red-700" role="alert">
-          {error}
         </p>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-[#e8e7dc] bg-white shadow-[0_3px_12px_rgba(42,65,48,0.04)]">

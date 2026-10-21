@@ -34,6 +34,26 @@ export type ManagerDelivery = {
   eta: string | null;
 };
 
+export type DispatchResult = {
+  runs: { runId: string; robotId: string; orderIds: string[]; routeSource: "valhalla" | "approximate" }[];
+  pendingOrderIds: string[];
+  unresolvedAddressOrderIds: string[];
+  overCapacityOrderIds: string[];
+  unavailableRobotIds: string[];
+};
+
+export async function dispatchDeliveries(): Promise<DispatchResult> {
+  let response: Response;
+  try {
+    response = await fetch("/api/manager/deliveries/dispatch", { method: "POST", credentials: "same-origin" });
+  } catch {
+    throw new Error("Can't reach the server. Please try again.");
+  }
+  const data = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(data?.error ?? "Unable to dispatch paid orders.");
+  return data as DispatchResult;
+}
+
 export async function fetchDeliveries(): Promise<ManagerDelivery[]> {
   let response: Response;
   try {
