@@ -838,32 +838,15 @@ function SalesOverview({
       ) : analytics && (
         <div className="space-y-4">
           <div className="grid gap-4 xl:grid-cols-2">
-            <SalesPieChart title="Revenue by top 8 items" values={topSlices(analytics.items.map((item) => ({ name: item.name, value: item.revenue })), 8)} />
-            <SalesPieChart title="Revenue by top 3 categories" values={topSlices(analytics.categories.map((category) => ({ name: category.name, value: category.revenue })), 3)} />
+            <SalesPieChart title="Revenue by Top 8 Items" values={topSlices(analytics.items.map((item) => ({ name: item.name, value: item.revenue })), 8)} />
+            <SalesPieChart title="Revenue by Top 3 Categories" values={topSlices(analytics.categories.map((category) => ({ name: category.name, value: category.revenue })), 3)} />
           </div>
-          <div className="grid gap-4 xl:grid-cols-2">
-            <SalesBarChart
-              title="Sales"
-              buckets={sales.map((bucket) => ({ bucketStart: bucket.bucketStart, value: bucket.revenue }))}
-              range={salesRangeFor[dateRange]}
-              formatValue={(value) => `$${value.toFixed(0)}`}
-            />
-            <SalesBarChart
-              title="Profit"
-              buckets={analytics.profitBuckets.map((bucket) => ({
-                bucketStart: bucket.bucketStart,
-                value: bucket.profit,
-                unknownCostQuantity: bucket.unknownCostQuantity,
-              }))}
-              range={salesRangeFor[dateRange]}
-              formatValue={(value) => `$${value.toFixed(0)}`}
-              notice={
-                analytics.profitBuckets.some((bucket) => bucket.unknownCostQuantity > 0)
-                  ? "Some orders have no saved item cost; profit shown excludes those items."
-                  : undefined
-              }
-            />
-          </div>
+          <SalesBarChart
+            title="Sales"
+            buckets={sales.map((bucket) => ({ bucketStart: bucket.bucketStart, value: bucket.revenue }))}
+            range={salesRangeFor[dateRange]}
+            formatValue={(value) => `$${value.toFixed(0)}`}
+          />
           <SalesItemsTable items={analytics.items} />
         </div>
       )}
@@ -886,6 +869,7 @@ const chartColors = ["#438254", "#91a95b", "#d4a449", "#cf7658", "#6e8da7", "#9c
 function SalesPieChart({ title, values }: { title: string; values: PieSlice[] }) {
   const total = values.reduce((sum, item) => sum + item.value, 0);
   let angle = -90;
+  let labelAngle = -90;
 
   return (
     <section className="min-w-0 rounded-2xl border border-[#e8e7dc] bg-white p-4 shadow-[0_3px_12px_rgba(42,65,48,0.04)] sm:p-5" aria-label={title}>
@@ -915,6 +899,29 @@ function SalesPieChart({ title, values }: { title: string; values: PieSlice[] })
                 />
               );
             })}
+            {values.length === 1 ? (
+              <text x="100" y="104" textAnchor="middle" className="fill-white text-[13px] font-bold">
+                100%
+              </text>
+            ) : values.map((item) => {
+              const start = labelAngle;
+              const sweep = (item.value / total) * 360;
+              labelAngle += sweep;
+              const middle = start + sweep / 2;
+              const labelPoint = polarPoint(100, 100, 62, middle);
+              return (
+                <text
+                  key={`${item.name}-percentage`}
+                  x={labelPoint.x}
+                  y={labelPoint.y}
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  className="fill-white text-[10px] font-bold [paint-order:stroke] [stroke:#294332] [stroke-width:2px]"
+                >
+                  {((item.value / total) * 100).toFixed(1)}%
+                </text>
+              );
+            })}
           </svg>
           <ul className="grid w-full gap-2 text-sm">
             {values.map((item, index) => (
@@ -924,7 +931,7 @@ function SalesPieChart({ title, values }: { title: string; values: PieSlice[] })
                   <span className="truncate">{item.name}</span>
                 </span>
                 <span className="shrink-0 tabular-nums font-semibold text-[#294332]">
-                  ${item.value.toFixed(2)} <span className="text-[#899188]">{((item.value / total) * 100).toFixed(1)}%</span>
+                  ${item.value.toFixed(2)}
                 </span>
               </li>
             ))}
@@ -945,13 +952,11 @@ function SalesBarChart({
   buckets,
   range,
   formatValue,
-  notice,
 }: {
   title: string;
-  buckets: { bucketStart: string; value: number; unknownCostQuantity?: number }[];
+  buckets: { bucketStart: string; value: number }[];
   range: SalesRange;
   formatValue: (value: number) => string;
-  notice?: string;
 }) {
   const values = buckets.map((bucket) => bucket.value);
   const maximum = Math.max(...values, 1);
@@ -961,7 +966,7 @@ function SalesBarChart({
   const chartBottom = 174;
   const baseline = chartTop + (maximum / span) * (chartBottom - chartTop);
   const labelInterval = Math.max(1, Math.ceil(buckets.length / 7));
-  const hasValues = values.some((value) => value !== 0) || buckets.some((bucket) => (bucket.unknownCostQuantity ?? 0) > 0);
+  const hasValues = values.some((value) => value !== 0);
   const barWidth = Math.min(28, 420 / Math.max(values.length, 1));
 
   return (
@@ -1001,7 +1006,7 @@ function SalesBarChart({
                 width={barWidth}
                 height={barHeight}
                 rx="3"
-                fill={title === "Profit" ? (bucket.value < 0 ? "#b85d4a" : "#d4a449") : "#438254"}
+                fill="#438254"
               >
                 <title>{`${formatBucketLabel(bucket.bucketStart, range)}: ${formatValue(bucket.value)}`}</title>
               </rect>
@@ -1015,11 +1020,10 @@ function SalesBarChart({
         })}
         {!hasValues && (
           <text x="332" y="112" textAnchor="middle" fill="#7d887b" fontSize="13">
-            {title === "Profit" ? "No known profit in this range" : "No paid sales in this range"}
+            No paid sales in this range
           </text>
         )}
       </svg>
-      {notice && <p className="mt-1 text-xs text-[#8b6841]">{notice}</p>}
     </section>
   );
 }
@@ -1029,18 +1033,16 @@ function SalesItemsTable({ items }: { items: SalesAnalytics["items"] }) {
     <section className="overflow-hidden rounded-2xl border border-[#e8e7dc] bg-white shadow-[0_3px_12px_rgba(42,65,48,0.04)]">
       <div className="border-b border-[#ecebe2] px-5 py-4 sm:px-7">
         <h3 className="text-lg font-extrabold text-[#294332]">Item sales and inventory</h3>
-        <p className="mt-1 text-sm text-[#667269]">Units sold, revenue, cost, profit, and stock for every item.</p>
+        <p className="mt-1 text-sm text-[#667269]">Units sold, revenue, and stock for every item.</p>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[74rem] text-left">
+        <table className="w-full min-w-[58rem] text-left">
           <thead className="bg-[#f6f7f1] text-xs uppercase tracking-wide text-[#667269]">
             <tr>
               <th scope="col" className="px-5 py-3 font-bold">Item</th>
               <th scope="col" className="px-4 py-3 font-bold">Category</th>
               <th scope="col" className="px-4 py-3 text-right font-bold">Quantity sold</th>
               <th scope="col" className="px-4 py-3 text-right font-bold">Revenue</th>
-              <th scope="col" className="px-4 py-3 text-right font-bold">Cost of goods</th>
-              <th scope="col" className="px-4 py-3 text-right font-bold">Profit</th>
               <th scope="col" className="px-4 py-3 text-right font-bold">Current price</th>
               <th scope="col" className="px-4 py-3 text-right font-bold">Unit cost</th>
               <th scope="col" className="px-5 py-3 text-right font-bold">On hand</th>
@@ -1053,17 +1055,13 @@ function SalesItemsTable({ items }: { items: SalesAnalytics["items"] }) {
                 <td className="px-4 py-4 text-sm text-[#667269]">{item.category}</td>
                 <td className="px-4 py-4 text-right text-sm tabular-nums">{item.quantity} {item.unit}</td>
                 <td className="px-4 py-4 text-right text-sm tabular-nums">${item.revenue.toFixed(2)}</td>
-                <td className="px-4 py-4 text-right text-sm tabular-nums">{item.cost === null ? "Unknown" : `$${item.cost.toFixed(2)}`}</td>
-                <td className={`px-4 py-4 text-right text-sm font-semibold tabular-nums ${item.profit !== null && item.profit < 0 ? "text-[#a74f40]" : "text-[#426149]"}`}>
-                  {item.profit === null ? "Unknown" : `$${item.profit.toFixed(2)}`}
-                </td>
                 <td className="px-4 py-4 text-right text-sm tabular-nums">${item.currentPrice.toFixed(2)} / {item.unit}</td>
                 <td className="px-4 py-4 text-right text-sm tabular-nums">{item.unitCost === null ? "Not set" : `$${item.unitCost.toFixed(2)}`}</td>
                 <td className="px-5 py-4 text-right text-sm tabular-nums">{item.currentStock} {item.unit}</td>
               </tr>
             ))}
             {items.length === 0 && (
-              <tr><td colSpan={9} className="px-5 py-8 text-center text-sm text-[#667269]">No catalog items found.</td></tr>
+              <tr><td colSpan={7} className="px-5 py-8 text-center text-sm text-[#667269]">No catalog items found.</td></tr>
             )}
           </tbody>
         </table>
