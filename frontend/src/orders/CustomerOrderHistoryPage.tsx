@@ -1,40 +1,96 @@
-import { useEffect, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { SiteHeader } from "../components/SiteHeader";
-import { fetchMyOrders as fetchMyOrdersRequest } from "./api";
+import { confirmOrderReceived, fetchMyOrders as fetchMyOrdersRequest, fetchOrderTracking } from "./api";
+import { fetchNotifications, markNotificationRead, type CustomerNotification } from "../notifications/api";
 import { OrderCard } from "./OrderCard";
 import type { CustomerOrder } from "./types";
 
 export function CustomerOrderHistoryPage() {
   const location = useLocation();
+  const navigate = useNavigate();
   // Set by the checkout page right after an order goes through.
   const placedOrderId = (location.state as { placedOrderId?: string } | null)?.placedOrderId;
   const [orders, setOrders] = useState<CustomerOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notifications, setNotifications] = useState<CustomerNotification[]>([]);
+  const [receiptPending, setReceiptPending] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  const fetchMyOrders = async () => {
-    setIsLoading(true);
-    setError(null);
+  const refreshOrders = useCallback(async (showLoading = false) => {
+    if (showLoading) setIsLoading(true);
+    if (showLoading) setError(null);
     try {
-      setOrders(await fetchMyOrdersRequest());
+      const fetchedOrders = await fetchMyOrdersRequest();
+      const trackedOrders = await Promise.all(fetchedOrders.map(async (order) => {
+        if (order.status !== "out_for_delivery") return order;
+        try {
+          const tracking = await fetchOrderTracking(order.id);
+          return { ...order, deliveryStatus: tracking.deliveryStatus };
+        } catch {
+          return order;
+        }
+      }));
+      setOrders(trackedOrders);
     } catch (fetchError) {
-      setError((fetchError as Error).message);
+      if (showLoading) setError((fetchError as Error).message);
     } finally {
-      setIsLoading(false);
+      if (showLoading) setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshOrders(true);
+    const timer = window.setInterval(() => void refreshOrders(), 5000);
+    return () => window.clearInterval(timer);
+  }, [refreshOrders]);
+
+  useEffect(() => {
+    let active = true;
+    const refresh = async () => {
+      try {
+        const next = await fetchNotifications();
+        if (active) setNotifications(next);
+      } catch {
+        // Notifications are helpful context; order history remains usable if they fail.
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 5000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
+
+  const handleConfirmReceived = async (orderId: string) => {
+    setReceiptPending(orderId);
+    setActionError(null);
+    try {
+      await confirmOrderReceived(orderId);
+      await refreshOrders();
+      setNotifications(await fetchNotifications());
+    } catch (confirmError) {
+      setActionError((confirmError as Error).message);
+    } finally {
+      setReceiptPending(null);
     }
   };
 
-  useEffect(() => {
-    void fetchMyOrders();
-  }, []);
-
-  const handleConfirmReceived = (_orderId: string) => {
-    // Confirmation stays a no-op until the order API is available.
+  const handleTrackingClick = (orderId: string) => {
+    navigate(`/orders/${encodeURIComponent(orderId)}/tracking`);
   };
 
-  const handleTrackingClick = (_orderId: string) => {
-    // Tracking stays a no-op until a delivery tracking page is available.
+  const handleNotificationClick = async (notification: CustomerNotification) => {
+    if (!notification.isRead) {
+      try {
+        await markNotificationRead(notification.notificationId);
+        setNotifications((current) => current.map((item) => item.notificationId === notification.notificationId
+          ? { ...item, isRead: true }
+          : item));
+      } catch (readError) {
+        setActionError((readError as Error).message);
+      }
+    }
+    if (notification.orderId) handleTrackingClick(notification.orderId);
   };
 
   return (
@@ -53,12 +109,33 @@ export function CustomerOrderHistoryPage() {
           </p>
         )}
 
+        {notifications.length > 0 && (
+          <section aria-label="Delivery notifications" className="mb-6 rounded-2xl border border-[#e8e7dc] bg-white p-5">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h2 className="font-extrabold text-[#294332]">Delivery updates</h2>
+              <span className="text-xs font-bold text-[#7d887b]">{notifications.filter((notification) => !notification.isRead).length} unread</span>
+            </div>
+            <ul className="space-y-2">
+              {notifications.slice(0, 5).map((notification) => (
+                <li key={notification.notificationId}>
+                  <button type="button" onClick={() => void handleNotificationClick(notification)} className={`w-full rounded-xl px-4 py-3 text-left text-sm ${notification.isRead ? "bg-[#f7f7f1] text-[#667269]" : "bg-[#e9f1df] font-semibold text-[#35563c]"}`}>
+                    <span>{notification.message}</span>
+                    <span className="mt-1 block text-xs opacity-70">{new Date(notification.createdAt).toLocaleString()}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {actionError && <p role="alert" className="mb-5 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-800">{actionError}</p>}
+
         {isLoading ? (
           <p role="status" className="rounded-2xl bg-white p-6 text-[#5f6b61]">Loading your orders…</p>
         ) : error ? (
           <section role="alert" className="rounded-2xl border border-red-200 bg-white p-6">
             <p className="text-red-800">{error}</p>
-            <button type="button" onClick={() => void fetchMyOrders()} className="mt-4 font-bold text-[#416449] underline">Try again</button>
+            <button type="button" onClick={() => void refreshOrders(true)} className="mt-4 font-bold text-[#416449] underline">Try again</button>
           </section>
         ) : orders.length === 0 ? (
           <section className="rounded-2xl border border-[#e8e7dc] bg-white p-8 text-center">
@@ -68,7 +145,7 @@ export function CustomerOrderHistoryPage() {
         ) : (
           <section aria-label="Your orders" className="space-y-4">
             {orders.map((order) => (
-              <OrderCard key={order.id} order={order} onTrackClick={handleTrackingClick} onConfirmReceived={handleConfirmReceived} />
+              <OrderCard key={order.id} order={order} onTrackClick={handleTrackingClick} onConfirmReceived={(id) => void handleConfirmReceived(id)} receiptPending={receiptPending === order.id} />
             ))}
           </section>
         )}

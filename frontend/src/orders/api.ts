@@ -8,6 +8,21 @@ export type CheckoutAddress = {
   deliveryInstructions: string;
 };
 
+export type CustomerTracking = {
+  orderId: string;
+  orderStatus: string;
+  deliveryStatus: string | null;
+  eta: string | null;
+  stopNumber: number | null;
+  runId: string | null;
+  routeGeometry: [number, number][] | null;
+  routeSource: "valhalla" | "approximate" | null;
+  robotName: string | null;
+  robotStatus: string | null;
+  robotLatitude: number | null;
+  robotLongitude: number | null;
+};
+
 // What the orders API sends back for each order.
 type OrderRecord = {
   orderId: string;
@@ -29,7 +44,6 @@ function toCustomerOrder(record: OrderRecord): CustomerOrder {
     id: record.orderId,
     date: record.createdAt,
     status: record.orderStatus,
-    // Set once delivery runs exist.
     deliveryStatus: null,
     grandTotal: record.grandTotal,
     items: record.items.map((item) => ({
@@ -81,4 +95,12 @@ export async function createPaymentIntent() {
 
 export async function fetchMyOrders() {
   return (await request<{ orders: OrderRecord[] }>("GET", "/mine")).orders.map(toCustomerOrder);
+}
+
+export async function fetchOrderTracking(orderId: string) {
+  return (await request<{ tracking: CustomerTracking }>("GET", `/${encodeURIComponent(orderId)}/tracking`)).tracking;
+}
+
+export async function confirmOrderReceived(orderId: string) {
+  return request<{ orderId: string; orderStatus: string }>("POST", `/${encodeURIComponent(orderId)}/received`);
 }

@@ -6,9 +6,10 @@ type OrderCardProps = {
   order: CustomerOrder;
   onTrackClick?: (orderId: string) => void;
   onConfirmReceived?: (orderId: string) => void;
+  receiptPending?: boolean;
 };
 
-export function OrderCard({ order, onTrackClick, onConfirmReceived }: OrderCardProps) {
+export function OrderCard({ order, onTrackClick, onConfirmReceived, receiptPending = false }: OrderCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const handleTrackClick = () => onTrackClick?.(order.id);
@@ -71,13 +72,14 @@ export function OrderCard({ order, onTrackClick, onConfirmReceived }: OrderCardP
               Track Delivery
             </button>
           )}
-          {order.deliveryStatus === "delivered" && (
+          {order.deliveryStatus === "delivered" && order.status !== "completed" && (
             <button
               type="button"
               onClick={handleConfirmReceivedClick}
-              className="rounded-full bg-[#416449] px-5 py-2 text-sm font-bold text-white transition hover:bg-[#35563c]"
+              disabled={receiptPending}
+              className="rounded-full bg-[#416449] px-5 py-2 text-sm font-bold text-white transition hover:bg-[#35563c] disabled:cursor-wait disabled:opacity-60"
             >
-              Order Received
+              {receiptPending ? "Confirming…" : "Order Received"}
             </button>
           )}
         </div>

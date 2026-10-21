@@ -12,6 +12,7 @@ import { CartPage } from "./cart/CartPage";
 import { CheckoutPage } from "./checkout/CheckoutPage";
 import { ManagerDashboard } from "./manager/ManagerDashboard";
 import { CustomerOrderHistoryPage } from "./orders/CustomerOrderHistoryPage";
+import { OrderTrackingPage } from "./orders/OrderTrackingPage";
 import 'maplibre-gl/dist/maplibre-gl.css';
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -29,6 +30,7 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/register" element={<Register />} />
           <Route path="/inventory" element={<InventoryPage />} />
           <Route path="/orders" element={<CustomerOrderHistoryPage />} />
+          <Route path="/orders/:orderId/tracking" element={<OrderTrackingPage />} />
           <Route path="/cart" element={<CartPage />} />
           <Route path="/checkout" element={<CheckoutPage />} />
         </Routes>
