@@ -276,6 +276,16 @@ function SummaryCard({
   );
 }
 
+function SalesMetricCard({ label, value, detail }: { label: string; value: string | null; detail: string }) {
+  return (
+    <article className="rounded-2xl border border-[#e8e7dc] bg-white p-4 shadow-[0_3px_12px_rgba(42,65,48,0.04)] sm:p-5">
+      <h3 className="text-sm font-bold text-[#667269]">{label}</h3>
+      <p className="mt-2 text-2xl font-extrabold tabular-nums text-[#294332] sm:text-3xl">{value ?? "—"}</p>
+      <p className="mt-1 text-xs text-[#7d887b] sm:text-sm">{detail}</p>
+    </article>
+  );
+}
+
 function OpenTabButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <button
@@ -785,8 +795,24 @@ function SalesOverview({
 }) {
   const [sales, setSales] = useState<SalesBucket[]>([]);
   const [analytics, setAnalytics] = useState<SalesAnalytics | null>(null);
+  const [customerCount, setCustomerCount] = useState<number | null>(null);
+  const [customersError, setCustomersError] = useState("");
   const [salesLoading, setSalesLoading] = useState(true);
   const [salesError, setSalesError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    fetchCustomers()
+      .then((customers) => {
+        if (active) setCustomerCount(customers.length);
+      })
+      .catch((requestError: unknown) => {
+        if (active) setCustomersError(requestError instanceof Error ? requestError.message : "Unable to load customers.");
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -817,8 +843,8 @@ function SalesOverview({
     <>
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-extrabold text-[#294332]">Sales</h2>
-          <p className="mt-1 text-sm text-[#667269]">Revenue breakdown, gross profit, and item performance over time.</p>
+          <h2 className="text-2xl font-extrabold text-[#294332]">Sales Report</h2>
+          <p className="mt-1 text-sm text-[#667269]">Revenue breakdown and item performance over time.</p>
         </div>
         <label className="flex items-center gap-2 text-sm font-semibold text-[#426149]">
           Date range
@@ -837,16 +863,40 @@ function SalesOverview({
         <p role="alert" className="rounded-xl border border-red-200 bg-white p-5 text-sm text-red-700">{salesError}</p>
       ) : analytics && (
         <div className="space-y-4">
-          <div className="grid gap-4 xl:grid-cols-2">
-            <SalesPieChart title="Revenue by Top 8 Items" values={topSlices(analytics.items.map((item) => ({ name: item.name, value: item.revenue })), 8)} />
-            <SalesPieChart title="Revenue by Top 3 Categories" values={topSlices(analytics.categories.map((category) => ({ name: category.name, value: category.revenue })), 3)} />
+          <section aria-label="Sales summary" className="grid gap-3 sm:grid-cols-3 sm:gap-4">
+            <SalesMetricCard
+              label="Revenue"
+              value={`$${sales.reduce((total, bucket) => total + bucket.revenue, 0).toFixed(2)}`}
+              detail={dateRange}
+            />
+            <SalesMetricCard
+              label="Orders"
+              value={String(sales.reduce((total, bucket) => total + bucket.paidOrders, 0))}
+              detail={`Paid orders · ${dateRange.toLowerCase()}`}
+            />
+            <SalesMetricCard
+              label="Customers"
+              value={customerCount === null ? null : String(customerCount)}
+              detail="Registered accounts"
+            />
+          </section>
+          {customersError && (
+            <p role="alert" className="rounded-xl border border-red-200 bg-white p-4 text-sm text-red-700">
+              {customersError}
+            </p>
+          )}
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(20rem,1fr)]">
+            <SalesBarChart
+              title="Sales"
+              buckets={sales.map((bucket) => ({ bucketStart: bucket.bucketStart, value: bucket.revenue }))}
+              range={salesRangeFor[dateRange]}
+              formatValue={(value) => `$${value.toFixed(0)}`}
+            />
+            <div className="flex min-w-0 flex-col gap-4">
+              <SalesPieChart className="xl:flex-1" title="Revenue by Top 8 Items" values={topSlices(analytics.items.map((item) => ({ name: item.name, value: item.revenue })), 8)} />
+              <SalesPieChart className="xl:flex-1" title="Revenue by Top 3 Categories" values={topSlices(analytics.categories.map((category) => ({ name: category.name, value: category.revenue })), 3)} />
+            </div>
           </div>
-          <SalesBarChart
-            title="Sales"
-            buckets={sales.map((bucket) => ({ bucketStart: bucket.bucketStart, value: bucket.revenue }))}
-            range={salesRangeFor[dateRange]}
-            formatValue={(value) => `$${value.toFixed(0)}`}
-          />
           <SalesItemsTable items={analytics.items} />
         </div>
       )}
@@ -866,13 +916,13 @@ function topSlices(values: PieSlice[], limit: number): PieSlice[] {
 
 const chartColors = ["#438254", "#91a95b", "#d4a449", "#cf7658", "#6e8da7", "#9c7bb4", "#4f9b91", "#b67b91", "#a8ad9b"];
 
-function SalesPieChart({ title, values }: { title: string; values: PieSlice[] }) {
+function SalesPieChart({ title, values, className = "" }: { title: string; values: PieSlice[]; className?: string }) {
   const total = values.reduce((sum, item) => sum + item.value, 0);
   let angle = -90;
   let labelAngle = -90;
 
   return (
-    <section className="min-w-0 rounded-2xl border border-[#e8e7dc] bg-white p-4 shadow-[0_3px_12px_rgba(42,65,48,0.04)] sm:p-5" aria-label={title}>
+    <section className={`flex min-w-0 flex-col rounded-2xl border border-[#e8e7dc] bg-white p-4 shadow-[0_3px_12px_rgba(42,65,48,0.04)] sm:p-5 ${className}`} aria-label={title}>
       <h3 className="text-lg font-extrabold text-[#294332]">{title}</h3>
       {total <= 0 ? (
         <p className="py-12 text-center text-sm text-[#7d887b]">No item sales in this range.</p>
@@ -962,8 +1012,8 @@ function SalesBarChart({
   const maximum = Math.max(...values, 1);
   const minimum = Math.min(...values, 0);
   const span = maximum - minimum || 1;
-  const chartTop = 32;
-  const chartBottom = 174;
+  const chartTop = 40;
+  const chartBottom = 366;
   const baseline = chartTop + (maximum / span) * (chartBottom - chartTop);
   const labelInterval = Math.max(1, Math.ceil(buckets.length / 7));
   const hasValues = values.some((value) => value !== 0);
@@ -972,17 +1022,17 @@ function SalesBarChart({
   return (
     <section
       aria-label={`${title} chart`}
-      className="min-w-0 rounded-2xl border border-[#e8e7dc] bg-white p-4 shadow-[0_3px_12px_rgba(42,65,48,0.04)] sm:p-5"
+      className="flex h-full min-w-0 flex-col rounded-2xl border border-[#e8e7dc] bg-white p-4 shadow-[0_3px_12px_rgba(42,65,48,0.04)] sm:p-5"
     >
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-lg font-extrabold text-[#294332]">{title}</h2>
         <span className="text-sm font-bold tabular-nums text-[#426149]">{formatValue(values.reduce((sum, value) => sum + value, 0))}</span>
       </div>
       <svg
-        viewBox="0 0 640 230"
+        viewBox="0 0 640 430"
         role="img"
         aria-label={`${title} bar chart for ${range}, showing ${buckets.length} time buckets`}
-        className="mt-3 w-full"
+        className="mt-3 min-h-[18rem] w-full flex-1"
       >
         {[0, 1, 2, 3].map((tick) => {
           const y = chartTop + tick * ((chartBottom - chartTop) / 3);
@@ -1011,7 +1061,7 @@ function SalesBarChart({
                 <title>{`${formatBucketLabel(bucket.bucketStart, range)}: ${formatValue(bucket.value)}`}</title>
               </rect>
               {(index % labelInterval === 0 || index === buckets.length - 1) && (
-                <text x={centerX} y="204" textAnchor="middle" fill="#7d887b" fontSize="11">
+                <text x={centerX} y="408" textAnchor="middle" fill="#7d887b" fontSize="11">
                   {formatBucketLabel(bucket.bucketStart, range)}
                 </text>
               )}
@@ -1019,7 +1069,7 @@ function SalesBarChart({
           );
         })}
         {!hasValues && (
-          <text x="332" y="112" textAnchor="middle" fill="#7d887b" fontSize="13">
+          <text x="332" y="210" textAnchor="middle" fill="#7d887b" fontSize="13">
             No paid sales in this range
           </text>
         )}
@@ -1029,14 +1079,16 @@ function SalesBarChart({
 }
 
 function SalesItemsTable({ items }: { items: SalesAnalytics["items"] }) {
+  const soldItems = items.filter((item) => item.quantity > 0);
+
   return (
     <section className="overflow-hidden rounded-2xl border border-[#e8e7dc] bg-white shadow-[0_3px_12px_rgba(42,65,48,0.04)]">
       <div className="border-b border-[#ecebe2] px-5 py-4 sm:px-7">
         <h3 className="text-lg font-extrabold text-[#294332]">Item sales and inventory</h3>
-        <p className="mt-1 text-sm text-[#667269]">Units sold, revenue, and stock for every item.</p>
+        <p className="mt-1 text-sm text-[#667269]">Units sold, revenue, and stock for items sold in this date range.</p>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[58rem] text-left">
+        <table className="w-full min-w-[52rem] text-left">
           <thead className="bg-[#f6f7f1] text-xs uppercase tracking-wide text-[#667269]">
             <tr>
               <th scope="col" className="px-5 py-3 font-bold">Item</th>
@@ -1044,24 +1096,22 @@ function SalesItemsTable({ items }: { items: SalesAnalytics["items"] }) {
               <th scope="col" className="px-4 py-3 text-right font-bold">Quantity sold</th>
               <th scope="col" className="px-4 py-3 text-right font-bold">Revenue</th>
               <th scope="col" className="px-4 py-3 text-right font-bold">Current price</th>
-              <th scope="col" className="px-4 py-3 text-right font-bold">Unit cost</th>
               <th scope="col" className="px-5 py-3 text-right font-bold">On hand</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#ecebe2]">
-            {items.map((item) => (
+            {soldItems.map((item) => (
               <tr key={item.productId}>
                 <th scope="row" className="px-5 py-4 font-semibold text-[#253b2d]">{item.name}</th>
                 <td className="px-4 py-4 text-sm text-[#667269]">{item.category}</td>
-                <td className="px-4 py-4 text-right text-sm tabular-nums">{item.quantity} {item.unit}</td>
+                <td className="px-4 py-4 text-right text-sm tabular-nums">{item.quantity}</td>
                 <td className="px-4 py-4 text-right text-sm tabular-nums">${item.revenue.toFixed(2)}</td>
                 <td className="px-4 py-4 text-right text-sm tabular-nums">${item.currentPrice.toFixed(2)} / {item.unit}</td>
-                <td className="px-4 py-4 text-right text-sm tabular-nums">{item.unitCost === null ? "Not set" : `$${item.unitCost.toFixed(2)}`}</td>
                 <td className="px-5 py-4 text-right text-sm tabular-nums">{item.currentStock} {item.unit}</td>
               </tr>
             ))}
-            {items.length === 0 && (
-              <tr><td colSpan={7} className="px-5 py-8 text-center text-sm text-[#667269]">No catalog items found.</td></tr>
+            {soldItems.length === 0 && (
+              <tr><td colSpan={6} className="px-5 py-8 text-center text-sm text-[#667269]">No items sold in this date range.</td></tr>
             )}
           </tbody>
         </table>
