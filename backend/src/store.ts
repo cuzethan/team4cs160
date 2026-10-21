@@ -37,6 +37,39 @@ export async function ensureInventoryManagementSchema(pool: pg.Pool) {
   `);
 }
 
+// Delivery tables exist in the original schema. These additions bring existing
+// persistent databases up to date as well as documenting the upgrade in db/init.
+export async function ensureDeliveryTrackingSchema(pool: pg.Pool) {
+  await pool.query(`
+    ALTER TABLE Robot
+      ALTER COLUMN maximum_orders SET DEFAULT 10,
+      ALTER COLUMN maximum_weight SET DEFAULT 200
+  `);
+  await pool.query(`
+    ALTER TABLE DeliveryRun
+      ADD COLUMN IF NOT EXISTS route_geometry JSONB,
+      ADD COLUMN IF NOT EXISTS route_source VARCHAR(30),
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+  `);
+  await pool.query(`
+    ALTER TABLE Notification
+      ADD COLUMN IF NOT EXISTS notification_type VARCHAR(50) NOT NULL DEFAULT 'delivery_update',
+      ADD COLUMN IF NOT EXISTS read_at TIMESTAMPTZ
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS delivery_order_status_idx ON Delivery(delivery_status, order_id);
+    CREATE INDEX IF NOT EXISTS delivery_run_status_idx ON DeliveryRun(run_status, robot_id);
+    CREATE INDEX IF NOT EXISTS notification_user_created_idx ON Notification(user_id, created_at DESC)
+  `);
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS delivery_single_assignment_idx ON Delivery(order_id)
+  `);
+  await pool.query(`
+    COMMENT ON COLUMN DeliveryRun.route_distance IS 'Route distance in meters';
+    COMMENT ON COLUMN DeliveryRun.estimated_duration IS 'Estimated route duration in seconds'
+  `);
+}
+
 export function createPgSettingsStore(pool: pg.Pool): SettingsStore {
   return {
     async get() {
@@ -311,12 +344,91 @@ export type ManagerDelivery = {
   eta: Date | null;
 };
 
+export type DeliveryRobot = {
+  robotId: string;
+  robotName: string;
+  status: string;
+  maximumOrders: number;
+  maximumWeight: number;
+  currentLatitude: number | null;
+  currentLongitude: number | null;
+  lastUpdated: Date;
+};
+
+export type DeliveryRun = {
+  runId: string;
+  robotId: string;
+  robotName: string;
+  status: string;
+  routeDistanceMeters: number | null;
+  estimatedDurationSeconds: number | null;
+  routeGeometry: [number, number][] | null;
+  routeSource: "valhalla" | "approximate" | null;
+  startedAt: Date | null;
+  completedAt: Date | null;
+  stops: { orderId: string; stopNumber: number; status: string; eta: Date | null }[];
+};
+
+export type DeliveryTracking = {
+  orderId: string;
+  orderStatus: string;
+  deliveryStatus: string | null;
+  eta: Date | null;
+  stopNumber: number | null;
+  runId: string | null;
+  routeGeometry: [number, number][] | null;
+  routeSource: "valhalla" | "approximate" | null;
+  robotName: string | null;
+  robotStatus: string | null;
+  robotLatitude: number | null;
+  robotLongitude: number | null;
+};
+
+export type DeliveryNotification = {
+  notificationId: string;
+  orderId: string | null;
+  type: string;
+  message: string;
+  isRead: boolean;
+  createdAt: Date;
+  readAt: Date | null;
+};
+
+export type ReceiptResult = "completed" | "not-found" | "not-delivered";
+
+export type NewDeliveryRun = {
+  robotId: string;
+  routeDistanceMeters: number;
+  estimatedDurationSeconds: number;
+  routeGeometry: [number, number][];
+  routeSource: "valhalla" | "approximate";
+  stops: { orderId: string; estimatedDeliveryTime: Date }[];
+};
+
+export class DeliveryAssignmentError extends Error {
+  constructor(readonly reason: "robot-unavailable" | "orders-unavailable" | "capacity-exceeded") {
+    super(reason);
+  }
+}
+
+const MAX_DELIVERY_RUN_ORDERS = 10;
+const MAX_DELIVERY_RUN_WEIGHT_LBS = 200;
+
 export interface SalesStore {
   listSales(range: SalesRange): Promise<SalesBucket[]>;
 }
 
 export interface DeliveryStore {
   listDeliveries(): Promise<ManagerDelivery[]>;
+  listRobots?(): Promise<DeliveryRobot[]>;
+  listRuns?(): Promise<DeliveryRun[]>;
+  getCustomerTracking?(userId: string, orderId: string): Promise<DeliveryTracking | null>;
+  confirmOrderReceived?(userId: string, orderId: string): Promise<ReceiptResult>;
+  listNotifications?(userId: string): Promise<DeliveryNotification[]>;
+  markNotificationRead?(userId: string, notificationId: string): Promise<boolean>;
+  createNotification?(userId: string, orderId: string | null, type: string, message: string): Promise<DeliveryNotification>;
+  createDeliveryRun?(run: NewDeliveryRun): Promise<string>;
+  updateRobotPosition?(robotId: string, latitude: number, longitude: number): Promise<boolean>;
 }
 
 // Postgres rejects malformed UUIDs with an error, so treat them as "not found" up front.
@@ -568,9 +680,194 @@ export function createPgDeliveryStore(pool: pg.Pool): DeliveryStore {
            ORDER BY updated_at DESC, created_at DESC, delivery_id DESC
            LIMIT 1
          ) d ON true
+         WHERE o.payment_status = 'paid'
          ORDER BY o.created_at DESC, o.order_id`,
       );
       return rows;
+    },
+
+    async listRobots() {
+      const { rows } = await pool.query<DeliveryRobot>(
+        `SELECT robot_id AS "robotId", robot_name AS "robotName", robot_status AS status,
+                maximum_orders AS "maximumOrders", maximum_weight::float8 AS "maximumWeight",
+                current_latitude::float8 AS "currentLatitude", current_longitude::float8 AS "currentLongitude",
+                last_updated AS "lastUpdated"
+         FROM Robot ORDER BY robot_name`,
+      );
+      return rows;
+    },
+
+    async listRuns() {
+      const { rows: runs } = await pool.query<Omit<DeliveryRun, "stops">>(
+        `SELECT dr.run_id AS "runId", dr.robot_id AS "robotId", r.robot_name AS "robotName",
+                dr.run_status AS status, dr.route_distance::float8 AS "routeDistanceMeters",
+                dr.estimated_duration AS "estimatedDurationSeconds", dr.route_geometry AS "routeGeometry",
+                dr.route_source AS "routeSource", dr.started_at AS "startedAt", dr.completed_at AS "completedAt"
+         FROM DeliveryRun dr JOIN Robot r ON r.robot_id = dr.robot_id
+         ORDER BY dr.started_at DESC NULLS LAST, dr.run_id DESC`,
+      );
+      if (runs.length === 0) return [];
+      const { rows: stops } = await pool.query<DeliveryRun["stops"][number] & { runId: string }>(
+        `SELECT run_id AS "runId", order_id AS "orderId", stop_number AS "stopNumber",
+                delivery_status AS status, estimated_delivery_time AS eta
+         FROM Delivery WHERE run_id = ANY($1) ORDER BY run_id, stop_number`,
+        [runs.map(({ runId }) => runId)],
+      );
+      return runs.map((run) => ({
+        ...run,
+        routeSource: run.routeSource === "valhalla" || run.routeSource === "approximate" ? run.routeSource : null,
+        stops: stops.filter((stop) => stop.runId === run.runId).map(({ runId: _runId, ...stop }) => stop),
+      }));
+    },
+
+    async getCustomerTracking(userId, orderId) {
+      if (!UUID_PATTERN.test(orderId)) return null;
+      const { rows } = await pool.query<DeliveryTracking>(
+        `SELECT o.order_id AS "orderId", o.order_status AS "orderStatus",
+                d.delivery_status AS "deliveryStatus", d.estimated_delivery_time AS eta,
+                d.stop_number AS "stopNumber", dr.run_id AS "runId", dr.route_geometry AS "routeGeometry",
+                dr.route_source AS "routeSource", r.robot_name AS "robotName", r.robot_status AS "robotStatus",
+                r.current_latitude::float8 AS "robotLatitude", r.current_longitude::float8 AS "robotLongitude"
+         FROM Orders o
+         LEFT JOIN Delivery d ON d.order_id = o.order_id
+         LEFT JOIN DeliveryRun dr ON dr.run_id = d.run_id
+         LEFT JOIN Robot r ON r.robot_id = dr.robot_id
+         WHERE o.order_id = $1 AND o.user_id = $2`,
+        [orderId, userId],
+      );
+      if (!rows[0]) return null;
+      const result = rows[0];
+      result.routeSource = result.routeSource === "valhalla" || result.routeSource === "approximate" ? result.routeSource : null;
+      return result;
+    },
+
+    async confirmOrderReceived(userId, orderId) {
+      if (!UUID_PATTERN.test(orderId)) return "not-found";
+      const { rows } = await pool.query<{ orderId: string }>(
+        `UPDATE Orders o SET order_status = 'completed', updated_at = now()
+         WHERE o.order_id = $1 AND o.user_id = $2
+           AND EXISTS (
+             SELECT 1 FROM Delivery d
+             WHERE d.order_id = o.order_id AND d.delivery_status = 'delivered'
+           )
+         RETURNING o.order_id AS "orderId"`,
+        [orderId, userId],
+      );
+      if (rows[0]) return "completed";
+      const { rows: ownedOrders } = await pool.query<{ orderId: string }>(
+        "SELECT order_id AS \"orderId\" FROM Orders WHERE order_id = $1 AND user_id = $2",
+        [orderId, userId],
+      );
+      return ownedOrders[0] ? "not-delivered" : "not-found";
+    },
+
+    async listNotifications(userId) {
+      const { rows } = await pool.query<DeliveryNotification>(
+        `SELECT notification_id AS "notificationId", order_id AS "orderId",
+                notification_type AS type, message, is_read AS "isRead",
+                created_at AS "createdAt", read_at AS "readAt"
+         FROM Notification WHERE user_id = $1 ORDER BY created_at DESC, notification_id DESC`,
+        [userId],
+      );
+      return rows;
+    },
+
+    async markNotificationRead(userId, notificationId) {
+      if (!UUID_PATTERN.test(notificationId)) return false;
+      const { rowCount } = await pool.query(
+        `UPDATE Notification SET is_read = TRUE, read_at = COALESCE(read_at, now())
+         WHERE notification_id = $1 AND user_id = $2`,
+        [notificationId, userId],
+      );
+      return rowCount !== 0;
+    },
+
+    async createNotification(userId, orderId, type, message) {
+      const { rows } = await pool.query<DeliveryNotification>(
+        `INSERT INTO Notification (user_id, order_id, notification_type, message)
+         VALUES ($1, $2, $3, $4)
+         RETURNING notification_id AS "notificationId", order_id AS "orderId",
+                   notification_type AS type, message, is_read AS "isRead",
+                   created_at AS "createdAt", read_at AS "readAt"`,
+        [userId, orderId, type, message],
+      );
+      return rows[0];
+    },
+
+    async createDeliveryRun(run) {
+      if (run.stops.length < 1 || run.stops.length > MAX_DELIVERY_RUN_ORDERS) {
+        throw new DeliveryAssignmentError("capacity-exceeded");
+      }
+      if (new Set(run.stops.map(({ orderId }) => orderId)).size !== run.stops.length) {
+        throw new DeliveryAssignmentError("orders-unavailable");
+      }
+
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const { rows: robots } = await client.query<{ maximumOrders: number; maximumWeight: number; status: string }>(
+          `SELECT maximum_orders AS "maximumOrders", maximum_weight::float8 AS "maximumWeight", robot_status AS status
+           FROM Robot WHERE robot_id = $1 FOR UPDATE`,
+          [run.robotId],
+        );
+        const robot = robots[0];
+        if (!robot || robot.status !== "available") throw new DeliveryAssignmentError("robot-unavailable");
+
+        const orderIds = run.stops.map(({ orderId }) => orderId);
+        const { rows: orders } = await client.query<{ orderId: string; addressId: string; totalWeight: number }>(
+          `SELECT o.order_id AS "orderId", o.address_id AS "addressId", o.total_weight::float8 AS "totalWeight"
+           FROM Orders o
+           WHERE o.order_id = ANY($1) AND o.payment_status = 'paid'
+             AND NOT EXISTS (SELECT 1 FROM Delivery d WHERE d.order_id = o.order_id)
+           FOR UPDATE OF o`,
+          [orderIds],
+        );
+        if (orders.length !== orderIds.length) throw new DeliveryAssignmentError("orders-unavailable");
+        const totalWeight = orders.reduce((sum, order) => sum + order.totalWeight, 0);
+        if (orders.length > Math.min(robot.maximumOrders, MAX_DELIVERY_RUN_ORDERS) ||
+            totalWeight > Math.min(robot.maximumWeight, MAX_DELIVERY_RUN_WEIGHT_LBS)) {
+          throw new DeliveryAssignmentError("capacity-exceeded");
+        }
+
+        const { rows: [{ runId }] } = await client.query<{ runId: string }>(
+          `INSERT INTO DeliveryRun
+             (robot_id, run_status, route_distance, estimated_duration, route_geometry, route_source, started_at)
+           VALUES ($1, 'assigned', $2, $3, $4::jsonb, $5, NULL)
+           RETURNING run_id AS "runId"`,
+          [run.robotId, run.routeDistanceMeters, run.estimatedDurationSeconds, JSON.stringify(run.routeGeometry), run.routeSource],
+        );
+
+        for (let index = 0; index < run.stops.length; index += 1) {
+          const stop = run.stops[index];
+          const order = orders.find(({ orderId }) => orderId === stop.orderId)!;
+          await client.query(
+            `INSERT INTO Delivery (order_id, address_id, run_id, delivery_status, stop_number, estimated_delivery_time)
+             VALUES ($1, $2, $3, 'scheduled', $4, $5)`,
+            [stop.orderId, order.addressId, runId, index + 1, stop.estimatedDeliveryTime],
+          );
+        }
+
+        await client.query("UPDATE Orders SET order_status = 'out_for_delivery', updated_at = now() WHERE order_id = ANY($1)", [orderIds]);
+        await client.query("UPDATE Robot SET robot_status = 'on_delivery', last_updated = now() WHERE robot_id = $1", [run.robotId]);
+        await client.query("COMMIT");
+        return runId;
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+
+    async updateRobotPosition(robotId, latitude, longitude) {
+      if (!UUID_PATTERN.test(robotId) || !Number.isFinite(latitude) || !Number.isFinite(longitude) ||
+          latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return false;
+      const { rowCount } = await pool.query(
+        `UPDATE Robot SET current_latitude = $2, current_longitude = $3, last_updated = now()
+         WHERE robot_id = $1`,
+        [robotId, latitude, longitude],
+      );
+      return rowCount !== 0;
     },
   };
 }

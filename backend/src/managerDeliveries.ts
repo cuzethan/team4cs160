@@ -18,5 +18,21 @@ export function createManagerDeliveriesRouter({ store, deliveryStore }: ManagerD
     res.json({ deliveries: await deliveryStore.listDeliveries() });
   }));
 
+  router.get("/robots", handle(async (req, res) => {
+    const user = await findCurrentUser(store, req);
+    if (!user) return res.status(401).json({ error: "Not logged in." });
+    if (user.role !== "admin") return res.status(403).json({ error: "Manager access is required." });
+    if (!deliveryStore.listRobots) return res.status(501).json({ error: "Robot data is not available." });
+    res.json({ robots: await deliveryStore.listRobots() });
+  }));
+
+  router.get("/runs", handle(async (req, res) => {
+    const user = await findCurrentUser(store, req);
+    if (!user) return res.status(401).json({ error: "Not logged in." });
+    if (user.role !== "admin") return res.status(403).json({ error: "Manager access is required." });
+    if (!deliveryStore.listRuns) return res.status(501).json({ error: "Delivery run data is not available." });
+    res.json({ runs: await deliveryStore.listRuns() });
+  }));
+
   return router;
 }
