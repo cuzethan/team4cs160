@@ -33,7 +33,7 @@ describe("auth API", () => {
     app = createApp({
       store: memory.store,
       ...memoryShopStores(),
-      salesStore: { listSales: async () => [] },
+      salesStore: { listSales: async () => [], listSalesAnalytics: async () => ({ profitBuckets: [], items: [], categories: [] }) },
       deliveryStore: { listDeliveries: async () => [] },
       appUrl: "http://localhost:5173",
       secureCookies: false,
@@ -270,7 +270,7 @@ describe("auth API", () => {
     const orderApp = createApp({
       store: memory.store,
       ...shops,
-      salesStore: { listSales: async () => [] },
+      salesStore: { listSales: async () => [], listSalesAnalytics: async () => ({ profitBuckets: [], items: [], categories: [] }) },
       deliveryStore: { listDeliveries: async () => [] },
       appUrl: "http://localhost:5173",
       secureCookies: false,

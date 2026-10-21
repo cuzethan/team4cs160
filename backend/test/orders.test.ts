@@ -35,15 +35,15 @@ describe("orders API", () => {
     paymentRequests = [];
     confirmedPayment = null;
     cart = createMemoryCartStore([
-      { productId: APPLES, name: "Gala Apples", category: "Test", unit: "each", price: 1.49, weightLbs: 1, quantityInStock: 5, active: true },
-      { productId: RICE, name: "Jasmine Rice", category: "Test", unit: "each", price: 5.99, weightLbs: 2, quantityInStock: 20, active: true },
+      { productId: APPLES, name: "Gala Apples", category: "Test", unit: "each", price: 1.49, unitCost: 0.8, weightLbs: 1, quantityInStock: 5, active: true },
+      { productId: RICE, name: "Jasmine Rice", category: "Test", unit: "each", price: 5.99, unitCost: 3, weightLbs: 2, quantityInStock: 20, active: true },
     ]);
     app = createApp({
       store: createMemoryStore().store,
       cartStore: cart.cartStore,
       orderStore: createMemoryOrderStore(cart).orderStore,
       productStore: createMemoryProductStore(cart).productStore,
-      salesStore: { listSales: async () => [] },
+      salesStore: { listSales: async () => [], listSalesAnalytics: async () => ({ profitBuckets: [], items: [], categories: [] }) },
       deliveryStore: { listDeliveries: async () => [] },
       payments: {
         async create(input) {

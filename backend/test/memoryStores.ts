@@ -157,6 +157,7 @@ export function createMemoryOrderStore({ cartStore, products, carts }: ReturnTyp
       return {
         name: line.name,
         price: line.price,
+        unitCost: product.unitCost ?? null,
         weight: line.weightLbs,
         stock: product.quantityInStock,
         active: product.active,
@@ -234,6 +235,7 @@ export function createMemoryProductStore({ products }: ReturnType<typeof createM
       description: descriptions.get(productId) ?? "",
       imageUrl: null,
       categoryId: `cat-${product.category}`,
+      unitCost: product.unitCost ?? null,
     };
   };
   const byCategoryThenName = (a: ManagedProduct, b: ManagedProduct) =>
@@ -244,7 +246,7 @@ export function createMemoryProductStore({ products }: ReturnType<typeof createM
       return [...products.values()]
         .filter((product) => product.active)
         .map((product) => {
-          const { categoryId: _categoryId, active: _active, ...catalog } = managed(product);
+          const { categoryId: _categoryId, active: _active, unitCost: _unitCost, ...catalog } = managed(product);
           return catalog;
         })
         .sort(byCategoryThenName);
@@ -263,6 +265,7 @@ export function createMemoryProductStore({ products }: ReturnType<typeof createM
         category: categories.get(input.categoryId)!,
         unit: input.unit,
         price: input.price,
+        unitCost: input.unitCost,
         weightLbs: input.weightLbs,
         quantityInStock: input.quantityInStock,
         active: true,

@@ -24,12 +24,13 @@ export function ProductTable({ products, busyIds, onEdit, onToggleActive }: Prod
     // `relative` keeps the screen-reader-only "Actions" label inside this scroll box;
     // otherwise its absolute position widens the whole page on phones.
     <div className="relative overflow-x-auto">
-      <table className="w-full min-w-[44rem] text-left">
+      <table className="w-full min-w-[50rem] text-left">
         <thead className="bg-[#f6f7f1] text-xs uppercase tracking-wide text-[#667269]">
           <tr>
             <th scope="col" className="px-5 py-3 font-bold sm:px-7">Product</th>
             <th scope="col" className="px-4 py-3 font-bold">Category</th>
             <th scope="col" className="px-4 py-3 text-right font-bold">Price</th>
+            <th scope="col" className="px-4 py-3 text-right font-bold">Unit cost</th>
             <th scope="col" className="px-4 py-3 text-right font-bold">Weight</th>
             <th scope="col" className="px-4 py-3 text-right font-bold">Stock</th>
             <th scope="col" className="px-5 py-3 text-right font-bold sm:px-7"><span className="sr-only">Actions</span></th>
@@ -48,6 +49,9 @@ export function ProductTable({ products, busyIds, onEdit, onToggleActive }: Prod
               <td className="px-4 py-4 text-sm">{product.category}</td>
               <td className="px-4 py-4 text-right text-sm tabular-nums">
                 ${product.price.toFixed(2)} <span className="text-[#899188]">/ {product.unit}</span>
+              </td>
+              <td className="px-4 py-4 text-right text-sm tabular-nums">
+                {product.unitCost === null ? <span className="text-[#899188]">Not set</span> : `$${product.unitCost.toFixed(2)}`}
               </td>
               <td className="px-4 py-4 text-right text-sm tabular-nums">{product.weightLbs} lb</td>
               <td className="px-4 py-4 text-right font-bold tabular-nums">
@@ -97,6 +101,7 @@ export function ProductFormDialog({ product, categories, onClose, onSaved }: Pro
     name: product?.name ?? "",
     description: product?.description ?? "",
     price: product ? String(product.price) : "",
+    unitCost: product?.unitCost === null || product?.unitCost === undefined ? "" : String(product.unitCost),
     weightLbs: product ? String(product.weightLbs) : "",
     unit: product?.unit ?? "each",
     categoryId: product?.categoryId ?? categories[0]?.id ?? "",
@@ -116,6 +121,7 @@ export function ProductFormDialog({ product, categories, onClose, onSaved }: Pro
       name: fields.name,
       description: fields.description,
       price: Number(fields.price),
+      unitCost: Number(fields.unitCost),
       weightLbs: Number(fields.weightLbs),
       unit: fields.unit,
       categoryId: fields.categoryId,
@@ -182,6 +188,10 @@ export function ProductFormDialog({ product, categories, onClose, onSaved }: Pro
           <label className={labelClassName}>
             Price ($)
             <input required type="number" min="0" max="99999.99" step="0.01" value={fields.price} onChange={(event) => setField("price")(event.target.value)} className={inputClassName} />
+          </label>
+          <label className={labelClassName}>
+            Unit cost ($)
+            <input required type="number" min="0" max="99999.99" step="0.01" value={fields.unitCost} onChange={(event) => setField("unitCost")(event.target.value)} className={inputClassName} />
           </label>
           <label className={labelClassName}>
             Weight (lb)
