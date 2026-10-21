@@ -14,10 +14,7 @@ import type { InventoryProduct } from "../inventory/types";
 import { fetchDeliveries, fetchDeliverySettings, fetchManagedInventory, fetchSales, saveDeliverySettings, updateProduct, type DeliverySettings, type ManagedProduct, type ManagerDelivery, type ProductCategory, type SalesBucket, type SalesRange } from "./api";
 import { ProductFormDialog, ProductTable } from "./ProductManager";
 
-import * as maplibregl from 'maplibre-gl';
-
-import Map from 'react-map-gl/maplibre'; 
-import 'maplibre-gl/dist/maplibre-gl.css';
+import Map from "react-map-gl/maplibre";
 
 
 
@@ -243,7 +240,7 @@ function OverviewPanel({ onOpenTab }: { onOpenTab: (tab: DashboardTab) => void }
           className="mt-3 flex min-h-48 items-center justify-center rounded-2xl border border-dashed border-[#dce2d5] bg-white text-sm text-[#899188] shadow-[0_3px_12px_rgba(42,65,48,0.04)]"
         >
         
-          <div style={{ width: '100vw', height: '40vh' }}>
+          <div style={{ width: "100%", height: "40vh" }}>
             <Map
               //mapLib={maplibregl}
               initialViewState={{
@@ -1152,7 +1149,7 @@ function RobotPanel({ tab }: { tab: "Robot" | "Revenue" }) {
   };
 
   return (
-     <div style={{ width: '100vw', height: '40vh' }}>
+     <div style={{ width: "100%", height: "40vh" }}>
             <Map
               //mapLib={maplibregl}
               initialViewState={{
