@@ -12,7 +12,7 @@ import { CartPage } from "./cart/CartPage";
 import { CheckoutPage } from "./checkout/CheckoutPage";
 import { ManagerDashboard } from "./manager/ManagerDashboard";
 import { CustomerOrderHistoryPage } from "./orders/CustomerOrderHistoryPage";
-
+import 'maplibre-gl/dist/maplibre-gl.css';
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <AuthProvider>

@@ -13,9 +13,17 @@ import { emojiFor } from "../inventory/api";
 import type { InventoryProduct } from "../inventory/types";
 import { fetchDeliveries, fetchDeliverySettings, fetchManagedInventory, fetchSales, saveDeliverySettings, updateProduct, type DeliverySettings, type ManagedProduct, type ManagerDelivery, type ProductCategory, type SalesBucket, type SalesRange } from "./api";
 import { ProductFormDialog, ProductTable } from "./ProductManager";
-import  Map  from '@vis.gl/react-maplibre';
-import 'maplibre-gl/dist/maplibre-gl.css';
+/*import  Map  from '@vis.gl/react-maplibre';
+import 'maplibre-gl/dist/maplibre-gl.css';*/
 import * as maplibregl from 'maplibre-gl';
+
+import Map from 'react-map-gl/maplibre'; // Important: Import from the maplibre submodule
+//import maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
+
+
+
+
 const tabs = ["Overview", "Customers", "Inventory", "Delivery", "Robot", "Sales", "Settings"] as const;
 type DashboardTab = (typeof tabs)[number];
 
@@ -39,6 +47,7 @@ const salesRangeFor: Record<DateRange, SalesRange> = {
   "Last 30 days": "month",
   "All time": "all",
 };
+
 
 export function ManagerDashboard() {
   const { user, loading } = useAuth();
@@ -238,7 +247,7 @@ function OverviewPanel({ onOpenTab }: { onOpenTab: (tab: DashboardTab) => void }
         
           <div style={{ width: '100vw', height: '40vh' }}>
             <Map
-              mapLib={maplibregl}
+              //mapLib={maplibregl}
               initialViewState={{
                 longitude: -121.8863, 
                 latitude: 37.3382,
@@ -1145,17 +1154,22 @@ function RobotPanel({ tab }: { tab: "Robot" | "Revenue" }) {
   };
 
   return (
-    <div style={{ width: '100vw', height: '100vh' }}>
-      <Map
-        initialViewState={{
-          longitude: -121.8863, // New York coordinates
-          latitude: 37.3382,
-          zoom: 10
-        }}
-        // Use the free, public tile schema from OpenFreeMap
-        mapStyle="https://tiles.openfreemap.org/styles/liberty"
-      />
-    </div>
+     <div style={{ width: '100vw', height: '40vh' }}>
+            <Map
+              //mapLib={maplibregl}
+              initialViewState={{
+                longitude: -121.8863, 
+                latitude: 37.3382,
+                zoom: 10
+              }}
+              // 1. Cap client zoom to match OpenFreeMap's standard layout limit
+              maxZoom={19} 
+  
+               // 2. Allow MapLibre to overscale local vector tiles if it pushes past the limit
+               maxPitch={85}
+            mapStyle="https://tiles.openfreemap.org/styles/liberty"
+              />
+          </div>
     
   );
 }
