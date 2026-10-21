@@ -13,12 +13,10 @@ import { emojiFor } from "../inventory/api";
 import type { InventoryProduct } from "../inventory/types";
 import { fetchDeliveries, fetchDeliverySettings, fetchManagedInventory, fetchSales, saveDeliverySettings, updateProduct, type DeliverySettings, type ManagedProduct, type ManagerDelivery, type ProductCategory, type SalesBucket, type SalesRange } from "./api";
 import { ProductFormDialog, ProductTable } from "./ProductManager";
-/*import  Map  from '@vis.gl/react-maplibre';
-import 'maplibre-gl/dist/maplibre-gl.css';*/
+
 import * as maplibregl from 'maplibre-gl';
 
-import Map from 'react-map-gl/maplibre'; // Important: Import from the maplibre submodule
-//import maplibregl from 'maplibre-gl';
+import Map from 'react-map-gl/maplibre'; 
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 
