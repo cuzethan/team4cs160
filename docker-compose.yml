@@ -22,7 +22,7 @@ services:
       DATABASE_URL: postgres://ofs:ofs@db:5432/ofs
       APP_URL: http://localhost:5173
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
-      VALHALLA_URL: ${VALHALLA_URL:-}
+      VALHALLA_URL: ${VALHALLA_URL:-http://valhalla:8002}
       PHOTON_URL: ${PHOTON_URL:-https://photon.komoot.io}
       ROBOT_SIMULATOR_INTERVAL_MS: ${ROBOT_SIMULATOR_INTERVAL_MS:-1000}
       ROBOT_SIMULATOR_SPEED_MULTIPLIER: ${ROBOT_SIMULATOR_SPEED_MULTIPLIER:-60}
@@ -31,9 +31,20 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      valhalla:
+        condition: service_started
     volumes:
       - ./backend:/app
       - /app/node_modules
+
+  valhalla:
+    image: ghcr.io/valhalla/valhalla-scripted:latest
+    ports:
+      - "8002:8002"
+    environment:
+      tile_urls: ${VALHALLA_TILE_URL:-}
+    volumes:
+      - valhalla-data:/custom_files
 
   frontend:
     build: ./frontend
@@ -50,3 +61,4 @@ services:
 
 volumes:
   pgdata:
+  valhalla-data:

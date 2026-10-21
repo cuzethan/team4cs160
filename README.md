@@ -19,6 +19,34 @@ If a port is already in use, replace the `up` command with:
 DB_PORT=5433 API_PORT=3002 docker compose up --build
 ```
 
+## Valhalla routing
+
+The backend uses Valhalla for road-network route optimization. Append these values to the `.env` file in the repository root (keep any Stripe values already there):
+
+```env
+VALHALLA_TILE_URL=https://download.geofabrik.de/north-america/us/california/norcal-latest.osm.pbf
+VALHALLA_URL=http://valhalla:8002
+```
+
+The tile URL supplies the OpenStreetMap region Valhalla builds its routing graph from. The first start downloads the extract and builds graph tiles; this can take a while and needs disk space. The configured Northern California extract covers the app's San Jose demo robot. See the [Geofabrik Northern California downloads](https://download.geofabrik.de/north-america/us/california/norcal.html).
+
+1. Add the two values above to the root `.env` file.
+2. Start the stack from the repository root:
+
+   ```bash
+   docker compose up -d
+   ```
+
+   To rebuild the application images as well, use `docker compose up -d --build`.
+
+3. Watch Valhalla startup and wait for its graph setup and service startup to finish before dispatching deliveries:
+
+   ```bash
+   docker compose logs -f valhalla
+   ```
+
+   Press Ctrl+C to stop following the logs; the container keeps running. If Valhalla is unavailable or its graph has not finished building, delivery routing falls back to an approximate straight-line route.
+
 ## Start
 
 Docker Desktop needs to be running.
