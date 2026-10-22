@@ -973,7 +973,7 @@ function SalesPieChart({ title, values, className = "" }: { title: string; value
               );
             })}
           </svg>
-          <ul className="grid w-full gap-2 text-sm">
+          <ul className="grid w-full min-w-0 flex-1 gap-2 text-sm">
             {values.map((item, index) => (
               <li key={item.name} className="flex items-center justify-between gap-3">
                 <span className="flex min-w-0 items-center gap-2 text-[#536459]">
