@@ -14,10 +14,12 @@ type ProductTableProps = {
   busyIds: Set<string>;
   onEdit: (product: ManagedProduct) => void;
   onToggleActive: (product: ManagedProduct) => void;
+  onSaved: (product: ManagedProduct) => void;
 };
 
-// Every product, active or not, with buttons to edit it or take it off the store.
-export function ProductTable({ products, busyIds, onEdit, onToggleActive }: ProductTableProps) {
+// Every product, active or not, with stock changed right in the row and buttons to edit it
+// or take it off the store.
+export function ProductTable({ products, busyIds, onEdit, onToggleActive, onSaved }: ProductTableProps) {
   if (products.length === 0) {
     return <p className="px-5 py-8 text-center text-sm text-[#667269] sm:px-7">No products match your search.</p>;
   }
@@ -26,7 +28,7 @@ export function ProductTable({ products, busyIds, onEdit, onToggleActive }: Prod
     // `relative` keeps the screen-reader-only "Actions" label inside this scroll box;
     // otherwise its absolute position widens the whole page on phones.
     <div className="relative overflow-x-auto">
-      <table className="w-full min-w-[50rem] text-left">
+      <table className="w-full min-w-[56rem] text-left">
         <thead className="bg-[#f6f7f1] text-xs uppercase tracking-wide text-[#667269]">
           <tr>
             <th scope="col" className="px-5 py-3 font-bold sm:px-7">Product</th>
@@ -58,8 +60,8 @@ export function ProductTable({ products, busyIds, onEdit, onToggleActive }: Prod
               <td className="px-4 py-4 text-right text-sm tabular-nums">
                 {product.weightLbs} lb <span className="text-[#899188]">/ {product.unit}</span>
               </td>
-              <td className="px-4 py-4 text-right font-bold tabular-nums">
-                {product.quantityInStock === 0 ? <span className="text-[#8b5145]">Out of stock</span> : product.quantityInStock}
+              <td className="px-4 py-4 text-right">
+                <StockCell product={product} onSaved={onSaved} />
               </td>
               <td className="px-5 py-4 sm:px-7">
                 <div className="flex justify-end gap-2">
@@ -86,6 +88,71 @@ export function ProductTable({ products, busyIds, onEdit, onToggleActive }: Prod
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// The product's stock, with − / + to change it by a typed amount without opening the editor.
+// The server saves these as "Manual adjustment"; the editor's Stock section takes a reason.
+function StockCell({ product, onSaved }: { product: ManagedProduct; onSaved: (product: ManagedProduct) => void }) {
+  const [amountText, setAmountText] = useState("1");
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const amount = parseStockAmount(amountText);
+
+  const adjust = async (direction: 1 | -1) => {
+    if (!amount) return;
+    setError(null);
+    setIsSaving(true);
+    try {
+      const updated = await adjustProductStock(product.id, direction * amount);
+      onSaved({ ...product, quantityInStock: updated });
+    } catch (adjustError) {
+      setError((adjustError as Error).message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const stepButtonClassName =
+    "flex h-7 w-7 items-center justify-center rounded-full border border-[#d9e2d2] text-sm font-bold text-[#416449] hover:bg-[#f1f5eb] disabled:cursor-not-allowed disabled:opacity-40";
+
+  return (
+    <div className="flex flex-col items-end gap-1.5">
+      <span className="font-bold tabular-nums">
+        {product.quantityInStock === 0 ? <span className="text-[#8b5145]">Out of stock</span> : product.quantityInStock}
+      </span>
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => void adjust(-1)}
+          disabled={isSaving || !amount || amount > product.quantityInStock}
+          className={stepButtonClassName}
+          aria-label={`Remove ${amount ?? ""} ${product.unit} of ${product.name} from stock`}
+        >
+          −
+        </button>
+        <input
+          type="number"
+          inputMode="numeric"
+          min={1}
+          step={1}
+          value={amountText}
+          onChange={(event) => setAmountText(event.target.value)}
+          className="h-7 w-14 rounded-lg border border-[#d9e2d2] px-1 text-center text-sm text-[#253b2d] outline-none focus:border-[#416449]"
+          aria-label={`Amount to add or remove for ${product.name}`}
+        />
+        <button
+          type="button"
+          onClick={() => void adjust(1)}
+          disabled={isSaving || !amount}
+          className={stepButtonClassName}
+          aria-label={`Add ${amount ?? ""} ${product.unit} of ${product.name} to stock`}
+        >
+          +
+        </button>
+      </div>
+      {error && <span role="alert" className="text-xs text-red-800">{error}</span>}
     </div>
   );
 }

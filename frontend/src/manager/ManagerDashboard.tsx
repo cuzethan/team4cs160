@@ -1257,6 +1257,7 @@ function ManageInventoryPanel() {
           busyIds={busyIds}
           onEdit={setEditing}
           onToggleActive={(product) => void handleToggleActive(product)}
+          onSaved={handleSaved}
         />
       </section>
 
