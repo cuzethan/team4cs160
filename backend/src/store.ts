@@ -390,12 +390,13 @@ export type DeliveryRun = {
   routeSource: "valhalla" | "approximate" | null;
   startedAt: Date | null;
   completedAt: Date | null;
-  stops: { orderId: string; stopNumber: number; status: string; eta: Date | null; latitude: number | null; longitude: number | null }[];
+  stops: { orderId: string; stopNumber: number; status: string; eta: Date | null; latitude: number | null; longitude: number | null; street: string; city: string; state: string; zipCode: string }[];
 };
 
 export type DeliveryTracking = {
   orderId: string;
   orderStatus: string;
+  deliveryAddress: { street: string; city: string; state: string; zipCode: string; deliveryInstructions: string | null };
   deliveryStatus: string | null;
   eta: Date | null;
   stopNumber: number | null;
@@ -782,7 +783,8 @@ export function createPgDeliveryStore(pool: pg.Pool): DeliveryStore {
       const { rows: stops } = await pool.query<DeliveryRun["stops"][number] & { runId: string }>(
         `SELECT d.run_id AS "runId", d.order_id AS "orderId", d.stop_number AS "stopNumber",
                 d.delivery_status AS status, d.estimated_delivery_time AS eta,
-                a.latitude::float8 AS latitude, a.longitude::float8 AS longitude
+                a.latitude::float8 AS latitude, a.longitude::float8 AS longitude,
+                a.street, a.city, a.state, a.zip_code AS "zipCode"
          FROM Delivery d JOIN Address a ON a.address_id = d.address_id
          WHERE d.run_id = ANY($1) ORDER BY d.run_id, d.stop_number`,
         [runs.map(({ runId }) => runId)],
@@ -842,11 +844,16 @@ export function createPgDeliveryStore(pool: pg.Pool): DeliveryStore {
       if (!UUID_PATTERN.test(orderId)) return null;
       const { rows } = await pool.query<DeliveryTracking>(
         `SELECT o.order_id AS "orderId", o.order_status AS "orderStatus",
+                jsonb_build_object(
+                  'street', a.street, 'city', a.city, 'state', a.state,
+                  'zipCode', a.zip_code, 'deliveryInstructions', a.delivery_instructions
+                ) AS "deliveryAddress",
                 d.delivery_status AS "deliveryStatus", d.estimated_delivery_time AS eta,
                 d.stop_number AS "stopNumber", dr.run_id AS "runId", dr.route_geometry AS "routeGeometry",
                 dr.route_source AS "routeSource", r.robot_name AS "robotName", r.robot_status AS "robotStatus",
                 r.current_latitude::float8 AS "robotLatitude", r.current_longitude::float8 AS "robotLongitude"
          FROM Orders o
+         JOIN Address a ON a.address_id = o.address_id
          LEFT JOIN LATERAL (
            SELECT order_id, delivery_status, estimated_delivery_time, stop_number, run_id
            FROM Delivery WHERE order_id = o.order_id

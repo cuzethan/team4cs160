@@ -1332,6 +1332,7 @@ function RobotPanel() {
                             <td className="px-4 py-3">{stop.stopNumber}</td>
                             <td className="px-4 py-3">
                               <span className="block font-mono text-xs font-bold">{shortOrderId(stop.orderId)}</span>
+                              <span className="block text-xs text-[#294332]">{stop.street}, {stop.city}, {stop.state} {stop.zipCode}</span>
                               <span className="text-xs text-[#7d887b]">{stop.latitude != null && stop.longitude != null ? `${stop.latitude.toFixed(5)}, ${stop.longitude.toFixed(5)}` : "Address coordinates unavailable"}</span>
                             </td>
                             <td className="px-4 py-3 capitalize text-[#667269]">{stop.status.replaceAll("_", " ")}</td>

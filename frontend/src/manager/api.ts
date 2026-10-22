@@ -64,7 +64,7 @@ export type DeliveryRun = {
   routeSource: "valhalla" | "approximate" | null;
   startedAt: string | null;
   completedAt: string | null;
-  stops: { orderId: string; stopNumber: number; status: string; eta: string | null; latitude: number | null; longitude: number | null }[];
+  stops: { orderId: string; stopNumber: number; status: string; eta: string | null; latitude: number | null; longitude: number | null; street: string; city: string; state: string; zipCode: string }[];
 };
 
 async function deliveryRequest<T>(path: string, init?: RequestInit): Promise<T> {
