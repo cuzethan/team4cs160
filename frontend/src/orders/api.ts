@@ -11,6 +11,13 @@ export type CheckoutAddress = {
 export type CustomerTracking = {
   orderId: string;
   orderStatus: string;
+  deliveryAddress: {
+    street: string;
+    city: string;
+    state: string;
+    zipCode: string;
+    deliveryInstructions: string | null;
+  };
   deliveryStatus: string | null;
   eta: string | null;
   stopNumber: number | null;

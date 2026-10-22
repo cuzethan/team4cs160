@@ -68,7 +68,7 @@ export function OrderTrackingPage() {
           </section>
         ) : tracking && (
           <>
-            <section className="mb-5 grid gap-3 sm:grid-cols-3">
+            <section className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div className="rounded-2xl border border-[#e8e7dc] bg-white p-5">
                 <p className="text-xs font-bold uppercase tracking-wide text-[#7d887b]">Delivery status</p>
                 <p className="mt-2 text-lg font-extrabold capitalize text-[#294332]">{(tracking.deliveryStatus ?? tracking.orderStatus).replaceAll("_", " ")}</p>
@@ -81,6 +81,16 @@ export function OrderTrackingPage() {
                 <p className="text-xs font-bold uppercase tracking-wide text-[#7d887b]">Robot</p>
                 <p className="mt-2 text-lg font-extrabold text-[#294332]">{tracking.robotName ?? "Awaiting assignment"}</p>
                 {tracking.stopNumber != null && <p className="mt-1 text-sm text-[#667269]">Stop {tracking.stopNumber}</p>}
+              </div>
+              <div className="rounded-2xl border border-[#e8e7dc] bg-white p-5">
+                <p className="text-xs font-bold uppercase tracking-wide text-[#7d887b]">Delivery address</p>
+                <address className="mt-2 not-italic text-sm font-semibold leading-6 text-[#294332]">
+                  {tracking.deliveryAddress.street}<br />
+                  {tracking.deliveryAddress.city}, {tracking.deliveryAddress.state} {tracking.deliveryAddress.zipCode}
+                </address>
+                {tracking.deliveryAddress.deliveryInstructions && (
+                  <p className="mt-2 text-sm text-[#667269]">Instructions: {tracking.deliveryAddress.deliveryInstructions}</p>
+                )}
               </div>
             </section>
             {tracking.deliveryStatus === "delivered" && (
