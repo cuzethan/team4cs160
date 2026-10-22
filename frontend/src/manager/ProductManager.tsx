@@ -6,6 +6,8 @@ import { createProduct, updateProduct, type ManagedProduct, type ProductCategory
 const inputClassName =
   "mt-1 w-full rounded-xl border border-[#dedfd5] bg-white px-4 py-2.5 text-sm text-[#253b2d] outline-none focus:border-[#416449]";
 const labelClassName = "block text-sm font-semibold text-[#536459]";
+const hintClassName = "mt-1 block text-xs font-normal text-[#899188]";
+const groupHeadingClassName = "text-xs font-bold uppercase tracking-wide text-[#899188]";
 
 type ProductTableProps = {
   products: ManagedProduct[];
@@ -53,7 +55,9 @@ export function ProductTable({ products, busyIds, onEdit, onToggleActive }: Prod
               <td className="px-4 py-4 text-right text-sm tabular-nums">
                 {product.unitCost === null ? <span className="text-[#899188]">Not set</span> : `$${product.unitCost.toFixed(2)}`}
               </td>
-              <td className="px-4 py-4 text-right text-sm tabular-nums">{product.weightLbs} lb</td>
+              <td className="px-4 py-4 text-right text-sm tabular-nums">
+                {product.weightLbs} lb <span className="text-[#899188]">/ {product.unit}</span>
+              </td>
               <td className="px-4 py-4 text-right font-bold tabular-nums">
                 {product.quantityInStock === 0 ? <span className="text-[#8b5145]">Out of stock</span> : product.quantityInStock}
               </td>
@@ -110,6 +114,11 @@ export function ProductFormDialog({ product, categories, onClose, onSaved }: Pro
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Used in labels and the preview, so every per-unit field names the same unit.
+  const unit = fields.unit.trim() || "unit";
+  const price = Number(fields.price);
+  const cost = Number(fields.unitCost);
+
   const setField = (field: keyof typeof fields) => (value: string) =>
     setFields((current) => ({ ...current, [field]: value }));
 
@@ -165,15 +174,16 @@ export function ProductFormDialog({ product, categories, onClose, onSaved }: Pro
         </h2>
 
         <form onSubmit={handleSubmit} className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <h3 className={`${groupHeadingClassName} sm:col-span-2`}>About the product</h3>
           <label className={`${labelClassName} sm:col-span-2`}>
             Name
-            <input required maxLength={100} value={fields.name} onChange={(event) => setField("name")(event.target.value)} className={inputClassName} />
+            <input required maxLength={100} placeholder="Gala Apples" value={fields.name} onChange={(event) => setField("name")(event.target.value)} className={inputClassName} />
           </label>
           <label className={`${labelClassName} sm:col-span-2`}>
             Description <span className="font-normal text-[#899188]">(optional)</span>
-            <textarea rows={2} maxLength={1000} value={fields.description} onChange={(event) => setField("description")(event.target.value)} className={inputClassName} />
+            <textarea rows={2} maxLength={1000} placeholder="Shown to customers on the product page." value={fields.description} onChange={(event) => setField("description")(event.target.value)} className={inputClassName} />
           </label>
-          <label className={labelClassName}>
+          <label className={`${labelClassName} sm:col-span-2`}>
             Category
             <select required value={fields.categoryId} onChange={(event) => setField("categoryId")(event.target.value)} className={inputClassName}>
               {categories.map((category) => (
@@ -181,27 +191,41 @@ export function ProductFormDialog({ product, categories, onClose, onSaved }: Pro
               ))}
             </select>
           </label>
-          <label className={labelClassName}>
-            Unit
+
+          <h3 className={`${groupHeadingClassName} mt-2 sm:col-span-2`}>How it's sold</h3>
+          <label className={`${labelClassName} sm:col-span-2`}>
+            Sold by
             <input required maxLength={20} placeholder="lb, each, bag…" value={fields.unit} onChange={(event) => setField("unit")(event.target.value)} className={inputClassName} />
+            <span className={hintClassName}>What one unit is. Price, cost, weight, and stock below are all per {unit}.</span>
           </label>
           <label className={labelClassName}>
-            Price ($)
-            <input required type="number" min="0" max="99999.99" step="0.01" value={fields.price} onChange={(event) => setField("price")(event.target.value)} className={inputClassName} />
+            Price per {unit} ($)
+            <input required type="number" min="0" max="99999.99" step="0.01" placeholder="1.49" value={fields.price} onChange={(event) => setField("price")(event.target.value)} className={inputClassName} />
+            <span className={hintClassName}>What the customer pays.</span>
           </label>
           <label className={labelClassName}>
-            Unit cost ($)
-            <input required type="number" min="0" max="99999.99" step="0.01" value={fields.unitCost} onChange={(event) => setField("unitCost")(event.target.value)} className={inputClassName} />
+            Cost per {unit} ($)
+            <input required type="number" min="0" max="99999.99" step="0.01" placeholder="0.82" value={fields.unitCost} onChange={(event) => setField("unitCost")(event.target.value)} className={inputClassName} />
+            <span className={hintClassName}>What the store pays its supplier. Only managers see this.</span>
           </label>
           <label className={labelClassName}>
-            Weight (lb)
-            <input required type="number" min="0.01" max="1000" step="0.01" value={fields.weightLbs} onChange={(event) => setField("weightLbs")(event.target.value)} className={inputClassName} />
+            Weight per {unit} (lb)
+            <input required type="number" min="0.01" max="1000" step="0.01" placeholder="1" value={fields.weightLbs} onChange={(event) => setField("weightLbs")(event.target.value)} className={inputClassName} />
+            <span className={hintClassName}>Used to work out the order's delivery fee.</span>
           </label>
           {isNew && (
             <label className={labelClassName}>
               Starting stock
               <input required type="number" min="0" step="1" value={fields.quantityInStock} onChange={(event) => setField("quantityInStock")(event.target.value)} className={inputClassName} />
+              <span className={hintClassName}>How many {unit} you have now.</span>
             </label>
+          )}
+
+          {price > 0 && (
+            <p className="rounded-xl bg-[#f1f5eb] px-4 py-3 text-sm text-[#416449] sm:col-span-2">
+              Customers will see <strong>${price.toFixed(2)} / {unit}</strong>
+              {fields.unitCost !== "" && cost <= price && <>. The store makes <strong>${(price - cost).toFixed(2)}</strong> per {unit}.</>}
+            </p>
           )}
 
           {error && (
