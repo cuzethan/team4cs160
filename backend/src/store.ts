@@ -1,4 +1,5 @@
 import type pg from "pg";
+import { getRobotBaseLocation } from "./robotBase.js";
 import { DEFAULT_DELIVERY_SETTINGS, deliveryFeeFor, roundCents, type DeliverySettings } from "./pricing.js";
 
 export type { DeliverySettings } from "./pricing.js";
@@ -40,6 +41,7 @@ export async function ensureInventoryManagementSchema(pool: pg.Pool) {
 // Delivery tables exist in the original schema. These additions bring existing
 // persistent databases up to date as well as documenting the upgrade in db/init.
 export async function ensureDeliveryTrackingSchema(pool: pg.Pool) {
+  const base = getRobotBaseLocation();
   await pool.query(`
     ALTER TABLE Robot
       ALTER COLUMN maximum_orders SET DEFAULT 10,
@@ -73,9 +75,9 @@ export async function ensureDeliveryTrackingSchema(pool: pg.Pool) {
   `);
   await pool.query(`
     INSERT INTO Robot (robot_name, robot_status, maximum_orders, maximum_weight, current_latitude, current_longitude)
-    SELECT 'Demo Robot 1', 'available', 10, 200, 37.3382, -121.8863
+    SELECT 'Demo Robot 1', 'available', 10, 200, $1, $2
     WHERE NOT EXISTS (SELECT 1 FROM Robot)
-  `);
+  `, [base.latitude, base.longitude]);
 }
 
 export function createPgSettingsStore(pool: pg.Pool): SettingsStore {

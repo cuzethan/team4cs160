@@ -1,4 +1,5 @@
 import type { UnassignedPaidOrder } from "./store.js";
+import { getRobotBaseLocation } from "./robotBase.js";
 
 export type GeocodedLocation = { latitude: number; longitude: number };
 
@@ -14,9 +15,10 @@ export async function geocodeAddress(
   const url = new URL("/api", photonUrl);
   url.searchParams.set("q", `${address.street}, ${address.city}, ${address.state} ${address.zipCode}`);
   url.searchParams.set("limit", "1");
-  // Prefer locations near the store's current San Jose map center.
-  url.searchParams.set("lat", "37.3382");
-  url.searchParams.set("lon", "-121.8863");
+  // Prefer locations near the configured robot base.
+  const base = getRobotBaseLocation();
+  url.searchParams.set("lat", String(base.latitude));
+  url.searchParams.set("lon", String(base.longitude));
   url.searchParams.set("location_bias_scale", "0.2");
 
   const response = await fetch(url, { signal: AbortSignal.timeout(5_000) });

@@ -24,8 +24,3 @@ CREATE UNIQUE INDEX delivery_single_assignment_idx ON Delivery(order_id) WHERE d
 
 COMMENT ON COLUMN DeliveryRun.route_distance IS 'Route distance in meters';
 COMMENT ON COLUMN DeliveryRun.estimated_duration IS 'Estimated route duration in seconds';
-
--- A small fleet is useful for the mock simulator and can be edited by managers later.
-INSERT INTO Robot (robot_name, robot_status, maximum_orders, maximum_weight, current_latitude, current_longitude)
-SELECT 'Demo Robot 1', 'available', 10, 200, 37.3382, -121.8863
-WHERE NOT EXISTS (SELECT 1 FROM Robot);
