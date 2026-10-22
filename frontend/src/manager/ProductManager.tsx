@@ -95,7 +95,7 @@ export function ProductTable({ products, busyIds, onEdit, onToggleActive, onSave
 // The product's stock, with − / + to change it by a typed amount without opening the editor.
 // The server saves these as "Manual adjustment"; the editor's Stock section takes a reason.
 function StockCell({ product, onSaved }: { product: ManagedProduct; onSaved: (product: ManagedProduct) => void }) {
-  const [amountText, setAmountText] = useState("1");
+  const [amountText, setAmountText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const amount = parseStockAmount(amountText);
@@ -107,6 +107,7 @@ function StockCell({ product, onSaved }: { product: ManagedProduct; onSaved: (pr
     try {
       const updated = await adjustProductStock(product.id, direction * amount);
       onSaved({ ...product, quantityInStock: updated });
+      setAmountText("");
     } catch (adjustError) {
       setError((adjustError as Error).message);
     } finally {
@@ -123,6 +124,7 @@ function StockCell({ product, onSaved }: { product: ManagedProduct; onSaved: (pr
         {product.quantityInStock === 0 ? <span className="text-[#8b5145]">Out of stock</span> : product.quantityInStock}
       </span>
       <div className="flex items-center gap-1.5">
+        <span aria-hidden="true" className="mr-1 text-xs text-[#899188]">Change by</span>
         <button
           type="button"
           onClick={() => void adjust(-1)}
