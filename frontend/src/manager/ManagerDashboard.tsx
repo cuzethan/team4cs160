@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import {
@@ -11,8 +11,13 @@ import {
 import { SiteHeader } from "../components/SiteHeader";
 import { emojiFor } from "../inventory/api";
 import type { InventoryProduct } from "../inventory/types";
-import { fetchDeliveries, fetchDeliverySettings, fetchManagedInventory, fetchSales, fetchSalesAnalytics, saveDeliverySettings, updateProduct, type DeliverySettings, type ManagedProduct, type ManagerDelivery, type ProductCategory, type SalesAnalytics, type SalesBucket, type SalesRange } from "./api";
+import { cancelDeliveryRun, dispatchDeliveries, fetchDeliveries, fetchDeliveryRobots, fetchDeliveryRuns, fetchDeliverySettings, fetchManagedInventory, fetchSales, fetchSalesAnalytics, saveDeliverySettings, updateProduct, type DeliveryRobot, type DeliveryRun, type DeliverySettings, type ManagedProduct, type ManagerDelivery, type ProductCategory, type SalesAnalytics, type SalesBucket, type SalesRange } from "./api";
 import { ProductFormDialog, ProductTable } from "./ProductManager";
+
+import Map, { Layer, Marker, NavigationControl, Source } from "react-map-gl/maplibre";
+
+
+
 
 const tabs = ["Overview", "Customers", "Inventory", "Delivery", "Robot", "Sales", "Settings"] as const;
 type DashboardTab = (typeof tabs)[number];
@@ -37,6 +42,7 @@ const salesRangeFor: Record<DateRange, SalesRange> = {
   "Last 30 days": "month",
   "All time": "all",
 };
+
 
 export function ManagerDashboard() {
   const { user, loading } = useAuth();
@@ -104,7 +110,7 @@ export function ManagerDashboard() {
           ) : activeTab === "Delivery" ? (
             <DeliveriesPanel />
           ) : (
-            <ComingSoonPanel tab={activeTab} />
+            <RobotPanel />
           )}
         </section>
       </main>
@@ -225,14 +231,13 @@ function OverviewPanel({ onOpenTab }: { onOpenTab: (tab: DashboardTab) => void }
         </section>
       </div>
 
-      <section aria-labelledby="robot-map-heading">
-        <h3 id="robot-map-heading" className="text-xl font-extrabold text-[#294332]">Robot map</h3>
-        <div
-          role="img"
-          aria-label="Blank map canvas for delivery locations"
-          className="mt-3 flex min-h-48 items-center justify-center rounded-2xl border border-dashed border-[#dce2d5] bg-white text-sm text-[#899188] shadow-[0_3px_12px_rgba(42,65,48,0.04)]"
-        >
-          The delivery map will appear here.
+      <section aria-labelledby="robot-map-heading" className="rounded-2xl border border-[#e8e7dc] bg-white p-5 shadow-[0_3px_12px_rgba(42,65,48,0.04)] sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h3 id="robot-map-heading" className="text-xl font-extrabold text-[#294332]">Robot fleet</h3>
+            <p className="mt-1 text-sm text-[#667269]">Open the live fleet view to inspect robot positions, delivery destinations, and stop ETAs.</p>
+          </div>
+          <OpenTabButton label="Open robot fleet" onClick={() => onOpenTab("Robot")} />
         </div>
       </section>
     </div>
@@ -712,6 +717,8 @@ function CustomerDetailPanel({
 function DeliveriesPanel() {
   const [deliveries, setDeliveries] = useState<ManagerDelivery[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dispatching, setDispatching] = useState(false);
+  const [dispatchSummary, setDispatchSummary] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -733,19 +740,47 @@ function DeliveriesPanel() {
     };
   }, []);
 
+  const runDispatch = async () => {
+    setDispatching(true);
+    setError("");
+    setDispatchSummary("");
+    try {
+      const result = await dispatchDeliveries();
+      setDispatchSummary(
+        `${result.runs.length} run${result.runs.length === 1 ? "" : "s"} created. ` +
+        `${result.pendingOrderIds.length} order${result.pendingOrderIds.length === 1 ? " remains" : "s remain"} queued; ` +
+        `${result.unresolvedAddressOrderIds.length} address${result.unresolvedAddressOrderIds.length === 1 ? " needs" : "es need"} geocoding, ` +
+        `${result.overCapacityOrderIds.length} order${result.overCapacityOrderIds.length === 1 ? " exceeds" : "s exceed"} the 200 lb limit.`,
+      );
+      setDeliveries(await fetchDeliveries());
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Unable to dispatch paid orders.");
+    } finally {
+      setDispatching(false);
+    }
+  };
+
   return (
     <div>
-      <div className="mb-5">
-        <h2 className="text-2xl font-extrabold text-[#294332]">Delivery</h2>
-        <p className="mt-1 text-sm text-[#667269]">Orders and delivery progress.</p>
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-extrabold text-[#294332]">Delivery</h2>
+          <p className="mt-1 text-sm text-[#667269]">Orders and delivery progress.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void runDispatch()}
+          disabled={loading || dispatching}
+          className="rounded-full bg-[#416449] px-5 py-2.5 text-sm font-bold text-white transition hover:bg-[#35563c] disabled:cursor-wait disabled:opacity-60"
+        >
+          {dispatching ? "Dispatching…" : "Dispatch paid orders"}
+        </button>
       </div>
+      {dispatchSummary && <p role="status" className="mb-4 rounded-xl bg-[#e9f1df] px-4 py-3 text-sm text-[#416449]">{dispatchSummary}</p>}
+      {error && <p className="mb-4 rounded-xl border border-red-200 bg-white p-4 text-sm text-red-700" role="alert">{error}</p>}
       {loading ? (
         <p className="rounded-xl border border-[#e8e7dc] bg-white p-5 text-sm text-[#667269]" role="status">
           Loading deliveries...
-        </p>
-      ) : error ? (
-        <p className="rounded-xl border border-red-200 bg-white p-5 text-sm text-red-700" role="alert">
-          {error}
         </p>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-[#e8e7dc] bg-white shadow-[0_3px_12px_rgba(42,65,48,0.04)]">
@@ -1332,19 +1367,205 @@ function LowStockTable({ products, action }: { products: InventoryProduct[]; act
   );
 }
 
-function ComingSoonPanel({ tab }: { tab: "Robot" | "Revenue" }) {
-  const descriptions: Record<"Robot" | "Revenue", string> = {
-    Robot: "Robot status and fleet controls will be available here.",
-    Revenue: "Revenue reports will be available here when payment reporting is connected.",
+function RobotPanel() {
+  const [robots, setRobots] = useState<DeliveryRobot[]>([]);
+  const [runs, setRuns] = useState<DeliveryRun[]>([]);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  const refresh = useCallback(async (initial = false) => {
+    try {
+      const [nextRobots, nextRuns] = await Promise.all([fetchDeliveryRobots(), fetchDeliveryRuns()]);
+      setRobots(nextRobots);
+      setRuns(nextRuns);
+      setError("");
+      setSelectedRunId((selected) => selected && nextRuns.some((run) => run.runId === selected)
+        ? selected
+        : nextRuns.find((run) => run.status === "active" || run.status === "assigned")?.runId ?? nextRuns[0]?.runId ?? null);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Unable to load the robot fleet.");
+    } finally {
+      if (initial) setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh(true);
+    const timer = window.setInterval(() => void refresh(), 3000);
+    return () => window.clearInterval(timer);
+  }, [refresh]);
+
+  const selectedRun = runs.find((run) => run.runId === selectedRunId) ?? null;
+  const selectedRobot = robots.find((robot) => robot.robotId === selectedRun?.robotId) ?? null;
+  const route = useMemo(() => selectedRun?.routeGeometry && selectedRun.routeGeometry.length > 0
+    ? {
+        type: "Feature" as const,
+        properties: {},
+        geometry: { type: "LineString" as const, coordinates: selectedRun.routeGeometry },
+      }
+    : null, [selectedRun?.routeGeometry]);
+
+  const mapPoints = [
+    ...(selectedRun?.routeGeometry ?? []),
+    ...((selectedRun?.stops ?? []).flatMap((stop) => stop.latitude != null && stop.longitude != null
+      ? [[stop.longitude, stop.latitude] as [number, number]]
+      : [])),
+    ...(selectedRobot?.currentLatitude != null && selectedRobot.currentLongitude != null
+      ? [[selectedRobot.currentLongitude, selectedRobot.currentLatitude] as [number, number]]
+      : []),
+  ].filter(([longitude, latitude]) => Number.isFinite(longitude) && Number.isFinite(latitude));
+  const mapBounds = mapPoints.length > 0
+    ? [
+        [Math.min(...mapPoints.map(([longitude]) => longitude)), Math.min(...mapPoints.map(([, latitude]) => latitude))],
+        [Math.max(...mapPoints.map(([longitude]) => longitude)), Math.max(...mapPoints.map(([, latitude]) => latitude))],
+      ] as [[number, number], [number, number]]
+    : null;
+
+  const stopRun = async () => {
+    if (!selectedRun || !["assigned", "active"].includes(selectedRun.status)) return;
+    const proceed = window.confirm("Stop this delivery run? Delivered orders stay delivered; remaining orders return to the paid queue for a later dispatch.");
+    if (!proceed) return;
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      await cancelDeliveryRun(selectedRun.runId);
+      setNotice(`Stopped run ${shortOrderId(selectedRun.runId)}. Undelivered orders are back in the paid queue.`);
+      await refresh();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Unable to stop the delivery run.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
-    <div className="rounded-2xl border border-[#e8e7dc] bg-white p-6 shadow-[0_3px_12px_rgba(42,65,48,0.04)] sm:p-8">
-      <h2 className="text-2xl font-extrabold text-[#294332]">{tab}</h2>
-      <p className="mt-2 text-[#667269]">{descriptions[tab]}</p>
-      <p className="mt-5 rounded-xl bg-[#f6f7f1] px-4 py-3 text-sm text-[#667269]">
-        This section does not have connected data yet.
-      </p>
+    <div>
+      <div className="mb-5">
+        <h2 className="text-2xl font-extrabold text-[#294332]">Robot fleet</h2>
+        <p className="mt-1 text-sm text-[#667269]">Live robot locations, planned routes, destinations, and stop ETAs.</p>
+      </div>
+      {notice && <p role="status" className="mb-4 rounded-xl bg-[#e9f1df] px-4 py-3 text-sm text-[#416449]">{notice}</p>}
+      {error && <p role="alert" className="mb-4 rounded-xl border border-red-200 bg-white p-4 text-sm text-red-700">{error}</p>}
+      {loading ? (
+        <p role="status" className="rounded-xl border border-[#e8e7dc] bg-white p-5 text-sm text-[#667269]">Loading robot fleet…</p>
+      ) : (
+        <>
+          <section aria-label="Robots" className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {robots.map((robot) => (
+              <article key={robot.robotId} className="rounded-2xl border border-[#e8e7dc] bg-white p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="font-extrabold text-[#294332]">{robot.robotName}</h3>
+                  <span className="rounded-full bg-[#e9f1df] px-2.5 py-1 text-xs font-bold capitalize text-[#416449]">{robot.status.replaceAll("_", " ")}</span>
+                </div>
+                <p className="mt-2 text-xs text-[#7d887b]">
+                  {robot.currentLatitude != null && robot.currentLongitude != null
+                    ? `${robot.currentLatitude.toFixed(5)}, ${robot.currentLongitude.toFixed(5)}`
+                    : "Position unavailable"}
+                </p>
+                <p className="mt-1 text-xs text-[#899188]">Updated {new Date(robot.lastUpdated).toLocaleTimeString()}</p>
+              </article>
+            ))}
+            {robots.length === 0 && <p className="rounded-2xl border border-[#e8e7dc] bg-white p-5 text-sm text-[#667269]">No robots have been registered.</p>}
+          </section>
+
+          <div className="grid items-start gap-5 xl:grid-cols-[minmax(15rem,0.8fr)_minmax(0,2fr)]">
+            <section aria-label="Delivery runs" className="overflow-hidden rounded-2xl border border-[#e8e7dc] bg-white">
+              <div className="border-b border-[#ecebe2] px-4 py-3">
+                <h3 className="font-extrabold text-[#294332]">Runs</h3>
+                <p className="mt-1 text-xs text-[#7d887b]">Refreshes every few seconds</p>
+              </div>
+              <ul className="max-h-[32rem] divide-y divide-[#ecebe2] overflow-y-auto">
+                {runs.map((run) => (
+                  <li key={run.runId}>
+                    <button type="button" aria-pressed={selectedRunId === run.runId} onClick={() => setSelectedRunId(run.runId)} className={`w-full px-4 py-3 text-left ${selectedRunId === run.runId ? "bg-[#e9f1df]" : "hover:bg-[#f8f8f3]"}`}>
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-xs font-bold text-[#294332]">{shortOrderId(run.runId)}</span>
+                        <span className="text-xs capitalize text-[#667269]">{run.status}</span>
+                      </span>
+                      <span className="mt-1 block text-xs text-[#667269]">{run.robotName} · {run.stops.length} stops</span>
+                    </button>
+                  </li>
+                ))}
+                {runs.length === 0 && <li className="px-4 py-5 text-sm text-[#667269]">No runs have been dispatched.</li>}
+              </ul>
+            </section>
+
+            <div>
+              <section aria-label="Selected route map" className="h-[55vh] min-h-[350px] overflow-hidden rounded-2xl border border-[#e8e7dc] bg-white">
+                <Map
+                  key={selectedRun?.runId ?? "fleet-map"}
+                  initialViewState={mapBounds
+                    ? { bounds: mapBounds, fitBoundsOptions: { padding: 48, maxZoom: 14 } }
+                    : { longitude: -121.8863, latitude: 37.3382, zoom: 10 }}
+                  mapStyle="https://tiles.openfreemap.org/styles/liberty"
+                  style={{ width: "100%", height: "100%" }}
+                >
+                  <NavigationControl position="top-right" />
+                  {route && <Source id="manager-delivery-route" type="geojson" data={route}>
+                    <Layer id="manager-delivery-route-line" type="line" paint={{ "line-color": "#416449", "line-width": 5, "line-opacity": 0.8 }} />
+                  </Source>}
+                  {selectedRun?.stops.map((stop) => stop.latitude != null && stop.longitude != null && (
+                    <Marker key={`${stop.orderId}-${stop.stopNumber}`} latitude={stop.latitude} longitude={stop.longitude} anchor="center">
+                      <span title={`Stop ${stop.stopNumber}: order ${shortOrderId(stop.orderId)}`} className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-[#d68b37] text-xs font-extrabold text-white shadow">{stop.stopNumber}</span>
+                    </Marker>
+                  ))}
+                  {selectedRobot?.currentLatitude != null && selectedRobot.currentLongitude != null && (
+                    <Marker latitude={selectedRobot.currentLatitude} longitude={selectedRobot.currentLongitude} anchor="center">
+                      <span title={`${selectedRobot.robotName} current position`} className="flex h-9 w-9 items-center justify-center rounded-full border-[3px] border-white bg-[#416449] text-lg shadow-lg">🤖</span>
+                    </Marker>
+                  )}
+                </Map>
+              </section>
+
+              {selectedRun ? (
+                <section aria-label="Run details" className="mt-4 overflow-hidden rounded-2xl border border-[#e8e7dc] bg-white">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#ecebe2] px-4 py-4">
+                    <div>
+                      <h3 className="font-extrabold text-[#294332]">{selectedRun.robotName} · run {shortOrderId(selectedRun.runId)}</h3>
+                      <p className="mt-1 text-xs capitalize text-[#667269]">
+                        {selectedRun.status} · {selectedRun.routeSource === "approximate" ? "approximate route" : selectedRun.routeSource ?? "route unavailable"}
+                        {selectedRun.routeDistanceMeters != null && ` · ${(selectedRun.routeDistanceMeters / 1000).toFixed(1)} km`}
+                      </p>
+                    </div>
+                    {["assigned", "active"].includes(selectedRun.status) && (
+                      <button type="button" disabled={busy} onClick={() => void stopRun()} className="rounded-full border border-red-200 px-4 py-2 text-sm font-bold text-red-800 hover:bg-red-50 disabled:opacity-50">
+                        {busy ? "Stopping…" : "Stop run"}
+                      </button>
+                    )}
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[34rem] text-left text-sm">
+                      <thead className="bg-[#f6f7f1] text-xs uppercase tracking-wide text-[#667269]">
+                        <tr><th className="px-4 py-3">Stop</th><th className="px-4 py-3">Order / destination</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">ETA</th></tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#ecebe2]">
+                        {selectedRun.stops.map((stop) => (
+                          <tr key={`${stop.orderId}-${stop.stopNumber}`}>
+                            <td className="px-4 py-3">{stop.stopNumber}</td>
+                            <td className="px-4 py-3">
+                              <span className="block font-mono text-xs font-bold">{shortOrderId(stop.orderId)}</span>
+                              <span className="block text-xs text-[#294332]">{stop.street}, {stop.city}, {stop.state} {stop.zipCode}</span>
+                              <span className="text-xs text-[#7d887b]">{stop.latitude != null && stop.longitude != null ? `${stop.latitude.toFixed(5)}, ${stop.longitude.toFixed(5)}` : "Address coordinates unavailable"}</span>
+                            </td>
+                            <td className="px-4 py-3 capitalize text-[#667269]">{stop.status.replaceAll("_", " ")}</td>
+                            <td className="px-4 py-3 text-[#667269]">{stop.eta ? new Date(stop.eta).toLocaleString() : "Not scheduled"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              ) : (
+                <p className="mt-4 rounded-2xl border border-[#e8e7dc] bg-white p-5 text-sm text-[#667269]">Select a run to see its route and delivery destinations.</p>
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

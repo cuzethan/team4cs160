@@ -19,6 +19,53 @@ If a port is already in use, replace the `up` command with:
 DB_PORT=5433 API_PORT=3002 docker compose up --build
 ```
 
+## Valhalla routing
+
+The backend uses Valhalla for road-network route optimization. Append these values to the `.env` file in the repository root (keep any Stripe values already there):
+
+```env
+VALHALLA_TILE_URL=https://download.geofabrik.de/north-america/us/california/norcal-latest.osm.pbf
+VALHALLA_URL=http://valhalla:8002
+```
+
+The tile URL supplies the OpenStreetMap region Valhalla builds its routing graph from. The first start downloads the extract and builds graph tiles; this can take a while and needs disk space. The configured Northern California extract covers the app's San Jose demo robot. See the [Geofabrik Northern California downloads](https://download.geofabrik.de/north-america/us/california/norcal.html).
+
+1. Add the two values above to the root `.env` file.
+2. Start the stack from the repository root:
+
+   ```bash
+   docker compose up -d
+   ```
+
+   To rebuild the application images as well, use `docker compose up -d --build`.
+
+3. Watch Valhalla startup and wait for its graph setup and service startup to finish before dispatching deliveries:
+
+   ```bash
+   docker compose logs -f valhalla
+   ```
+
+   Press Ctrl+C to stop following the logs; the container keeps running. If Valhalla is unavailable or its graph has not finished building, delivery routing falls back to an approximate straight-line route.
+
+## Robot base location and reset
+
+The robot depot defaults to the current San Jose demo location. To use a different base, add these optional values to the root `.env` file (coordinates are decimal degrees):
+
+```env
+ROBOT_BASE_LATITUDE=37.3382
+ROBOT_BASE_LONGITUDE=-121.8863
+```
+
+The base is used when the first demo robot is created and to bias address geocoding. Existing robot positions are not moved automatically when these values change. To stop active runs, return every robot to the configured base, and make undelivered orders available for dispatch again, stop the backend and run:
+
+```bash
+docker compose stop backend
+docker compose run --rm backend npm run reset-robots
+docker compose start backend
+```
+
+The reset command preserves completed deliveries. Stop the backend first so its simulator does not update robot positions while the reset is running.
+
 ## Start
 
 Docker Desktop needs to be running.

@@ -2,11 +2,12 @@ import express from "express";
 import { handle } from "./auth.js";
 import { createCustomerGuard } from "./cart.js";
 import { PaymentsNotConfiguredError, type PaymentIntentCreator } from "./payments.js";
-import { CheckoutError, type AuthStore, type OrderStore } from "./store.js";
+import { CheckoutError, type AuthStore, type DeliveryStore, type OrderStore } from "./store.js";
 
 export type OrderOptions = {
   store: AuthStore;
   orderStore: OrderStore;
+  deliveryStore?: DeliveryStore;
   payments: PaymentIntentCreator;
 };
 
@@ -16,7 +17,7 @@ function text(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-export function createOrderRouter({ store, orderStore, payments }: OrderOptions) {
+export function createOrderRouter({ store, orderStore, deliveryStore, payments }: OrderOptions) {
   const router = express.Router();
   const requireCustomer = createCustomerGuard(store, "Please log in to see your orders and check out.");
 
@@ -99,6 +100,25 @@ export function createOrderRouter({ store, orderStore, payments }: OrderOptions)
   router.get("/mine", handle(async (req, res) => {
     const user = await requireCustomer(req, res);
     if (user) res.json({ orders: await orderStore.listOrders(user.userId) });
+  }));
+
+  router.get("/:orderId/tracking", handle(async (req, res) => {
+    const user = await requireCustomer(req, res);
+    if (!user) return;
+    if (!deliveryStore?.getCustomerTracking) return res.status(501).json({ error: "Delivery tracking is not available." });
+    const tracking = await deliveryStore.getCustomerTracking(user.userId, req.params.orderId);
+    if (!tracking) return res.status(404).json({ error: "Order not found." });
+    res.json({ tracking });
+  }));
+
+  router.post("/:orderId/received", handle(async (req, res) => {
+    const user = await requireCustomer(req, res);
+    if (!user) return;
+    if (!deliveryStore?.confirmOrderReceived) return res.status(501).json({ error: "Order confirmation is not available." });
+    const result = await deliveryStore.confirmOrderReceived(user.userId, req.params.orderId);
+    if (result === "not-found") return res.status(404).json({ error: "Order not found." });
+    if (result === "not-delivered") return res.status(409).json({ error: "This order has not been delivered yet." });
+    res.json({ orderId: req.params.orderId, orderStatus: "completed" });
   }));
 
   return router;
