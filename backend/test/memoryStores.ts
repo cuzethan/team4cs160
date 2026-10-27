@@ -6,7 +6,10 @@ import {
   type CartProduct,
   type CartStore,
   type CustomerRecord,
+  type DeliveryStore,
   type ManagedProduct,
+  type ManagerDelivery,
+  type RefundResult,
   CheckoutError,
   quoteFromLines,
   type OrderRecord,
@@ -301,4 +304,64 @@ export function createMemoryProductStore({ products }: ReturnType<typeof createM
   };
 
   return { productStore, transactions, priceHistory };
+}
+
+export type MemoryRefundableOrder = {
+  orderId: string;
+  customerName: string;
+  paymentStatus: "paid" | "refunded";
+  orderStatus: "placed" | "out_for_delivery" | "completed" | "cancelled";
+  /** Non-cancelled delivery means the order is on a robot run. */
+  activeDelivery: boolean;
+  items: { productId: string; quantity: number }[];
+};
+
+/** In-memory deliveries + refund/restock so API tests can assert stock returns. */
+export function createMemoryDeliveryStore(
+  products: Map<string, CartProduct>,
+  seedOrders: MemoryRefundableOrder[] = [],
+) {
+  const orders = new Map(seedOrders.map((order) => [order.orderId, { ...order, items: order.items.map((item) => ({ ...item })) }]));
+  const transactions: { userId: string; productId: string; quantityChanged: number; quantityAfterChange: number; reason: string }[] = [];
+
+  const deliveryStore: DeliveryStore = {
+    async listDeliveries(): Promise<ManagerDelivery[]> {
+      return [...orders.values()]
+        .filter((order) => order.paymentStatus === "paid")
+        .map((order) => ({
+          orderId: order.orderId,
+          customerName: order.customerName,
+          deliveryProgress: order.activeDelivery ? "en_route" : "Awaiting dispatch",
+          eta: null,
+        }));
+    },
+
+    async refundOrder(managerUserId, orderId): Promise<RefundResult> {
+      const order = orders.get(orderId);
+      if (!order) return "not-found";
+      if (order.paymentStatus === "refunded" || order.orderStatus === "cancelled") return "already-refunded";
+      if (order.paymentStatus !== "paid") return "not-found";
+      if (order.orderStatus === "completed") return "already-completed";
+      if (order.activeDelivery) return "already-dispatched";
+
+      for (const item of order.items) {
+        const product = products.get(item.productId);
+        if (!product) throw new Error(`Missing product ${item.productId}`);
+        product.quantityInStock += item.quantity;
+        transactions.push({
+          userId: managerUserId,
+          productId: item.productId,
+          quantityChanged: item.quantity,
+          quantityAfterChange: product.quantityInStock,
+          reason: `Refund order ${orderId}`,
+        });
+      }
+
+      order.paymentStatus = "refunded";
+      order.orderStatus = "cancelled";
+      return "refunded";
+    },
+  };
+
+  return { deliveryStore, orders, transactions };
 }

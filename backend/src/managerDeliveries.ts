@@ -54,5 +54,27 @@ export function createManagerDeliveriesRouter({ store, deliveryStore }: ManagerD
     res.json(result);
   }));
 
+  router.post("/:orderId/refund", handle(async (req, res) => {
+    const user = await findCurrentUser(store, req);
+    if (!user) return res.status(401).json({ error: "Not logged in." });
+    if (user.role !== "admin") return res.status(403).json({ error: "Manager access is required." });
+    if (!deliveryStore.refundOrder) return res.status(501).json({ error: "Order refunds are not available." });
+
+    const result = await deliveryStore.refundOrder(user.userId, req.params.orderId);
+    if (result === "not-found") return res.status(404).json({ error: "Order not found." });
+    if (result === "already-refunded") {
+      return res.status(409).json({ error: "This order was already refunded." });
+    }
+    if (result === "already-completed") {
+      return res.status(409).json({ error: "Completed orders cannot be refunded." });
+    }
+    if (result === "already-dispatched") {
+      return res.status(409).json({
+        error: "This order is on a robot run. Cancel the delivery run first, then refund.",
+      });
+    }
+    res.json({ orderId: req.params.orderId, paymentStatus: "refunded", orderStatus: "cancelled" });
+  }));
+
   return router;
 }

@@ -146,6 +146,13 @@ export async function fetchDeliveries(): Promise<ManagerDelivery[]> {
   if (!response.ok) throw new Error(data?.error ?? "Unable to load deliveries.");
   return data.deliveries as ManagerDelivery[];
 }
+
+export async function refundDeliveryOrder(orderId: string) {
+  return deliveryRequest<{ orderId: string; paymentStatus: string; orderStatus: string }>(
+    `/${encodeURIComponent(orderId)}/refund`,
+    { method: "POST" },
+  );
+}
 export async function fetchSales(range: SalesRange) {
   let response: Response;
   try {

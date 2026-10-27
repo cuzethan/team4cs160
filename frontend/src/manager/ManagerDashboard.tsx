@@ -11,7 +11,7 @@ import {
 import { SiteHeader } from "../components/SiteHeader";
 import { emojiFor } from "../inventory/api";
 import type { InventoryProduct } from "../inventory/types";
-import { cancelDeliveryRun, dispatchDeliveries, fetchDeliveries, fetchDeliveryRobots, fetchDeliveryRuns, fetchDeliverySettings, fetchManagedInventory, fetchSales, fetchSalesAnalytics, saveDeliverySettings, updateProduct, type DeliveryRobot, type DeliveryRun, type DeliverySettings, type ManagedProduct, type ManagerDelivery, type ProductCategory, type SalesAnalytics, type SalesBucket, type SalesRange } from "./api";
+import { cancelDeliveryRun, dispatchDeliveries, fetchDeliveries, fetchDeliveryRobots, fetchDeliveryRuns, fetchDeliverySettings, fetchManagedInventory, fetchSales, fetchSalesAnalytics, refundDeliveryOrder, saveDeliverySettings, updateProduct, type DeliveryRobot, type DeliveryRun, type DeliverySettings, type ManagedProduct, type ManagerDelivery, type ProductCategory, type SalesAnalytics, type SalesBucket, type SalesRange } from "./api";
 import { ProductFormDialog, ProductTable } from "./ProductManager";
 
 import Map, { Layer, Marker, NavigationControl, Source } from "react-map-gl/maplibre";
@@ -714,10 +714,15 @@ function CustomerDetailPanel({
   );
 }
 
+function canRefundDelivery(progress: string) {
+  return progress.toLowerCase() === "awaiting dispatch";
+}
+
 function DeliveriesPanel() {
   const [deliveries, setDeliveries] = useState<ManagerDelivery[]>([]);
   const [loading, setLoading] = useState(true);
   const [dispatching, setDispatching] = useState(false);
+  const [refundingOrderId, setRefundingOrderId] = useState<string | null>(null);
   const [dispatchSummary, setDispatchSummary] = useState("");
   const [error, setError] = useState("");
 
@@ -760,17 +765,35 @@ function DeliveriesPanel() {
     }
   };
 
+  const refundOrder = async (orderId: string) => {
+    if (!window.confirm("Refund this order and return its items to stock? This only works before the order is dispatched to a robot.")) {
+      return;
+    }
+    setRefundingOrderId(orderId);
+    setError("");
+    setDispatchSummary("");
+    try {
+      await refundDeliveryOrder(orderId);
+      setDispatchSummary(`Order ${shortOrderId(orderId)} was refunded and restocked.`);
+      setDeliveries(await fetchDeliveries());
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Unable to refund this order.");
+    } finally {
+      setRefundingOrderId(null);
+    }
+  };
+
   return (
     <div>
       <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h2 className="text-2xl font-extrabold text-[#294332]">Delivery</h2>
-          <p className="mt-1 text-sm text-[#667269]">Orders and delivery progress.</p>
+          <p className="mt-1 text-sm text-[#667269]">Orders and delivery progress. Refund only before dispatch.</p>
         </div>
         <button
           type="button"
           onClick={() => void runDispatch()}
-          disabled={loading || dispatching}
+          disabled={loading || dispatching || refundingOrderId !== null}
           className="rounded-full bg-[#416449] px-5 py-2.5 text-sm font-bold text-white transition hover:bg-[#35563c] disabled:cursor-wait disabled:opacity-60"
         >
           {dispatching ? "Dispatching…" : "Dispatch paid orders"}
@@ -791,6 +814,7 @@ function DeliveriesPanel() {
                 <th scope="col" className="px-5 py-3 font-bold">Customer</th>
                 <th scope="col" className="px-5 py-3 font-bold">Delivery progress</th>
                 <th scope="col" className="px-5 py-3 font-bold">ETA</th>
+                <th scope="col" className="px-5 py-3 font-bold">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#ecebe2]">
@@ -804,11 +828,25 @@ function DeliveriesPanel() {
                   <td className="px-5 py-4 text-sm text-[#667269]">
                     {delivery.eta ? new Date(delivery.eta).toLocaleString() : "Not scheduled"}
                   </td>
+                  <td className="px-5 py-4">
+                    {canRefundDelivery(delivery.deliveryProgress) ? (
+                      <button
+                        type="button"
+                        onClick={() => void refundOrder(delivery.orderId)}
+                        disabled={dispatching || refundingOrderId !== null}
+                        className="rounded-full border border-[#d7d9c8] px-3 py-1.5 text-sm font-semibold text-[#416449] transition hover:bg-[#f6f7f1] disabled:cursor-wait disabled:opacity-60"
+                      >
+                        {refundingOrderId === delivery.orderId ? "Refunding…" : "Refund"}
+                      </button>
+                    ) : (
+                      <span className="text-sm text-[#899188]">Cancel run to refund</span>
+                    )}
+                  </td>
                 </tr>
               ))}
               {deliveries.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-5 py-8 text-center text-sm text-[#667269]">
+                  <td colSpan={5} className="px-5 py-8 text-center text-sm text-[#667269]">
                     No orders to deliver yet.
                   </td>
                 </tr>

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createProduct, fetchDeliveries, fetchManagedInventory, fetchSales, fetchSalesAnalytics, updateProduct } from "../src/manager/api";
+import { createProduct, fetchDeliveries, fetchManagedInventory, fetchSales, fetchSalesAnalytics, refundDeliveryOrder, updateProduct } from "../src/manager/api";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -39,6 +39,23 @@ describe("manager sales API client", () => {
         new Response(JSON.stringify({ error: "Manager access is required." }), { status: 403 }),
       ));
       await expect(fetchDeliveries()).rejects.toThrow("Manager access is required.");
+    });
+
+    it("posts a refund for an undispatched order", async () => {
+      const body = { orderId: "order-1", paymentStatus: "refunded", orderStatus: "cancelled" };
+      const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status: 200 }));
+      vi.stubGlobal("fetch", fetchMock);
+
+      await expect(refundDeliveryOrder("order-1")).resolves.toEqual(body);
+      expect(fetchMock.mock.calls[0][0]).toBe("/api/manager/deliveries/order-1/refund");
+      expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: "POST", credentials: "same-origin" });
+    });
+
+    it("surfaces a robot-run conflict on refund", async () => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: "This order is on a robot run. Cancel the delivery run first, then refund." }), { status: 409 }),
+      ));
+      await expect(refundDeliveryOrder("order-2")).rejects.toThrow(/cancel the delivery run first/i);
     });
   });
 

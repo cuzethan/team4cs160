@@ -443,6 +443,12 @@ export type DeliveryNotification = {
 
 export type ReceiptResult = "completed" | "not-found" | "not-delivered";
 export type CancelRunResult = "cancelled" | "not-found" | "not-active";
+export type RefundResult =
+  | "refunded"
+  | "not-found"
+  | "already-refunded"
+  | "already-dispatched"
+  | "already-completed";
 
 export type NewDeliveryRun = {
   robotId: string;
@@ -509,6 +515,8 @@ export interface DeliveryStore {
   listRobots?(): Promise<DeliveryRobot[]>;
   listRuns?(): Promise<DeliveryRun[]>;
   cancelDeliveryRun?(runId: string): Promise<CancelRunResult>;
+  /** Refund a paid order that is not on an active robot run, and restock its items. */
+  refundOrder?(managerUserId: string, orderId: string): Promise<RefundResult>;
   getCustomerTracking?(userId: string, orderId: string): Promise<DeliveryTracking | null>;
   confirmOrderReceived?(userId: string, orderId: string): Promise<ReceiptResult>;
   listNotifications?(userId: string): Promise<DeliveryNotification[]>;
@@ -954,6 +962,98 @@ export function createPgDeliveryStore(pool: pg.Pool): DeliveryStore {
         await client.query(`UPDATE Robot SET robot_status = 'available', last_updated = now() WHERE robot_id = $1`, [run.robotId]);
         await client.query("COMMIT");
         return "cancelled";
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+
+    async refundOrder(managerUserId, orderId) {
+      if (!UUID_PATTERN.test(orderId) || !UUID_PATTERN.test(managerUserId)) return "not-found";
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const { rows: orders } = await client.query<{ paymentStatus: string; orderStatus: string }>(
+          `SELECT payment_status AS "paymentStatus", order_status AS "orderStatus"
+           FROM Orders WHERE order_id = $1 FOR UPDATE`,
+          [orderId],
+        );
+        const order = orders[0];
+        if (!order) {
+          await client.query("ROLLBACK");
+          return "not-found";
+        }
+        if (order.paymentStatus === "refunded" || order.orderStatus === "cancelled") {
+          await client.query("ROLLBACK");
+          return "already-refunded";
+        }
+        if (order.paymentStatus !== "paid") {
+          await client.query("ROLLBACK");
+          return "not-found";
+        }
+        if (order.orderStatus === "completed") {
+          await client.query("ROLLBACK");
+          return "already-completed";
+        }
+
+        // Active (non-cancelled) delivery means a robot run owns this order — cancel the run first.
+        const { rows: activeDeliveries } = await client.query<{ deliveryId: string }>(
+          `SELECT delivery_id AS "deliveryId" FROM Delivery
+           WHERE order_id = $1 AND delivery_status <> 'cancelled'
+           LIMIT 1
+           FOR UPDATE`,
+          [orderId],
+        );
+        if (activeDeliveries[0]) {
+          await client.query("ROLLBACK");
+          return "already-dispatched";
+        }
+
+        const { rows: items } = await client.query<{ productId: string; quantity: number }>(
+          `SELECT product_id AS "productId", quantity FROM OrderItem WHERE order_id = $1 FOR UPDATE`,
+          [orderId],
+        );
+
+        for (const item of items) {
+          const { rows: stockRows } = await client.query<{ quantityInStock: number }>(
+            `UPDATE Product
+             SET quantity_in_stock = quantity_in_stock + $2, updated_at = now()
+             WHERE product_id = $1
+             RETURNING quantity_in_stock AS "quantityInStock"`,
+            [item.productId, item.quantity],
+          );
+          const stock = stockRows[0];
+          if (!stock) {
+            throw new Error(`Missing product ${item.productId} while refunding order ${orderId}`);
+          }
+          await client.query(
+            `INSERT INTO Transactions (user_id, product_id, transaction_type, quantity_changed, quantity_after_change, reason)
+             VALUES ($1, $2, 'refund', $3, $4, $5)`,
+            [managerUserId, item.productId, item.quantity, stock.quantityInStock, `Refund order ${orderId}`],
+          );
+        }
+
+        await client.query(
+          `UPDATE Orders
+           SET payment_status = 'refunded', order_status = 'cancelled', updated_at = now()
+           WHERE order_id = $1`,
+          [orderId],
+        );
+        await client.query(
+          `UPDATE Payment SET payment_status = 'refunded', processed_at = now()
+           WHERE order_id = $1 AND payment_status = 'paid'`,
+          [orderId],
+        );
+        await client.query(
+          `INSERT INTO AuditLog (user_id, affected_table, affected_record_id, description)
+           VALUES ($1, 'Orders', $2, $3)`,
+          [managerUserId, orderId, `Refunded order and restocked ${items.length} line item(s)`],
+        );
+
+        await client.query("COMMIT");
+        return "refunded";
       } catch (error) {
         await client.query("ROLLBACK");
         throw error;
