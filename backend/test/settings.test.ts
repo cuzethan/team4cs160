@@ -16,7 +16,9 @@ describe("global delivery settings", () => {
     const app = createApp({
       store: memory.store, settingsStore: settings.settingsStore, cartStore: cart.cartStore,
       orderStore: createMemoryOrderStore(cart, settings.settingsStore).orderStore,
-      productStore: createMemoryProductStore(cart).productStore, salesStore: { listSales: async () => [] },
+      productStore: createMemoryProductStore(cart).productStore, salesStore: {
+        listSales: async () => [], listSalesAnalytics: async () => ({ profitBuckets: [], items: [], categories: [] }),
+      },
       deliveryStore: { listDeliveries: async () => [] },
       payments: {
         async create({ amountCents }) { paidAmount = amountCents; return { clientSecret: "secret" }; },

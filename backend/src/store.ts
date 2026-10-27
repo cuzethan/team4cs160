@@ -80,6 +80,26 @@ export async function ensureDeliveryTrackingSchema(pool: pg.Pool) {
   `, [base.latitude, base.longitude]);
 }
 
+export async function ensureProductCostSchema(pool: pg.Pool) {
+  await pool.query(`
+    ALTER TABLE Product
+      ADD COLUMN IF NOT EXISTS unit_cost DECIMAL(10, 2);
+    ALTER TABLE OrderItem
+      ADD COLUMN IF NOT EXISTS cost_at_purchase DECIMAL(10, 2);
+    DO $$
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'product_unit_cost_nonnegative') THEN
+        ALTER TABLE Product ADD CONSTRAINT product_unit_cost_nonnegative
+          CHECK (unit_cost IS NULL OR unit_cost >= 0);
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'order_item_cost_at_purchase_nonnegative') THEN
+        ALTER TABLE OrderItem ADD CONSTRAINT order_item_cost_at_purchase_nonnegative
+          CHECK (cost_at_purchase IS NULL OR cost_at_purchase >= 0);
+      END IF;
+    END $$;
+  `);
+}
+
 export function createPgSettingsStore(pool: pg.Pool): SettingsStore {
   return {
     async get() {
@@ -299,6 +319,7 @@ export type CatalogProduct = {
 export type ManagedProduct = CatalogProduct & {
   categoryId: string | null;
   active: boolean;
+  unitCost: number | null;
 };
 
 export type ProductCategory = { id: string; name: string };
@@ -311,6 +332,7 @@ export type NewProduct = {
   unit: string;
   categoryId: string;
   quantityInStock: number;
+  unitCost: number;
 };
 
 export type ProductChanges = Partial<Omit<NewProduct, "quantityInStock">> & { active?: boolean };
@@ -460,7 +482,27 @@ const MAX_DELIVERY_RUN_WEIGHT_LBS = 200;
 
 export interface SalesStore {
   listSales(range: SalesRange): Promise<SalesBucket[]>;
+  listSalesAnalytics(range: SalesRange): Promise<SalesAnalytics>;
 }
+
+export type SalesAnalytics = {
+  profitBuckets: { bucketStart: Date; profit: number; unknownCostQuantity: number }[];
+  items: {
+    productId: string;
+    name: string;
+    category: string;
+    unit: string;
+    quantity: number;
+    revenue: number;
+    cost: number | null;
+    profit: number | null;
+    unknownCostQuantity: number;
+    currentStock: number;
+    unitCost: number | null;
+    currentPrice: number;
+  }[];
+  categories: { name: string; revenue: number }[];
+};
 
 export interface DeliveryStore {
   listDeliveries(): Promise<ManagerDelivery[]>;
@@ -487,7 +529,8 @@ const managedProductColumns = `
   p.product_id AS id, p.product_name AS name, COALESCE(c.category_name, 'Other') AS category,
   COALESCE(p.description, '') AS description, p.price::float8 AS price,
   p.weight::float8 AS "weightLbs", p.unit, p.quantity_in_stock AS "quantityInStock",
-  p.image_url AS "imageUrl", p.category_id AS "categoryId", p.active`;
+  p.image_url AS "imageUrl", p.category_id AS "categoryId", p.active,
+  p.unit_cost::float8 AS "unitCost"`;
 
 async function findManagedProduct(pool: pg.Pool, productId: string) {
   const { rows } = await pool.query<ManagedProduct>(
@@ -504,6 +547,11 @@ export function describeProductChanges(before: ManagedProduct, after: ManagedPro
   const changes: string[] = [];
   if (after.name !== before.name) changes.push(`renamed to ${after.name}`);
   if (after.price !== before.price) changes.push(`price $${before.price.toFixed(2)} → $${after.price.toFixed(2)}`);
+  if (after.unitCost !== before.unitCost) {
+    const oldCost = before.unitCost === null ? "not set" : `$${before.unitCost.toFixed(2)}`;
+    const newCost = after.unitCost === null ? "not set" : `$${after.unitCost.toFixed(2)}`;
+    changes.push(`unit cost ${oldCost} → ${newCost}`);
+  }
   if (after.weightLbs !== before.weightLbs) changes.push(`weight ${before.weightLbs} → ${after.weightLbs} lb`);
   if (after.unit !== before.unit) changes.push(`unit ${before.unit} → ${after.unit}`);
   if (after.categoryId !== before.categoryId) changes.push("category changed");
@@ -548,11 +596,11 @@ export function createPgProductStore(pool: pg.Pool): ProductStore {
       try {
         await client.query("BEGIN");
         const { rows: [{ productId }] } = await client.query<{ productId: string }>(
-          `INSERT INTO Product (product_name, description, price, weight, unit, category_id, quantity_in_stock)
-           VALUES ($1, NULLIF($2, ''), $3, $4, $5, $6, $7)
+          `INSERT INTO Product (product_name, description, price, weight, unit, category_id, quantity_in_stock, unit_cost)
+           VALUES ($1, NULLIF($2, ''), $3, $4, $5, $6, $7, $8)
            RETURNING product_id AS "productId"`,
           [product.name, product.description, product.price, product.weightLbs, product.unit,
-            product.categoryId, product.quantityInStock],
+            product.categoryId, product.quantityInStock, product.unitCost],
         );
         if (product.quantityInStock > 0) {
           await client.query(
@@ -597,9 +645,9 @@ export function createPgProductStore(pool: pg.Pool): ProductStore {
         await client.query(
           `UPDATE Product
            SET product_name = $2, description = NULLIF($3, ''), price = $4, weight = $5, unit = $6,
-               category_id = $7, active = $8, updated_at = now()
+               category_id = $7, active = $8, unit_cost = $9, updated_at = now()
            WHERE product_id = $1`,
-          [productId, next.name, next.description, next.price, next.weightLbs, next.unit, next.categoryId, next.active],
+          [productId, next.name, next.description, next.price, next.weightLbs, next.unit, next.categoryId, next.active, next.unitCost],
         );
         if (next.price !== current.price) {
           await client.query(
@@ -708,6 +756,80 @@ export function createPgSalesStore(pool: pg.Pool): SalesStore {
          ORDER BY b.bucket_start`,
       );
       return rows;
+    },
+    async listSalesAnalytics(range) {
+      const selectedRange = ranges[range];
+      const bucketQuery = `
+        WITH bounds AS (
+          SELECT ${selectedRange.start} AS start_at, ${selectedRange.end} AS end_at,
+                 ${selectedRange.step} AS bucket_step
+        ), buckets AS (
+          SELECT generate_series(start_at, end_at, bucket_step) AS bucket_start, bucket_step
+          FROM bounds
+        )
+        SELECT b.bucket_start AS "bucketStart",
+               COALESCE(SUM(CASE WHEN oi.cost_at_purchase IS NOT NULL
+                 THEN (oi.price_at_purchase - oi.cost_at_purchase) * oi.quantity ELSE 0 END), 0)::float8 AS profit,
+               COALESCE(SUM(CASE WHEN oi.cost_at_purchase IS NULL THEN oi.quantity ELSE 0 END), 0)::int AS "unknownCostQuantity"
+        FROM buckets b
+        LEFT JOIN Payment p
+          ON p.payment_status = 'paid'
+         AND p.processed_at >= b.bucket_start
+         AND p.processed_at < b.bucket_start + b.bucket_step
+        LEFT JOIN OrderItem oi ON oi.order_id = p.order_id
+        GROUP BY b.bucket_start
+        ORDER BY b.bucket_start`;
+      const itemsQuery = `
+        WITH bounds AS (
+          SELECT ${selectedRange.start} AS start_at, ${selectedRange.end} AS end_at,
+                 ${selectedRange.step} AS bucket_step
+        ), paid_orders AS (
+          SELECT DISTINCT p.order_id
+          FROM Payment p CROSS JOIN bounds b
+          WHERE p.payment_status = 'paid'
+            AND p.processed_at >= b.start_at
+            AND p.processed_at < b.end_at + b.bucket_step
+        ), item_sales AS (
+          SELECT oi.product_id,
+                 SUM(oi.quantity)::int AS quantity,
+                 SUM(oi.price_at_purchase * oi.quantity)::float8 AS revenue,
+                 SUM(CASE WHEN oi.cost_at_purchase IS NOT NULL
+                   THEN oi.cost_at_purchase * oi.quantity ELSE 0 END)::float8 AS known_cost,
+                 SUM(CASE WHEN oi.cost_at_purchase IS NULL THEN oi.quantity ELSE 0 END)::int AS unknown_cost_quantity
+          FROM paid_orders po
+          JOIN OrderItem oi ON oi.order_id = po.order_id
+          GROUP BY oi.product_id
+        )
+        SELECT p.product_id AS "productId", p.product_name AS name,
+               COALESCE(c.category_name, 'Other') AS category,
+               p.unit,
+               COALESCE(s.quantity, 0)::int AS quantity,
+               COALESCE(s.revenue, 0)::float8 AS revenue,
+               CASE WHEN s.product_id IS NULL OR s.unknown_cost_quantity > 0 THEN NULL
+                    ELSE s.known_cost END::float8 AS cost,
+               CASE WHEN s.product_id IS NULL OR s.unknown_cost_quantity > 0 THEN NULL
+                    ELSE s.revenue - s.known_cost END::float8 AS profit,
+               COALESCE(s.unknown_cost_quantity, 0)::int AS "unknownCostQuantity",
+               p.quantity_in_stock AS "currentStock",
+               p.unit_cost::float8 AS "unitCost",
+               p.price::float8 AS "currentPrice"
+        FROM Product p
+        LEFT JOIN Category c ON c.category_id = p.category_id
+        LEFT JOIN item_sales s ON s.product_id = p.product_id
+        ORDER BY revenue DESC, p.product_name`;
+      const [bucketResult, itemResult] = await Promise.all([
+        pool.query<SalesAnalytics["profitBuckets"][number]>(bucketQuery),
+        pool.query<SalesAnalytics["items"][number]>(itemsQuery),
+      ]);
+      const categoryTotals = new Map<string, number>();
+      for (const item of itemResult.rows) {
+        categoryTotals.set(item.category, (categoryTotals.get(item.category) ?? 0) + item.revenue);
+      }
+      return {
+        profitBuckets: bucketResult.rows,
+        items: itemResult.rows,
+        categories: [...categoryTotals].map(([name, revenue]) => ({ name, revenue })).sort((a, b) => b.revenue - a.revenue),
+      };
     },
   };
 }
@@ -1106,6 +1228,7 @@ export type CartProduct = {
   category: string;
   unit: string;
   price: number;
+  unitCost?: number | null;
   weightLbs: number;
   quantityInStock: number;
   active: boolean;
@@ -1233,6 +1356,7 @@ export type CheckoutQuote = {
 type PricedLine = {
   name: string;
   price: number;
+  unitCost: number | null;
   weight: number;
   stock: number;
   active: boolean;
@@ -1283,7 +1407,8 @@ async function loadOrderItems(client: pg.Pool | pg.PoolClient, orderIds: string[
   const { rows } = await client.query<OrderLine & { orderId: string }>(
     `SELECT oi.order_id AS "orderId", oi.order_item_id AS "orderItemId", oi.product_id AS "productId",
             p.product_name AS "productName", oi.quantity,
-            oi.price_at_purchase::float8 AS "priceAtPurchase", oi.weight_at_purchase::float8 AS "weightAtPurchase"
+            oi.price_at_purchase::float8 AS "priceAtPurchase",
+            oi.weight_at_purchase::float8 AS "weightAtPurchase"
      FROM OrderItem oi JOIN Product p ON p.product_id = oi.product_id
      WHERE oi.order_id = ANY($1)
      ORDER BY p.product_name`,
@@ -1305,6 +1430,7 @@ type CheckoutLine = PricedLine & { productId: string };
 
 const checkoutLineSql = `
   SELECT p.product_id AS "productId", p.product_name AS name, p.price::float8 AS price,
+         p.unit_cost::float8 AS "unitCost",
          p.weight::float8 AS weight, p.quantity_in_stock AS stock, p.active, ci.quantity
   FROM ShoppingCart sc
   JOIN CartItems ci ON ci.cart_id = sc.cart_id
@@ -1370,9 +1496,9 @@ export function createPgOrderStore(pool: pg.Pool, settingsStore: SettingsStore =
 
         for (const line of lines) {
           await client.query(
-            `INSERT INTO OrderItem (order_id, product_id, quantity, price_at_purchase, weight_at_purchase)
-             VALUES ($1, $2, $3, $4, $5)`,
-            [order.orderId, line.productId, line.quantity, line.price, line.weight],
+            `INSERT INTO OrderItem (order_id, product_id, quantity, price_at_purchase, cost_at_purchase, weight_at_purchase)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [order.orderId, line.productId, line.quantity, line.price, line.unitCost, line.weight],
           );
           await client.query(
             `UPDATE Product SET quantity_in_stock = quantity_in_stock - $2, updated_at = now()

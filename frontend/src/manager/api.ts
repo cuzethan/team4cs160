@@ -6,6 +6,37 @@ export type SalesBucket = {
   revenue: number;
 };
 
+export type SalesAnalytics = {
+  profitBuckets: { bucketStart: string; profit: number; unknownCostQuantity: number }[];
+  items: {
+    productId: string;
+    name: string;
+    category: string;
+    unit: string;
+    quantity: number;
+    revenue: number;
+    cost: number | null;
+    profit: number | null;
+    unknownCostQuantity: number;
+    currentStock: number;
+    unitCost: number | null;
+    currentPrice: number;
+  }[];
+  categories: { name: string; revenue: number }[];
+};
+
+export async function fetchSalesAnalytics(range: SalesRange): Promise<SalesAnalytics> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/manager/sales/analytics?range=${range}`, { credentials: "same-origin" });
+  } catch {
+    throw new Error("Can't reach the server. Please try again.");
+  }
+  const data = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(data?.error ?? "Unable to load sales analytics.");
+  return data.analytics as SalesAnalytics;
+}
+
 export type DeliverySettings = { deliveryFee: number; freeDeliveryWeightThreshold: number };
 
 async function settingsRequest(method: "GET" | "PUT", settings?: DeliverySettings): Promise<DeliverySettings> {
@@ -135,6 +166,7 @@ export type ManagedProduct = {
   categoryId: string | null;
   description: string;
   price: number;
+  unitCost: number | null;
   weightLbs: number;
   unit: string;
   quantityInStock: number;
@@ -148,6 +180,7 @@ export type ProductInput = {
   name: string;
   description: string;
   price: number;
+  unitCost: number;
   weightLbs: number;
   unit: string;
   categoryId: string;

@@ -11,7 +11,7 @@ import {
 import { SiteHeader } from "../components/SiteHeader";
 import { emojiFor } from "../inventory/api";
 import type { InventoryProduct } from "../inventory/types";
-import { cancelDeliveryRun, dispatchDeliveries, fetchDeliveries, fetchDeliveryRobots, fetchDeliveryRuns, fetchDeliverySettings, fetchManagedInventory, fetchSales, saveDeliverySettings, updateProduct, type DeliveryRobot, type DeliveryRun, type DeliverySettings, type ManagedProduct, type ManagerDelivery, type ProductCategory, type SalesBucket, type SalesRange } from "./api";
+import { cancelDeliveryRun, dispatchDeliveries, fetchDeliveries, fetchDeliveryRobots, fetchDeliveryRuns, fetchDeliverySettings, fetchManagedInventory, fetchSales, fetchSalesAnalytics, saveDeliverySettings, updateProduct, type DeliveryRobot, type DeliveryRun, type DeliverySettings, type ManagedProduct, type ManagerDelivery, type ProductCategory, type SalesAnalytics, type SalesBucket, type SalesRange } from "./api";
 import { ProductFormDialog, ProductTable } from "./ProductManager";
 
 import Map, { Layer, Marker, NavigationControl, Source } from "react-map-gl/maplibre";
@@ -278,6 +278,16 @@ function SummaryCard({
       </span>
       <span className="mt-1 block text-xs text-[#7d887b] sm:text-sm">{detail}</span>
     </button>
+  );
+}
+
+function SalesMetricCard({ label, value, detail }: { label: string; value: string | null; detail: string }) {
+  return (
+    <article className="rounded-2xl border border-[#e8e7dc] bg-white p-4 shadow-[0_3px_12px_rgba(42,65,48,0.04)] sm:p-5">
+      <h3 className="text-sm font-bold text-[#667269]">{label}</h3>
+      <p className="mt-2 text-2xl font-extrabold tabular-nums text-[#294332] sm:text-3xl">{value ?? "—"}</p>
+      <p className="mt-1 text-xs text-[#7d887b] sm:text-sm">{detail}</p>
+    </article>
   );
 }
 
@@ -819,19 +829,42 @@ function SalesOverview({
   onDateRangeChange: (dateRange: DateRange) => void;
 }) {
   const [sales, setSales] = useState<SalesBucket[]>([]);
+  const [analytics, setAnalytics] = useState<SalesAnalytics | null>(null);
+  const [customerCount, setCustomerCount] = useState<number | null>(null);
+  const [customersError, setCustomersError] = useState("");
   const [salesLoading, setSalesLoading] = useState(true);
   const [salesError, setSalesError] = useState("");
 
   useEffect(() => {
     let active = true;
-    setSalesLoading(true);
-    setSalesError("");
-    fetchSales(salesRangeFor[dateRange])
-      .then((buckets) => {
-        if (active) setSales(buckets);
+    fetchCustomers()
+      .then((customers) => {
+        if (active) setCustomerCount(customers.length);
       })
       .catch((requestError: unknown) => {
-        if (active) setSalesError(requestError instanceof Error ? requestError.message : "Unable to load sales data.");
+        if (active) setCustomersError(requestError instanceof Error ? requestError.message : "Unable to load customers.");
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    setSalesLoading(true);
+    setSalesError("");
+    Promise.all([
+      fetchSales(salesRangeFor[dateRange]),
+      fetchSalesAnalytics(salesRangeFor[dateRange]),
+    ])
+      .then(([buckets, details]) => {
+        if (active) {
+          setSales(buckets);
+          setAnalytics(details);
+        }
+      })
+      .catch((requestError: unknown) => {
+        if (active) setSalesError(requestError instanceof Error ? requestError.message : "Unable to load sales analytics.");
       })
       .finally(() => {
         if (active) setSalesLoading(false);
@@ -845,8 +878,8 @@ function SalesOverview({
     <>
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-extrabold text-[#294332]">Sales</h2>
-          <p className="mt-1 text-sm text-[#667269]">Paid orders and revenue over time.</p>
+          <h2 className="text-2xl font-extrabold text-[#294332]">Sales Report</h2>
+          <p className="mt-1 text-sm text-[#667269]">Revenue breakdown and item performance over time.</p>
         </div>
         <label className="flex items-center gap-2 text-sm font-semibold text-[#426149]">
           Date range
@@ -863,79 +896,261 @@ function SalesOverview({
         <p role="status" className="rounded-xl border border-[#e8e7dc] bg-white p-5 text-sm text-[#667269]">Loading sales data...</p>
       ) : salesError ? (
         <p role="alert" className="rounded-xl border border-red-200 bg-white p-5 text-sm text-red-700">{salesError}</p>
-      ) : (
-        <div className="grid gap-4 xl:grid-cols-2">
-          <SalesChart title="Paid orders" buckets={sales} range={salesRangeFor[dateRange]} metric="paidOrders" />
-          <SalesChart title="Payment revenue" buckets={sales} range={salesRangeFor[dateRange]} metric="revenue" />
+      ) : analytics && (
+        <div className="space-y-4">
+          <section aria-label="Sales summary" className="grid gap-3 sm:grid-cols-3 sm:gap-4">
+            <SalesMetricCard
+              label="Revenue"
+              value={`$${sales.reduce((total, bucket) => total + bucket.revenue, 0).toFixed(2)}`}
+              detail={dateRange}
+            />
+            <SalesMetricCard
+              label="Orders"
+              value={String(sales.reduce((total, bucket) => total + bucket.paidOrders, 0))}
+              detail={`Paid orders · ${dateRange.toLowerCase()}`}
+            />
+            <SalesMetricCard
+              label="Customers"
+              value={customerCount === null ? null : String(customerCount)}
+              detail="Registered accounts"
+            />
+          </section>
+          {customersError && (
+            <p role="alert" className="rounded-xl border border-red-200 bg-white p-4 text-sm text-red-700">
+              {customersError}
+            </p>
+          )}
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(20rem,1fr)]">
+            <SalesBarChart
+              title="Sales"
+              buckets={sales.map((bucket) => ({ bucketStart: bucket.bucketStart, value: bucket.revenue }))}
+              range={salesRangeFor[dateRange]}
+              formatValue={(value) => `$${value.toFixed(0)}`}
+            />
+            <div className="flex min-w-0 flex-col gap-4">
+              <SalesPieChart className="xl:flex-1" title="Revenue by Top 8 Items" values={topSlices(analytics.items.map((item) => ({ name: item.name, value: item.revenue })), 8)} />
+              <SalesPieChart className="xl:flex-1" title="Revenue by Top 3 Categories" values={topSlices(analytics.categories.map((category) => ({ name: category.name, value: category.revenue })), 3)} />
+            </div>
+          </div>
+          <SalesItemsTable items={analytics.items} />
         </div>
       )}
     </>
   );
 }
 
-function SalesChart({
+type PieSlice = { name: string; value: number };
+
+function topSlices(values: PieSlice[], limit: number): PieSlice[] {
+  const sorted = values.filter((item) => item.value > 0).sort((a, b) => b.value - a.value);
+  const shown = sorted.slice(0, limit);
+  const remainder = sorted.slice(limit).reduce((total, item) => total + item.value, 0);
+  if (remainder > 0) shown.push({ name: limit === 8 ? "Other items" : "Other categories", value: remainder });
+  return shown;
+}
+
+const chartColors = ["#438254", "#91a95b", "#d4a449", "#cf7658", "#6e8da7", "#9c7bb4", "#4f9b91", "#b67b91", "#a8ad9b"];
+
+function SalesPieChart({ title, values, className = "" }: { title: string; values: PieSlice[]; className?: string }) {
+  const total = values.reduce((sum, item) => sum + item.value, 0);
+  let angle = -90;
+  let labelAngle = -90;
+
+  return (
+    <section className={`flex min-w-0 flex-col rounded-2xl border border-[#e8e7dc] bg-white p-4 shadow-[0_3px_12px_rgba(42,65,48,0.04)] sm:p-5 ${className}`} aria-label={title}>
+      <h3 className="text-lg font-extrabold text-[#294332]">{title}</h3>
+      {total <= 0 ? (
+        <p className="py-12 text-center text-sm text-[#7d887b]">No item sales in this range.</p>
+      ) : (
+        <div className="mt-4 flex flex-col items-center gap-5 sm:flex-row">
+          <svg viewBox="0 0 200 200" role="img" aria-label={`${title}, total $${total.toFixed(2)}`} className="h-44 w-44 shrink-0">
+            {values.length === 1 ? (
+              <circle cx="100" cy="100" r="98" fill={chartColors[0]} />
+            ) : values.map((item, index) => {
+              const start = angle;
+              const sweep = (item.value / total) * 360;
+              angle += sweep;
+              const end = angle;
+              const startPoint = polarPoint(100, 100, 98, start);
+              const endPoint = polarPoint(100, 100, 98, end);
+              const largeArc = sweep > 180 ? 1 : 0;
+              return (
+                <path
+                  key={item.name}
+                  d={`M 100 100 L ${startPoint.x} ${startPoint.y} A 98 98 0 ${largeArc} 1 ${endPoint.x} ${endPoint.y} Z`}
+                  fill={chartColors[index % chartColors.length]}
+                  stroke="white"
+                  strokeWidth="1.5"
+                />
+              );
+            })}
+            {values.length === 1 ? (
+              <text x="100" y="104" textAnchor="middle" className="fill-white text-[13px] font-bold">
+                100%
+              </text>
+            ) : values.map((item) => {
+              const start = labelAngle;
+              const sweep = (item.value / total) * 360;
+              labelAngle += sweep;
+              const middle = start + sweep / 2;
+              const labelPoint = polarPoint(100, 100, 62, middle);
+              return (
+                <text
+                  key={`${item.name}-percentage`}
+                  x={labelPoint.x}
+                  y={labelPoint.y}
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  className="fill-white text-[10px] font-bold [paint-order:stroke] [stroke:#294332] [stroke-width:2px]"
+                >
+                  {((item.value / total) * 100).toFixed(1)}%
+                </text>
+              );
+            })}
+          </svg>
+          <ul className="grid w-full min-w-0 flex-1 gap-2 text-sm">
+            {values.map((item, index) => (
+              <li key={item.name} className="flex items-center justify-between gap-3">
+                <span className="flex min-w-0 items-center gap-2 text-[#536459]">
+                  <span aria-hidden="true" className="h-3 w-3 shrink-0 rounded-sm" style={{ backgroundColor: chartColors[index % chartColors.length] }} />
+                  <span className="truncate">{item.name}</span>
+                </span>
+                <span className="shrink-0 tabular-nums font-semibold text-[#294332]">
+                  ${item.value.toFixed(2)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function polarPoint(cx: number, cy: number, radius: number, angle: number) {
+  const radians = (angle * Math.PI) / 180;
+  return { x: cx + radius * Math.cos(radians), y: cy + radius * Math.sin(radians) };
+}
+
+function SalesBarChart({
   title,
   buckets,
   range,
-  metric,
+  formatValue,
 }: {
   title: string;
-  buckets: SalesBucket[];
+  buckets: { bucketStart: string; value: number }[];
   range: SalesRange;
-  metric: "paidOrders" | "revenue";
+  formatValue: (value: number) => string;
 }) {
-  const values = buckets.map((bucket) => bucket[metric]);
+  const values = buckets.map((bucket) => bucket.value);
   const maximum = Math.max(...values, 1);
-  const points = values.map((value, index) => ({
-    x: 54 + (index / Math.max(values.length - 1, 1)) * 556,
-    y: 174 - (value / maximum) * 142,
-  }));
-  const line = points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
+  const minimum = Math.min(...values, 0);
+  const span = maximum - minimum || 1;
+  const chartTop = 40;
+  const chartBottom = 366;
+  const baseline = chartTop + (maximum / span) * (chartBottom - chartTop);
   const labelInterval = Math.max(1, Math.ceil(buckets.length / 7));
-  const hasSales = values.some((value) => value > 0);
-  const formatValue = (value: number) => metric === "revenue"
-    ? `$${new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value)}`
-    : new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value);
+  const hasValues = values.some((value) => value !== 0);
+  const barWidth = Math.min(28, 420 / Math.max(values.length, 1));
 
   return (
     <section
       aria-label={`${title} chart`}
-      className="min-w-0 rounded-2xl border border-[#e8e7dc] bg-white p-4 shadow-[0_3px_12px_rgba(42,65,48,0.04)] sm:p-5"
+      className="flex h-full min-w-0 flex-col rounded-2xl border border-[#e8e7dc] bg-white p-4 shadow-[0_3px_12px_rgba(42,65,48,0.04)] sm:p-5"
     >
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-lg font-extrabold text-[#294332]">{title}</h2>
-        <span className="text-sm font-bold tabular-nums text-[#426149]">
-          {metric === "revenue" ? `$${values.reduce((sum, value) => sum + value, 0).toFixed(2)}` : values.reduce((sum, value) => sum + value, 0)}
-        </span>
+        <span className="text-sm font-bold tabular-nums text-[#426149]">{formatValue(values.reduce((sum, value) => sum + value, 0))}</span>
       </div>
       <svg
-        viewBox="0 0 640 220"
+        viewBox="0 0 640 430"
         role="img"
-        aria-label={`${title} graph for ${range}, showing ${buckets.length} time buckets`}
-        className="mt-3 w-full"
+        aria-label={`${title} bar chart for ${range}, showing ${buckets.length} time buckets`}
+        className="mt-3 min-h-[18rem] w-full flex-1"
       >
         {[0, 1, 2, 3].map((tick) => {
-          const y = 32 + tick * (142 / 3);
-          const value = maximum * (1 - tick / 3);
+          const y = chartTop + tick * ((chartBottom - chartTop) / 3);
+          const value = maximum - (tick / 3) * span;
           return (
             <g key={tick}>
-              <line x1="52" x2="612" y1={y} y2={y} stroke="#ecebe2" strokeDasharray="4 5" />
-              <text x="44" y={y + 4} textAnchor="end" fill="#7d887b" fontSize="11">{formatValue(value)}</text>
+              <line x1="56" x2="612" y1={y} y2={y} stroke="#ecebe2" strokeDasharray="4 5" />
+              <text x="50" y={y + 4} textAnchor="end" fill="#7d887b" fontSize="11">{formatValue(value)}</text>
             </g>
           );
         })}
-        {points.length > 0 && (
-          <path d={line} fill="none" stroke="#438254" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-        )}
-        {buckets.map((bucket, index) => index % labelInterval === 0 || index === buckets.length - 1 ? (
-          <text key={bucket.bucketStart} x={points[index].x} y="202" textAnchor="middle" fill="#7d887b" fontSize="11">
-            {formatBucketLabel(bucket.bucketStart, range)}
+        <line x1="56" x2="612" y1={baseline} y2={baseline} stroke="#9ba797" />
+        {buckets.map((bucket, index) => {
+          const centerX = 58 + ((index + 0.5) / Math.max(buckets.length, 1)) * 550;
+          const barHeight = Math.abs(bucket.value) * ((chartBottom - chartTop) / span);
+          return (
+            <g key={bucket.bucketStart}>
+              <rect
+                x={centerX - barWidth / 2}
+                y={bucket.value >= 0 ? baseline - barHeight : baseline}
+                width={barWidth}
+                height={barHeight}
+                rx="3"
+                fill="#438254"
+              >
+                <title>{`${formatBucketLabel(bucket.bucketStart, range)}: ${formatValue(bucket.value)}`}</title>
+              </rect>
+              {(index % labelInterval === 0 || index === buckets.length - 1) && (
+                <text x={centerX} y="408" textAnchor="middle" fill="#7d887b" fontSize="11">
+                  {formatBucketLabel(bucket.bucketStart, range)}
+                </text>
+              )}
+            </g>
+          );
+        })}
+        {!hasValues && (
+          <text x="332" y="210" textAnchor="middle" fill="#7d887b" fontSize="13">
+            No paid sales in this range
           </text>
-        ) : null)}
-        {!hasSales && (
-          <text x="332" y="112" textAnchor="middle" fill="#7d887b" fontSize="13">No paid sales in this range</text>
         )}
       </svg>
+    </section>
+  );
+}
+
+function SalesItemsTable({ items }: { items: SalesAnalytics["items"] }) {
+  const soldItems = items.filter((item) => item.quantity > 0);
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-[#e8e7dc] bg-white shadow-[0_3px_12px_rgba(42,65,48,0.04)]">
+      <div className="border-b border-[#ecebe2] px-5 py-4 sm:px-7">
+        <h3 className="text-lg font-extrabold text-[#294332]">Item sales and inventory</h3>
+        <p className="mt-1 text-sm text-[#667269]">Units sold, revenue, and stock for items sold in this date range.</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[52rem] text-left">
+          <thead className="bg-[#f6f7f1] text-xs uppercase tracking-wide text-[#667269]">
+            <tr>
+              <th scope="col" className="px-5 py-3 font-bold">Item</th>
+              <th scope="col" className="px-4 py-3 font-bold">Category</th>
+              <th scope="col" className="px-4 py-3 text-right font-bold">Quantity sold</th>
+              <th scope="col" className="px-4 py-3 text-right font-bold">Revenue</th>
+              <th scope="col" className="px-4 py-3 text-right font-bold">Current price</th>
+              <th scope="col" className="px-5 py-3 text-right font-bold">On hand</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#ecebe2]">
+            {soldItems.map((item) => (
+              <tr key={item.productId}>
+                <th scope="row" className="px-5 py-4 font-semibold text-[#253b2d]">{item.name}</th>
+                <td className="px-4 py-4 text-sm text-[#667269]">{item.category}</td>
+                <td className="px-4 py-4 text-right text-sm tabular-nums">{item.quantity}</td>
+                <td className="px-4 py-4 text-right text-sm tabular-nums">${item.revenue.toFixed(2)}</td>
+                <td className="px-4 py-4 text-right text-sm tabular-nums">${item.currentPrice.toFixed(2)} / {item.unit}</td>
+                <td className="px-5 py-4 text-right text-sm tabular-nums">{item.currentStock} {item.unit}</td>
+              </tr>
+            ))}
+            {soldItems.length === 0 && (
+              <tr><td colSpan={6} className="px-5 py-8 text-center text-sm text-[#667269]">No items sold in this date range.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }
@@ -1077,6 +1292,7 @@ function ManageInventoryPanel() {
           busyIds={busyIds}
           onEdit={setEditing}
           onToggleActive={(product) => void handleToggleActive(product)}
+          onSaved={handleSaved}
         />
       </section>
 

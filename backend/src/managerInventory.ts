@@ -40,6 +40,13 @@ export function parseProductFields(
     }
     changes.price = Math.round(price * 100) / 100;
   }
+  if (has("unitCost")) {
+    const unitCost = body.unitCost;
+    if (typeof unitCost !== "number" || !Number.isFinite(unitCost) || unitCost < 0 || unitCost > 99999.99) {
+      return { error: "Enter a unit cost from $0 to $99,999.99." };
+    }
+    changes.unitCost = Math.round(unitCost * 100) / 100;
+  }
   if (has("weightLbs")) {
     const weight = typeof body.weightLbs === "number" ? Math.round(body.weightLbs * 100) / 100 : NaN;
     if (!Number.isFinite(weight) || weight <= 0 || weight > 1000) {
@@ -109,6 +116,7 @@ export function createManagerInventoryRouter({ store, productStore }: ManagerInv
       name: changes.name!,
       description: changes.description ?? "",
       price: changes.price!,
+      unitCost: changes.unitCost!,
       weightLbs: changes.weightLbs!,
       unit: changes.unit!,
       categoryId: changes.categoryId!,
