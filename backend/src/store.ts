@@ -340,6 +340,17 @@ export type ProductChanges = Partial<Omit<NewProduct, "quantityInStock">> & { ac
 // Who changed stock and why; saved to the Transactions table.
 export type StockChange = { userId: string; reason: string };
 
+/** Unified manager history for inventory edits, price changes, and stock moves. */
+export type ManagerAuditEntry = {
+  id: string;
+  source: "audit" | "price" | "stock";
+  createdAt: Date;
+  actorName: string | null;
+  summary: string;
+  tableName: string | null;
+  recordId: string | null;
+};
+
 export interface ProductStore {
   // Active products only, ordered by category then name.
   listProducts(): Promise<CatalogProduct[]>;
@@ -359,6 +370,8 @@ export interface ProductStore {
     | { status: "insufficient-stock" }
     | { status: "maximum-stock" }
   >;
+  /** Recent inventory/price activity for the manager audit log viewer. */
+  listManagerAudit?(limit?: number): Promise<ManagerAuditEntry[]>;
 }
 
 export type SalesRange = "today" | "week" | "month" | "all";
@@ -714,6 +727,59 @@ export function createPgProductStore(pool: pg.Pool): ProductStore {
       return nextQuantity < 0
         ? { status: "insufficient-stock" }
         : { status: "maximum-stock" };
+    },
+
+    async listManagerAudit(limit = 100) {
+      const take = Number.isFinite(limit) ? Math.min(Math.max(Math.trunc(limit), 1), 500) : 100;
+      const [auditResult, priceResult, stockResult] = await Promise.all([
+        pool.query<ManagerAuditEntry>(
+          `SELECT a.audit_log_id::text AS id, 'audit' AS source, a.created_at AS "createdAt",
+                  NULLIF(trim(concat_ws(' ', u.first_name, u.last_name)), '') AS "actorName",
+                  a.description AS summary, a.affected_table AS "tableName",
+                  a.affected_record_id::text AS "recordId"
+           FROM AuditLog a
+           LEFT JOIN Users u ON u.user_id = a.user_id
+           ORDER BY a.created_at DESC
+           LIMIT $1`,
+          [take],
+        ),
+        pool.query<ManagerAuditEntry>(
+          `SELECT ('price-' || ph.price_history_id::text) AS id, 'price' AS source,
+                  ph.changed_at AS "createdAt",
+                  NULLIF(trim(concat_ws(' ', u.first_name, u.last_name)), '') AS "actorName",
+                  concat_ws('', COALESCE(p.product_name, 'Product'), ': price $',
+                    trim(to_char(ph.old_price, 'FM999999990.00')), ' → $',
+                    trim(to_char(ph.new_price, 'FM999999990.00'))) AS summary,
+                  'Product' AS "tableName", ph.product_id::text AS "recordId"
+           FROM PriceHistory ph
+           LEFT JOIN Product p ON p.product_id = ph.product_id
+           LEFT JOIN Users u ON u.user_id = ph.changed_by
+           ORDER BY ph.changed_at DESC
+           LIMIT $1`,
+          [take],
+        ),
+        pool.query<ManagerAuditEntry>(
+          `SELECT t.transaction_id::text AS id, 'stock' AS source, t.created_at AS "createdAt",
+                  NULLIF(trim(concat_ws(' ', u.first_name, u.last_name)), '') AS "actorName",
+                  concat_ws('', COALESCE(p.product_name, 'Product'), ': ', t.transaction_type, ' ',
+                    CASE WHEN t.quantity_changed > 0 THEN '+' ELSE '' END, t.quantity_changed::text,
+                    ' (now ', t.quantity_after_change::text, ')',
+                    CASE WHEN NULLIF(trim(t.reason), '') IS NULL THEN '' ELSE concat(' — ', trim(t.reason)) END
+                  ) AS summary,
+                  'Product' AS "tableName", t.product_id::text AS "recordId"
+           FROM Transactions t
+           LEFT JOIN Product p ON p.product_id = t.product_id
+           LEFT JOIN Users u ON u.user_id = t.user_id
+           WHERE t.transaction_type IN ('restock', 'removal', 'refund', 'sale')
+           ORDER BY t.created_at DESC
+           LIMIT $1`,
+          [take],
+        ),
+      ]);
+
+      return [...auditResult.rows, ...priceResult.rows, ...stockResult.rows]
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, take);
     },
   };
 }

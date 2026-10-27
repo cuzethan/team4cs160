@@ -98,6 +98,16 @@ export function createManagerInventoryRouter({ store, productStore }: ManagerInv
     res.json({ products, categories });
   }));
 
+  router.get("/audit", handle(async (req, res) => {
+    if (!(await requireManager(req, res))) return;
+    if (!productStore.listManagerAudit) {
+      return res.status(501).json({ error: "The audit log is not available." });
+    }
+    const rawLimit = typeof req.query.limit === "string" ? Number(req.query.limit) : 100;
+    const entries = await productStore.listManagerAudit(Number.isFinite(rawLimit) ? rawLimit : 100);
+    res.json({ entries });
+  }));
+
   router.post("/", handle(async (req, res) => {
     const user = await requireManager(req, res);
     if (!user) return;

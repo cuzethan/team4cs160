@@ -178,10 +178,31 @@ describe("manager product management API", () => {
     const res = await manager.patch(`/api/manager/inventory/${APPLES}`).send({ price: 1.79, weightLbs: 1.5, categoryId: "cat-Grains" });
     expect(res.status).toBe(200);
     expect(res.body.product).toMatchObject({ name: "Gala Apples", price: 1.79, weightLbs: 1.5, category: "Grains" });
-    expect(products.priceHistory).toEqual([{ productId: APPLES, changedBy: managerUser.userId, oldPrice: 1.49, newPrice: 1.79 }]);
+    expect(products.priceHistory).toEqual([
+      expect.objectContaining({ productId: APPLES, changedBy: managerUser.userId, oldPrice: 1.49, newPrice: 1.79 }),
+    ]);
 
     expect((await manager.patch(`/api/manager/inventory/${APPLES}`).send({ name: "Gala Apples" })).status).toBe(200);
     expect(products.priceHistory).toHaveLength(1);
+  });
+
+  it("lets managers read the audit log of inventory and price changes", async () => {
+    const { app, manager, customer } = await setup();
+    expect((await request(app).get("/api/manager/inventory/audit")).status).toBe(401);
+    expect((await customer.get("/api/manager/inventory/audit")).status).toBe(403);
+
+    await manager.patch(`/api/manager/inventory/${APPLES}`).send({ price: 1.99 });
+    await manager.patch(`/api/manager/inventory/${APPLES}/stock`).send({ adjustment: 4, reason: "Weekly delivery" });
+
+    const response = await manager.get("/api/manager/inventory/audit");
+    expect(response.status).toBe(200);
+    expect(response.body.entries.length).toBeGreaterThanOrEqual(2);
+    expect(response.body.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ source: "price", summary: expect.stringMatching(/Gala Apples: price \$1\.49 → \$1\.99/) }),
+        expect.objectContaining({ source: "stock", summary: expect.stringMatching(/Gala Apples: restock \+4/) }),
+      ]),
+    );
   });
 
   it("refuses empty or invalid edits and unknown products", async () => {
@@ -215,8 +236,8 @@ describe("manager product management API", () => {
     await manager.patch(`/api/manager/inventory/${APPLES}/stock`).send({ adjustment: 100, reason: " Weekly delivery " });
     await manager.patch(`/api/manager/inventory/${APPLES}/stock`).send({ adjustment: -3 });
     expect(products.transactions).toEqual([
-      { userId: managerUser.userId, productId: APPLES, quantityChanged: 100, quantityAfterChange: 110, reason: "Weekly delivery" },
-      { userId: managerUser.userId, productId: APPLES, quantityChanged: -3, quantityAfterChange: 107, reason: "Manual adjustment" },
+      expect.objectContaining({ userId: managerUser.userId, productId: APPLES, quantityChanged: 100, quantityAfterChange: 110, reason: "Weekly delivery", type: "restock" }),
+      expect.objectContaining({ userId: managerUser.userId, productId: APPLES, quantityChanged: -3, quantityAfterChange: 107, reason: "Manual adjustment", type: "removal" }),
     ]);
     expect((await manager.patch(`/api/manager/inventory/${APPLES}/stock`).send({ adjustment: 1, reason: "x".repeat(201) })).status).toBe(400);
   });

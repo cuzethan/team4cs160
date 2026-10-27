@@ -8,6 +8,7 @@ import {
   type CustomerRecord,
   type DeliveryStore,
   type ManagedProduct,
+  type ManagerAuditEntry,
   type ManagerDelivery,
   type RefundResult,
   CheckoutError,
@@ -227,8 +228,10 @@ export function createMemoryProductStore({ products }: ReturnType<typeof createM
   const categories = new Map<string, string>(
     [...products.values()].map((product) => [`cat-${product.category}`, product.category]),
   );
-  const transactions: { userId: string; productId: string; quantityChanged: number; quantityAfterChange: number; reason: string }[] = [];
-  const priceHistory: { productId: string; changedBy: string; oldPrice: number; newPrice: number }[] = [];
+  const transactions: { id: string; userId: string; productId: string; quantityChanged: number; quantityAfterChange: number; reason: string; type: string; createdAt: Date }[] = [];
+  const priceHistory: { id: string; productId: string; changedBy: string; oldPrice: number; newPrice: number; createdAt: Date }[] = [];
+  const auditLog: ManagerAuditEntry[] = [];
+  const actorName = (userId: string) => (userId ? "Manager" : null);
 
   const managed = (product: CartProduct): ManagedProduct => {
     const { productId, ...rest } = product;
@@ -275,15 +278,30 @@ export function createMemoryProductStore({ products }: ReturnType<typeof createM
       });
       descriptions.set(productId, input.description);
       if (input.quantityInStock > 0) {
-        transactions.push({ userId, productId, quantityChanged: input.quantityInStock, quantityAfterChange: input.quantityInStock, reason: "Initial stock" });
+        transactions.push({
+          id: randomUUID(), userId, productId, quantityChanged: input.quantityInStock,
+          quantityAfterChange: input.quantityInStock, reason: "Initial stock", type: "restock", createdAt: new Date(),
+        });
       }
+      auditLog.push({
+        id: randomUUID(), source: "audit", createdAt: new Date(), actorName: actorName(userId),
+        summary: `Added product ${input.name}`, tableName: "Product", recordId: productId,
+      });
       return managed(products.get(productId)!);
     },
     async updateProduct(userId, productId, changes) {
       const product = products.get(productId);
       if (!product) return null;
       if (changes.price !== undefined && changes.price !== product.price) {
-        priceHistory.push({ productId, changedBy: userId, oldPrice: product.price, newPrice: changes.price });
+        priceHistory.push({
+          id: randomUUID(), productId, changedBy: userId, oldPrice: product.price,
+          newPrice: changes.price, createdAt: new Date(),
+        });
+        auditLog.push({
+          id: randomUUID(), source: "audit", createdAt: new Date(), actorName: actorName(userId),
+          summary: `${product.name}: price $${product.price.toFixed(2)} → $${changes.price.toFixed(2)}`,
+          tableName: "Product", recordId: productId,
+        });
       }
       const { categoryId, description, ...rest } = changes;
       Object.assign(product, rest);
@@ -298,12 +316,47 @@ export function createMemoryProductStore({ products }: ReturnType<typeof createM
       if (nextQuantity < 0) return { status: "insufficient-stock" };
       if (nextQuantity > 2147483647) return { status: "maximum-stock" };
       product.quantityInStock = nextQuantity;
-      transactions.push({ userId: change.userId, productId, quantityChanged: adjustment, quantityAfterChange: nextQuantity, reason: change.reason });
+      transactions.push({
+        id: randomUUID(), userId: change.userId, productId, quantityChanged: adjustment,
+        quantityAfterChange: nextQuantity, reason: change.reason,
+        type: adjustment > 0 ? "restock" : "removal", createdAt: new Date(),
+      });
       return { status: "updated", quantityInStock: nextQuantity };
+    },
+    async listManagerAudit(limit = 100) {
+      const take = Math.min(Math.max(Math.trunc(limit), 1), 500);
+      const prices: ManagerAuditEntry[] = priceHistory.map((entry) => {
+        const product = products.get(entry.productId);
+        return {
+          id: `price-${entry.id}`,
+          source: "price" as const,
+          createdAt: entry.createdAt,
+          actorName: actorName(entry.changedBy),
+          summary: `${product?.name ?? "Product"}: price $${entry.oldPrice.toFixed(2)} → $${entry.newPrice.toFixed(2)}`,
+          tableName: "Product",
+          recordId: entry.productId,
+        };
+      });
+      const stocks: ManagerAuditEntry[] = transactions.map((entry) => {
+        const product = products.get(entry.productId);
+        const signed = entry.quantityChanged > 0 ? `+${entry.quantityChanged}` : `${entry.quantityChanged}`;
+        return {
+          id: entry.id,
+          source: "stock" as const,
+          createdAt: entry.createdAt,
+          actorName: actorName(entry.userId),
+          summary: `${product?.name ?? "Product"}: ${entry.type} ${signed} (now ${entry.quantityAfterChange}) — ${entry.reason}`,
+          tableName: "Product",
+          recordId: entry.productId,
+        };
+      });
+      return [...auditLog, ...prices, ...stocks]
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        .slice(0, take);
     },
   };
 
-  return { productStore, transactions, priceHistory };
+  return { productStore, transactions, priceHistory, auditLog };
 }
 
 export type MemoryRefundableOrder = {

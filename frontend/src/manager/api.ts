@@ -221,3 +221,21 @@ export async function createProduct(product: ProductInput & { quantityInStock: n
 export async function updateProduct(productId: string, changes: Partial<ProductInput> & { active?: boolean }) {
   return (await inventoryRequest<{ product: ManagedProduct }>("PATCH", `/${encodeURIComponent(productId)}`, changes)).product;
 }
+
+export type ManagerAuditEntry = {
+  id: string;
+  source: "audit" | "price" | "stock";
+  createdAt: string;
+  actorName: string | null;
+  summary: string;
+  tableName: string | null;
+  recordId: string | null;
+};
+
+export async function fetchManagerAudit(limit = 100): Promise<ManagerAuditEntry[]> {
+  const data = await inventoryRequest<{ entries: ManagerAuditEntry[] }>(
+    "GET",
+    `/audit?limit=${encodeURIComponent(String(limit))}`,
+  );
+  return data.entries;
+}

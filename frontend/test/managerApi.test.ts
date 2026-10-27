@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createProduct, fetchDeliveries, fetchManagedInventory, fetchSales, fetchSalesAnalytics, refundDeliveryOrder, updateProduct } from "../src/manager/api";
+import { createProduct, fetchDeliveries, fetchManagedInventory, fetchManagerAudit, fetchSales, fetchSalesAnalytics, refundDeliveryOrder, updateProduct } from "../src/manager/api";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -115,5 +115,23 @@ describe("manager product API client", () => {
   it("shows the server's error message", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "Choose a category." }), { status: 400 })));
     await expect(updateProduct("p-1", { categoryId: "nope" })).rejects.toThrow("Choose a category.");
+  });
+
+  it("loads the manager audit log", async () => {
+    const entries = [{
+      id: "a-1",
+      source: "price" as const,
+      createdAt: "2026-10-27T20:00:00.000Z",
+      actorName: "Max Boss",
+      summary: "Gala Apples: price $1.49 → $1.79",
+      tableName: "Product",
+      recordId: "p-1",
+    }];
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ entries }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(fetchManagerAudit(50)).resolves.toEqual(entries);
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/manager/inventory/audit?limit=50");
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: "GET", credentials: "same-origin" });
   });
 });

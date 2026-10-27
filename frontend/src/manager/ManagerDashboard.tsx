@@ -11,7 +11,7 @@ import {
 import { SiteHeader } from "../components/SiteHeader";
 import { emojiFor } from "../inventory/api";
 import type { InventoryProduct } from "../inventory/types";
-import { cancelDeliveryRun, dispatchDeliveries, fetchDeliveries, fetchDeliveryRobots, fetchDeliveryRuns, fetchDeliverySettings, fetchManagedInventory, fetchSales, fetchSalesAnalytics, refundDeliveryOrder, saveDeliverySettings, updateProduct, type DeliveryRobot, type DeliveryRun, type DeliverySettings, type ManagedProduct, type ManagerDelivery, type ProductCategory, type SalesAnalytics, type SalesBucket, type SalesRange } from "./api";
+import { cancelDeliveryRun, dispatchDeliveries, fetchDeliveries, fetchDeliveryRobots, fetchDeliveryRuns, fetchDeliverySettings, fetchManagedInventory, fetchManagerAudit, fetchSales, fetchSalesAnalytics, refundDeliveryOrder, saveDeliverySettings, updateProduct, type DeliveryRobot, type DeliveryRun, type DeliverySettings, type ManagedProduct, type ManagerAuditEntry, type ManagerDelivery, type ProductCategory, type SalesAnalytics, type SalesBucket, type SalesRange } from "./api";
 import { ProductFormDialog, ProductTable } from "./ProductManager";
 
 import Map, { Layer, Marker, NavigationControl, Source } from "react-map-gl/maplibre";
@@ -19,7 +19,7 @@ import Map, { Layer, Marker, NavigationControl, Source } from "react-map-gl/mapl
 
 
 
-const tabs = ["Overview", "Customers", "Inventory", "Delivery", "Robot", "Sales", "Settings"] as const;
+const tabs = ["Overview", "Customers", "Inventory", "Delivery", "Robot", "Sales", "Audit", "Settings"] as const;
 type DashboardTab = (typeof tabs)[number];
 
 // Sidebar sections. A null heading means the tab stands on its own.
@@ -27,7 +27,7 @@ const tabGroups: { heading: string | null; tabs: DashboardTab[] }[] = [
   { heading: null, tabs: ["Overview"] },
   { heading: "Store", tabs: ["Inventory", "Customers"] },
   { heading: "Orders", tabs: ["Delivery", "Robot"] },
-  { heading: "Reports", tabs: ["Sales"] },
+  { heading: "Reports", tabs: ["Sales", "Audit"] },
   { heading: null, tabs: ["Settings"] },
 ];
 
@@ -101,6 +101,8 @@ export function ManagerDashboard() {
             <OverviewPanel onOpenTab={setActiveTab} />
           ) : activeTab === "Sales" ? (
             <SalesOverview dateRange={dateRange} onDateRangeChange={setDateRange} />
+          ) : activeTab === "Audit" ? (
+            <AuditLogPanel />
           ) : activeTab === "Inventory" ? (
             <ManageInventoryPanel />
           ) : activeTab === "Customers" ? (
@@ -1198,6 +1200,84 @@ function formatBucketLabel(bucketStart: string, range: SalesRange) {
   if (range === "today") return date.toLocaleTimeString([], { hour: "numeric" });
   if (range === "all") return date.toLocaleDateString([], { month: "short", year: "2-digit" });
   return date.toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+function auditSourceLabel(source: ManagerAuditEntry["source"]) {
+  if (source === "price") return "Price";
+  if (source === "stock") return "Stock";
+  return "Change";
+}
+
+function AuditLogPanel() {
+  const [entries, setEntries] = useState<ManagerAuditEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    fetchManagerAudit()
+      .then((results) => {
+        if (active) setEntries(results);
+      })
+      .catch((requestError: unknown) => {
+        if (active) {
+          setError(requestError instanceof Error ? requestError.message : "Unable to load the audit log.");
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return (
+    <div>
+      <div className="mb-5">
+        <h2 className="text-2xl font-extrabold text-[#294332]">Audit log</h2>
+        <p className="mt-1 text-sm text-[#667269]">Inventory edits, price changes, and stock movements.</p>
+      </div>
+      {error && <p className="mb-4 rounded-xl border border-red-200 bg-white p-4 text-sm text-red-700" role="alert">{error}</p>}
+      {loading ? (
+        <p className="rounded-xl border border-[#e8e7dc] bg-white p-5 text-sm text-[#667269]" role="status">
+          Loading audit history...
+        </p>
+      ) : (
+        <div className="overflow-x-auto rounded-2xl border border-[#e8e7dc] bg-white shadow-[0_3px_12px_rgba(42,65,48,0.04)]">
+          <table className="w-full min-w-[40rem] text-left">
+            <thead className="bg-[#f6f7f1] text-xs uppercase tracking-wide text-[#667269]">
+              <tr>
+                <th scope="col" className="px-5 py-3 font-bold">When</th>
+                <th scope="col" className="px-5 py-3 font-bold">Type</th>
+                <th scope="col" className="px-5 py-3 font-bold">Who</th>
+                <th scope="col" className="px-5 py-3 font-bold">What changed</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#ecebe2]">
+              {entries.map((entry) => (
+                <tr key={`${entry.source}-${entry.id}`}>
+                  <td className="whitespace-nowrap px-5 py-4 text-sm text-[#667269]">
+                    {new Date(entry.createdAt).toLocaleString()}
+                  </td>
+                  <td className="px-5 py-4 text-sm font-semibold text-[#416449]">{auditSourceLabel(entry.source)}</td>
+                  <td className="px-5 py-4 text-sm text-[#253b2d]">{entry.actorName ?? "System"}</td>
+                  <td className="px-5 py-4 text-sm text-[#253b2d]">{entry.summary}</td>
+                </tr>
+              ))}
+              {entries.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-5 py-8 text-center text-sm text-[#667269]">
+                    No inventory or price changes recorded yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // The Inventory tab: the overview plus adding, editing, deactivating, and restocking products.
