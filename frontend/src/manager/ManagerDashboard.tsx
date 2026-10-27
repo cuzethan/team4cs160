@@ -1208,14 +1208,31 @@ function auditSourceLabel(source: ManagerAuditEntry["source"]) {
   return "Change";
 }
 
+type AuditTypeFilter = "all" | ManagerAuditEntry["source"];
+
+function startOfLocalDay(dateValue: string) {
+  const [year, month, day] = dateValue.split("-").map(Number);
+  return new Date(year, month - 1, day, 0, 0, 0, 0).getTime();
+}
+
+function endOfLocalDay(dateValue: string) {
+  const [year, month, day] = dateValue.split("-").map(Number);
+  return new Date(year, month - 1, day, 23, 59, 59, 999).getTime();
+}
+
 function AuditLogPanel() {
   const [entries, setEntries] = useState<ManagerAuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState<AuditTypeFilter>("all");
+  const [actorFilter, setActorFilter] = useState("all");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
 
   useEffect(() => {
     let active = true;
-    fetchManagerAudit()
+    fetchManagerAudit(200)
       .then((results) => {
         if (active) setEntries(results);
       })
@@ -1232,12 +1249,125 @@ function AuditLogPanel() {
     };
   }, []);
 
+  const actors = useMemo(() => {
+    const names = new Set<string>();
+    for (const entry of entries) names.add(entry.actorName?.trim() || "System");
+    return [...names].sort((a, b) => a.localeCompare(b));
+  }, [entries]);
+
+  const visibleEntries = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const fromMs = fromDate ? startOfLocalDay(fromDate) : null;
+    const toMs = toDate ? endOfLocalDay(toDate) : null;
+
+    return entries.filter((entry) => {
+      if (typeFilter !== "all" && entry.source !== typeFilter) return false;
+
+      const actor = entry.actorName?.trim() || "System";
+      if (actorFilter !== "all" && actor !== actorFilter) return false;
+
+      const createdMs = new Date(entry.createdAt).getTime();
+      if (fromMs !== null && createdMs < fromMs) return false;
+      if (toMs !== null && createdMs > toMs) return false;
+
+      if (!query) return true;
+      return (
+        entry.summary.toLowerCase().includes(query) ||
+        actor.toLowerCase().includes(query) ||
+        auditSourceLabel(entry.source).toLowerCase().includes(query) ||
+        (entry.tableName ?? "").toLowerCase().includes(query)
+      );
+    });
+  }, [actorFilter, entries, fromDate, search, toDate, typeFilter]);
+
+  const clearFilters = () => {
+    setSearch("");
+    setTypeFilter("all");
+    setActorFilter("all");
+    setFromDate("");
+    setToDate("");
+  };
+
+  const filtersActive = Boolean(search.trim() || typeFilter !== "all" || actorFilter !== "all" || fromDate || toDate);
+
   return (
     <div>
-      <div className="mb-5">
-        <h2 className="text-2xl font-extrabold text-[#294332]">Audit log</h2>
-        <p className="mt-1 text-sm text-[#667269]">Inventory edits, price changes, and stock movements.</p>
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-extrabold text-[#294332]">Audit log</h2>
+          <p className="mt-1 text-sm text-[#667269]">Inventory edits, price changes, and stock movements.</p>
+        </div>
+        <p className="text-sm font-semibold text-[#667269]">
+          {visibleEntries.length} of {entries.length}
+        </p>
       </div>
+
+      <div className="mb-4 flex flex-wrap gap-3">
+        <label className="flex h-11 min-w-[14rem] flex-1 items-center gap-2 rounded-xl border border-[#e6e6dc] bg-white px-4 text-[#899188] shadow-sm">
+          <span className="sr-only">Search audit log</span>
+          <input
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search summary, person, or type"
+            className="w-full bg-transparent text-sm text-[#304336] outline-none placeholder:text-[#a3aaa1]"
+          />
+        </label>
+        <label className="flex items-center gap-2 text-sm font-semibold text-[#426149]">
+          Type
+          <select
+            value={typeFilter}
+            onChange={(event) => setTypeFilter(event.target.value as AuditTypeFilter)}
+            className="rounded-lg border border-[#dce2d5] bg-white px-3 py-2.5 text-[#253b2d] shadow-sm"
+          >
+            <option value="all">All</option>
+            <option value="audit">Change</option>
+            <option value="price">Price</option>
+            <option value="stock">Stock</option>
+          </select>
+        </label>
+        <label className="flex items-center gap-2 text-sm font-semibold text-[#426149]">
+          Who
+          <select
+            value={actorFilter}
+            onChange={(event) => setActorFilter(event.target.value)}
+            className="rounded-lg border border-[#dce2d5] bg-white px-3 py-2.5 text-[#253b2d] shadow-sm"
+          >
+            <option value="all">Anyone</option>
+            {actors.map((actor) => (
+              <option key={actor} value={actor}>{actor}</option>
+            ))}
+          </select>
+        </label>
+        <label className="flex items-center gap-2 text-sm font-semibold text-[#426149]">
+          From
+          <input
+            type="date"
+            value={fromDate}
+            onChange={(event) => setFromDate(event.target.value)}
+            className="rounded-lg border border-[#dce2d5] bg-white px-3 py-2.5 text-[#253b2d] shadow-sm"
+          />
+        </label>
+        <label className="flex items-center gap-2 text-sm font-semibold text-[#426149]">
+          To
+          <input
+            type="date"
+            value={toDate}
+            onChange={(event) => setToDate(event.target.value)}
+            className="rounded-lg border border-[#dce2d5] bg-white px-3 py-2.5 text-[#253b2d] shadow-sm"
+          />
+        </label>
+        {filtersActive && (
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="rounded-lg border border-[#dce2d5] bg-white px-3 py-2.5 text-sm font-semibold text-[#416449] shadow-sm transition hover:bg-[#f6f7f1]"
+          >
+            Clear filters
+          </button>
+        )}
+      </div>
+
       {error && <p className="mb-4 rounded-xl border border-red-200 bg-white p-4 text-sm text-red-700" role="alert">{error}</p>}
       {loading ? (
         <p className="rounded-xl border border-[#e8e7dc] bg-white p-5 text-sm text-[#667269]" role="status">
@@ -1255,7 +1385,7 @@ function AuditLogPanel() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#ecebe2]">
-              {entries.map((entry) => (
+              {visibleEntries.map((entry) => (
                 <tr key={`${entry.source}-${entry.id}`}>
                   <td className="whitespace-nowrap px-5 py-4 text-sm text-[#667269]">
                     {new Date(entry.createdAt).toLocaleString()}
@@ -1265,10 +1395,12 @@ function AuditLogPanel() {
                   <td className="px-5 py-4 text-sm text-[#253b2d]">{entry.summary}</td>
                 </tr>
               ))}
-              {entries.length === 0 && (
+              {visibleEntries.length === 0 && (
                 <tr>
                   <td colSpan={4} className="px-5 py-8 text-center text-sm text-[#667269]">
-                    No inventory or price changes recorded yet.
+                    {entries.length === 0
+                      ? "No inventory or price changes recorded yet."
+                      : "No audit entries match these filters."}
                   </td>
                 </tr>
               )}
