@@ -960,14 +960,16 @@ function SalesOverview({
               {customersError}
             </p>
           )}
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(20rem,1fr)]">
-            <SalesBarChart
-              title="Sales"
-              buckets={sales.map((bucket) => ({ bucketStart: bucket.bucketStart, value: bucket.revenue }))}
-              range={salesRangeFor[dateRange]}
-              formatValue={(value) => `$${value.toFixed(0)}`}
-            />
-            <div className="flex min-w-0 flex-col gap-4">
+          <div className="grid gap-4 xl:grid-cols-3">
+            <div className="min-w-0 xl:col-span-2">
+              <SalesBarChart
+                title="Sales"
+                buckets={sales.map((bucket) => ({ bucketStart: bucket.bucketStart, value: bucket.revenue }))}
+                range={salesRangeFor[dateRange]}
+                formatValue={(value) => `$${value.toFixed(0)}`}
+              />
+            </div>
+            <div className="flex min-w-0 flex-col gap-4 xl:col-span-1">
               <SalesPieChart className="xl:flex-1" title="Revenue by Top 8 Items" values={topSlices(analytics.items.map((item) => ({ name: item.name, value: item.revenue })), 8)} />
               <SalesPieChart className="xl:flex-1" title="Revenue by Top 3 Categories" values={topSlices(analytics.categories.map((category) => ({ name: category.name, value: category.revenue })), 3)} />
             </div>
