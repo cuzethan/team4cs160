@@ -181,7 +181,11 @@ export function CheckoutPage() {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
-  const [deliverySettings, setDeliverySettings] = useState<DeliverySettings>({ deliveryFee: 10, freeDeliveryWeightThreshold: 20 });
+  const [deliverySettings, setDeliverySettings] = useState<DeliverySettings>({
+    deliveryFee: 10,
+    freeDeliveryWeightThreshold: 20,
+    maxDeliveryDistanceMiles: 50,
+  });
 
   const loadPaymentIntent = async () => {
     setPaymentLoading(true);

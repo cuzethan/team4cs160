@@ -18,12 +18,18 @@ export async function ensureGlobalSettingsSchema(pool: pg.Pool) {
       settings_id SMALLINT PRIMARY KEY CHECK (settings_id = 1),
       delivery_fee DECIMAL(10,2) NOT NULL CHECK (delivery_fee >= 0),
       free_delivery_weight_threshold DECIMAL(10,2) NOT NULL CHECK (free_delivery_weight_threshold > 0),
+      max_delivery_distance_miles DECIMAL(10,2) NOT NULL CHECK (max_delivery_distance_miles > 0),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
   `);
   await pool.query(`
-    INSERT INTO GlobalSettings (settings_id, delivery_fee, free_delivery_weight_threshold)
-    VALUES (1, 10, 20)
+    ALTER TABLE GlobalSettings
+      ADD COLUMN IF NOT EXISTS max_delivery_distance_miles DECIMAL(10,2) NOT NULL DEFAULT 50
+        CHECK (max_delivery_distance_miles > 0)
+  `);
+  await pool.query(`
+    INSERT INTO GlobalSettings (settings_id, delivery_fee, free_delivery_weight_threshold, max_delivery_distance_miles)
+    VALUES (1, 10, 20, 50)
     ON CONFLICT (settings_id) DO NOTHING
   `);
 }
@@ -105,22 +111,25 @@ export function createPgSettingsStore(pool: pg.Pool): SettingsStore {
     async get() {
       const { rows } = await pool.query<DeliverySettings>(
         `SELECT delivery_fee::float8 AS "deliveryFee",
-                free_delivery_weight_threshold::float8 AS "freeDeliveryWeightThreshold"
+                free_delivery_weight_threshold::float8 AS "freeDeliveryWeightThreshold",
+                max_delivery_distance_miles::float8 AS "maxDeliveryDistanceMiles"
          FROM GlobalSettings WHERE settings_id = 1`,
       );
       return rows[0] ?? DEFAULT_DELIVERY_SETTINGS;
     },
     async update(settings) {
       const { rows } = await pool.query<DeliverySettings>(
-        `INSERT INTO GlobalSettings (settings_id, delivery_fee, free_delivery_weight_threshold)
-         VALUES (1, $1, $2)
+        `INSERT INTO GlobalSettings (settings_id, delivery_fee, free_delivery_weight_threshold, max_delivery_distance_miles)
+         VALUES (1, $1, $2, $3)
          ON CONFLICT (settings_id) DO UPDATE
            SET delivery_fee = EXCLUDED.delivery_fee,
                free_delivery_weight_threshold = EXCLUDED.free_delivery_weight_threshold,
+               max_delivery_distance_miles = EXCLUDED.max_delivery_distance_miles,
                updated_at = now()
          RETURNING delivery_fee::float8 AS "deliveryFee",
-                   free_delivery_weight_threshold::float8 AS "freeDeliveryWeightThreshold"`,
-        [settings.deliveryFee, settings.freeDeliveryWeightThreshold],
+                   free_delivery_weight_threshold::float8 AS "freeDeliveryWeightThreshold",
+                   max_delivery_distance_miles::float8 AS "maxDeliveryDistanceMiles"`,
+        [settings.deliveryFee, settings.freeDeliveryWeightThreshold, settings.maxDeliveryDistanceMiles],
       );
       return rows[0];
     },

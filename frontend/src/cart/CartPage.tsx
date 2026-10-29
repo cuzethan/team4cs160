@@ -17,7 +17,11 @@ export function CartPage() {
   const [error, setError] = useState<string | null>(null);
   // Problems with a single change (e.g. not enough stock). The cart itself still shows.
   const [updateError, setUpdateError] = useState<string | null>(null);
-  const [deliverySettings, setDeliverySettings] = useState<DeliverySettings>({ deliveryFee: 10, freeDeliveryWeightThreshold: 20 });
+  const [deliverySettings, setDeliverySettings] = useState<DeliverySettings>({
+    deliveryFee: 10,
+    freeDeliveryWeightThreshold: 20,
+    maxDeliveryDistanceMiles: 50,
+  });
 
   const showCart = (lines: CartLine[]) => {
     setCartItems(lines.map(toCartItem));

@@ -4,9 +4,10 @@ CREATE TABLE IF NOT EXISTS GlobalSettings (
   settings_id SMALLINT PRIMARY KEY CHECK (settings_id = 1),
   delivery_fee DECIMAL(10,2) NOT NULL CHECK (delivery_fee >= 0),
   free_delivery_weight_threshold DECIMAL(10,2) NOT NULL CHECK (free_delivery_weight_threshold > 0),
+  max_delivery_distance_miles DECIMAL(10,2) NOT NULL CHECK (max_delivery_distance_miles > 0),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-INSERT INTO GlobalSettings (settings_id, delivery_fee, free_delivery_weight_threshold)
-VALUES (1, 10, 20)
+INSERT INTO GlobalSettings (settings_id, delivery_fee, free_delivery_weight_threshold, max_delivery_distance_miles)
+VALUES (1, 10, 20, 50)
 ON CONFLICT (settings_id) DO NOTHING;

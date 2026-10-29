@@ -61,7 +61,7 @@ export function createApp({ checkDatabase, cartStore, orderStore, productStore, 
   app.use("/api/notifications", createNotificationsRouter(authOptions.store, deliveryStore));
   app.use("/api/manager/sales", createSalesRouter({ store: authOptions.store, salesStore }));
   app.use("/api/manager/inventory", createManagerInventoryRouter({ store: authOptions.store, productStore }));
-  app.use("/api/manager/deliveries", createManagerDeliveriesRouter({ store: authOptions.store, deliveryStore }));
+  app.use("/api/manager/deliveries", createManagerDeliveriesRouter({ store: authOptions.store, deliveryStore, settingsStore: settings }));
 
   return app;
 }
