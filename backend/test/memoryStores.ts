@@ -24,9 +24,12 @@ import {
 
 export function createMemorySettingsStore() {
   let settings = { ...DEFAULT_DELIVERY_SETTINGS };
+  let robotBase = { latitude: 37.3382, longitude: -121.8863 };
   const settingsStore: SettingsStore = {
     async get() { return { ...settings }; },
     async update(next) { settings = { ...next }; return { ...settings }; },
+    async getRobotBase() { return { ...robotBase }; },
+    async updateRobotBase(next) { robotBase = { ...next }; return { ...robotBase }; },
   };
   return { settingsStore };
 }

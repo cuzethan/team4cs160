@@ -9,6 +9,8 @@ export { DEFAULT_DELIVERY_SETTINGS } from "./pricing.js";
 export interface SettingsStore {
   get(): Promise<DeliverySettings>;
   update(settings: DeliverySettings): Promise<DeliverySettings>;
+  getRobotBase(): Promise<{ latitude: number; longitude: number }>;
+  updateRobotBase(base: { latitude: number; longitude: number }): Promise<{ latitude: number; longitude: number }>;
 }
 
 // Postgres only runs docker-entrypoint-initdb.d scripts for an empty data volume.
@@ -19,9 +21,12 @@ export async function ensureGlobalSettingsSchema(pool: pg.Pool) {
       settings_id SMALLINT PRIMARY KEY CHECK (settings_id = 1),
       delivery_fee DECIMAL(10,2) NOT NULL CHECK (delivery_fee >= 0),
       free_delivery_weight_threshold DECIMAL(10,2) NOT NULL CHECK (free_delivery_weight_threshold > 0),
+      robot_base_latitude DECIMAL(9,6) NOT NULL DEFAULT 37.3382 CHECK (robot_base_latitude BETWEEN -90 AND 90),
+      robot_base_longitude DECIMAL(9,6) NOT NULL DEFAULT -121.8863 CHECK (robot_base_longitude BETWEEN -180 AND 180),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
   `);
+  await pool.query(`ALTER TABLE GlobalSettings ADD COLUMN IF NOT EXISTS robot_base_latitude DECIMAL(9,6) NOT NULL DEFAULT 37.3382, ADD COLUMN IF NOT EXISTS robot_base_longitude DECIMAL(9,6) NOT NULL DEFAULT -121.8863`);
   await pool.query(`
     INSERT INTO GlobalSettings (settings_id, delivery_fee, free_delivery_weight_threshold)
     VALUES (1, 10, 20)
@@ -124,6 +129,17 @@ export function createPgSettingsStore(pool: pg.Pool): SettingsStore {
                    free_delivery_weight_threshold::float8 AS "freeDeliveryWeightThreshold"`,
         [settings.deliveryFee, settings.freeDeliveryWeightThreshold],
       );
+      return rows[0];
+    },
+    async getRobotBase() {
+      const { rows } = await pool.query<{ latitude: number; longitude: number }>(`SELECT robot_base_latitude::float8 AS latitude, robot_base_longitude::float8 AS longitude FROM GlobalSettings WHERE settings_id = 1`);
+      return rows[0] ?? getRobotBaseLocation();
+    },
+    async updateRobotBase(base) {
+      const { rows } = await pool.query<{ latitude: number; longitude: number }>(
+        `INSERT INTO GlobalSettings (settings_id, delivery_fee, free_delivery_weight_threshold, robot_base_latitude, robot_base_longitude)
+         VALUES (1, 10, 20, $1, $2) ON CONFLICT (settings_id) DO UPDATE SET robot_base_latitude = EXCLUDED.robot_base_latitude, robot_base_longitude = EXCLUDED.robot_base_longitude, updated_at = now()
+         RETURNING robot_base_latitude::float8 AS latitude, robot_base_longitude::float8 AS longitude`, [base.latitude, base.longitude]);
       return rows[0];
     },
   };

@@ -17,3 +17,10 @@ export function getRobotBaseLocation() {
     longitude: configuredCoordinate("ROBOT_BASE_LONGITUDE", DEFAULT_BASE.longitude, -180, 180),
   };
 }
+
+export type RobotBaseLocation = { latitude: number; longitude: number };
+
+export function configureRobotBaseLocation(base: RobotBaseLocation) {
+  process.env.ROBOT_BASE_LATITUDE = String(base.latitude);
+  process.env.ROBOT_BASE_LONGITUDE = String(base.longitude);
+}

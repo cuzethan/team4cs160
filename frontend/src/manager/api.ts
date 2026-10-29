@@ -58,6 +58,16 @@ async function settingsRequest(method: "GET" | "PUT", settings?: DeliverySetting
 export const fetchDeliverySettings = () => settingsRequest("GET");
 export const saveDeliverySettings = (settings: DeliverySettings) => settingsRequest("PUT", settings);
 
+export type RobotBaseLocation = { latitude: number; longitude: number };
+async function robotBaseRequest(method: "GET" | "PUT", base?: RobotBaseLocation): Promise<RobotBaseLocation> {
+  const response = await fetch("/api/settings/robot-base", { method, credentials: "same-origin", headers: base ? { "Content-Type": "application/json" } : undefined, body: base ? JSON.stringify(base) : undefined });
+  const data = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(data?.error ?? "Unable to save robot base location.");
+  return data as RobotBaseLocation;
+}
+export const fetchRobotBaseLocation = () => robotBaseRequest("GET");
+export const saveRobotBaseLocation = (base: RobotBaseLocation) => robotBaseRequest("PUT", base);
+
 export type ManagerDelivery = {
   orderId: string;
   customerName: string;

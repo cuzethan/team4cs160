@@ -3,6 +3,7 @@ import { createApp } from "./app.js";
 import { createStripePayments } from "./payments.js";
 import { startDeliverySimulator } from "./robotSimulator.js";
 import { createPgCartStore, createPgDeliveryStore, createPgOrderStore, createPgProductStore, createPgSalesStore, createPgSettingsStore, createPgStore, ensureDeliveryTrackingSchema, ensureGlobalSettingsSchema, ensureInventoryManagementSchema, ensureProductCostSchema } from "./store.js";
+import { configureRobotBaseLocation } from "./robotBase.js";
 
 const port = Number(process.env.PORT ?? 3001);
 const pool = new pg.Pool({
@@ -10,10 +11,11 @@ const pool = new pg.Pool({
 });
 
 await ensureGlobalSettingsSchema(pool);
+const settingsStore = createPgSettingsStore(pool);
+configureRobotBaseLocation(await settingsStore.getRobotBase());
 await ensureInventoryManagementSchema(pool);
 await ensureDeliveryTrackingSchema(pool);
 await ensureProductCostSchema(pool);
-const settingsStore = createPgSettingsStore(pool);
 const deliveryStore = createPgDeliveryStore(pool);
 const app = createApp({
   store: createPgStore(pool),

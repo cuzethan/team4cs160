@@ -49,7 +49,9 @@ The tile URL supplies the OpenStreetMap region Valhalla builds its routing graph
 
 ## Robot base location and reset
 
-The robot depot defaults to the current San Jose demo location. To use a different base, add these optional values to the root `.env` file (coordinates are decimal degrees):
+The robot depot defaults to the current San Jose demo location. Managers can change it from the dashboard's Settings tab using decimal-degree latitude and longitude. The value is persisted in the `GlobalSettings.robot_base_latitude` and `GlobalSettings.robot_base_longitude` columns and loaded by the backend at startup.
+
+The optional root `.env` values remain a fallback for backend utilities that run without a persisted settings row (coordinates are decimal degrees):
 
 ```env
 ROBOT_BASE_LATITUDE=37.3382

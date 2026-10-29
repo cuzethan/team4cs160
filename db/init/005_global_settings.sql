@@ -4,6 +4,8 @@ CREATE TABLE IF NOT EXISTS GlobalSettings (
   settings_id SMALLINT PRIMARY KEY CHECK (settings_id = 1),
   delivery_fee DECIMAL(10,2) NOT NULL CHECK (delivery_fee >= 0),
   free_delivery_weight_threshold DECIMAL(10,2) NOT NULL CHECK (free_delivery_weight_threshold > 0),
+  robot_base_latitude DECIMAL(9,6) NOT NULL DEFAULT 37.3382 CHECK (robot_base_latitude BETWEEN -90 AND 90),
+  robot_base_longitude DECIMAL(9,6) NOT NULL DEFAULT -121.8863 CHECK (robot_base_longitude BETWEEN -180 AND 180),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

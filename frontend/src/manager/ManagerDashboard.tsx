@@ -11,7 +11,7 @@ import {
 import { SiteHeader } from "../components/SiteHeader";
 import { emojiFor } from "../inventory/api";
 import type { InventoryProduct } from "../inventory/types";
-import { cancelDeliveryRun, dispatchDeliveries, fetchDeliveries, fetchDeliveryRobots, fetchDeliveryRuns, fetchDeliverySettings, fetchManagedInventory, fetchManagerAudit, fetchSales, fetchSalesAnalytics, recallDeliveryRobot, refundDeliveryOrder, saveDeliverySettings, updateProduct, type DeliveryRobot, type DeliveryRun, type DeliverySettings, type ManagedProduct, type ManagerAuditEntry, type ManagerDelivery, type ProductCategory, type SalesAnalytics, type SalesBucket, type SalesRange } from "./api";
+import { cancelDeliveryRun, dispatchDeliveries, fetchDeliveries, fetchDeliveryRobots, fetchDeliveryRuns, fetchDeliverySettings, fetchRobotBaseLocation, fetchManagedInventory, fetchManagerAudit, fetchSales, fetchSalesAnalytics, recallDeliveryRobot, refundDeliveryOrder, saveDeliverySettings, saveRobotBaseLocation, updateProduct, type DeliveryRobot, type DeliveryRun, type DeliverySettings, type ManagedProduct, type ManagerAuditEntry, type ManagerDelivery, type ProductCategory, type RobotBaseLocation, type SalesAnalytics, type SalesBucket, type SalesRange } from "./api";
 import { ProductFormDialog, ProductTable } from "./ProductManager";
 
 import Map, { Layer, Marker, NavigationControl, Source } from "react-map-gl/maplibre";
@@ -304,6 +304,7 @@ function OpenTabButton({ label, onClick }: { label: string; onClick: () => void 
 
 function SettingsPanel() {
   const [settings, setSettings] = useState<DeliverySettings>({ deliveryFee: 10, freeDeliveryWeightThreshold: 20 });
+  const [base, setBase] = useState<RobotBaseLocation>({ latitude: 37.3382, longitude: -121.8863 });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -311,7 +312,7 @@ function SettingsPanel() {
 
   useEffect(() => {
     let active = true;
-    fetchDeliverySettings().then((value) => { if (active) setSettings(value); })
+    Promise.all([fetchDeliverySettings(), fetchRobotBaseLocation()]).then(([value, baseValue]) => { if (active) { setSettings(value); setBase(baseValue); } })
       .catch((e: unknown) => { if (active) setError(e instanceof Error ? e.message : "Unable to load settings."); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -326,9 +327,17 @@ function SettingsPanel() {
     finally { setSaving(false); }
   };
 
+  const saveBase = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault(); setSaving(true); setError(""); setSuccess("");
+    try { setBase(await saveRobotBaseLocation(base)); setSuccess("Robot home base saved."); }
+    catch (e) { setError(e instanceof Error ? e.message : "Unable to save robot base location."); }
+    finally { setSaving(false); }
+  };
+
   return <div>
     <div className="mb-5"><h2 className="text-2xl font-extrabold text-[#294332]">Settings</h2><p className="mt-1 text-sm text-[#667269]">Configure delivery pricing for every customer order.</p></div>
     {loading ? <p role="status" className="rounded-xl border border-[#e8e7dc] bg-white p-5 text-sm text-[#667269]">Loading settings...</p> : (
+      <>
       <form onSubmit={submit} className="max-w-xl space-y-5 rounded-2xl border border-[#e8e7dc] bg-white p-6 shadow-[0_3px_12px_rgba(42,65,48,0.04)]">
         <label className="block text-sm font-semibold text-[#536459]">Delivery fee ($)
           <input aria-label="Delivery fee" type="number" min="0" step="0.01" required value={settings.deliveryFee} onChange={(e) => setSettings({ ...settings, deliveryFee: Number(e.target.value) })} className="mt-1 w-full rounded-xl border border-[#dedfd5] px-4 py-3" />
@@ -340,6 +349,15 @@ function SettingsPanel() {
         {success && <p role="status" className="text-sm text-green-800">{success}</p>}
         <button disabled={saving} className="rounded-xl bg-[#416449] px-5 py-3 font-bold text-white disabled:opacity-60">{saving ? "Saving..." : "Save settings"}</button>
       </form>
+      <form onSubmit={saveBase} className="mt-5 max-w-xl space-y-5 rounded-2xl border border-[#e8e7dc] bg-white p-6 shadow-[0_3px_12px_rgba(42,65,48,0.04)]">
+        <div><h3 className="text-lg font-extrabold text-[#294332]">Robot home base</h3><p className="mt-1 text-sm text-[#667269]">Coordinates use decimal degrees. This is where robots start and return.</p></div>
+        <label className="block text-sm font-semibold text-[#536459]">Latitude<input aria-label="Robot base latitude" type="number" min="-90" max="90" step="0.000001" required value={base.latitude} onChange={(e) => setBase({ ...base, latitude: Number(e.target.value) })} className="mt-1 w-full rounded-xl border border-[#dedfd5] px-4 py-3" /></label>
+        <label className="block text-sm font-semibold text-[#536459]">Longitude<input aria-label="Robot base longitude" type="number" min="-180" max="180" step="0.000001" required value={base.longitude} onChange={(e) => setBase({ ...base, longitude: Number(e.target.value) })} className="mt-1 w-full rounded-xl border border-[#dedfd5] px-4 py-3" /></label>
+        {error && <p role="alert" className="text-sm text-red-800">{error}</p>}
+        {success && <p role="status" className="text-sm text-green-800">{success}</p>}
+        <button disabled={saving} className="rounded-xl bg-[#416449] px-5 py-3 font-bold text-white disabled:opacity-60">{saving ? "Saving..." : "Save home base"}</button>
+      </form>
+      </>
     )}
   </div>;
 }

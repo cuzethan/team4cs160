@@ -44,6 +44,8 @@ export function createApp({ checkDatabase, cartStore, orderStore, productStore, 
   const settings = settingsStore ?? {
     async get(): Promise<DeliverySettings> { return DEFAULT_DELIVERY_SETTINGS; },
     async update(value: DeliverySettings) { return value; },
+    async getRobotBase() { return { latitude: 37.3382, longitude: -121.8863 }; },
+    async updateRobotBase(value: { latitude: number; longitude: number }) { return value; },
   };
   app.use("/api/auth", createAuthRouter({ ...authOptions, orderStore }));
   app.use("/api/settings", createSettingsRouter(authOptions.store, settings));
