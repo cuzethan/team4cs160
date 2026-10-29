@@ -76,6 +76,30 @@ describe("manager deliveries API", () => {
     expect(listDeliveries).toHaveBeenCalledOnce();
   });
 
+  it("lets managers recall a robot and reports a cancelled active run", async () => {
+    const memory = createMemoryStore();
+    const cart = createMemoryCartStore([]);
+    const recallRobot = vi.fn(async () => ({ status: "returning" as const, returnRunId: "run-2", cancelledRunId: "run-1" }));
+    const app = createApp({
+      store: memory.store,
+      cartStore: cart.cartStore,
+      orderStore: createMemoryOrderStore(cart).orderStore,
+      productStore: createMemoryProductStore(cart).productStore,
+      salesStore: { listSales: async () => [], listSalesAnalytics: async () => ({ profitBuckets: [], items: [], categories: [] }) },
+      deliveryStore: { listDeliveries: async () => [], recallRobot },
+      appUrl: "http://localhost:5173",
+      secureCookies: false,
+      checkDatabase: async () => {},
+    });
+
+    const manager = await managerAgent(app, memory);
+    const response = await manager.post("/api/manager/deliveries/robots/robot-1/recall");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ robotId: "robot-1", status: "returning", returnRunId: "run-2", cancelledRunId: "run-1" });
+    expect(recallRobot).toHaveBeenCalledWith("robot-1");
+  });
+
   it("refunds an undispatched paid order and restocks its items", async () => {
     const memory = createMemoryStore();
     const cart = createMemoryCartStore([

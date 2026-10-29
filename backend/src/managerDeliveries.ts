@@ -46,6 +46,22 @@ export function createManagerDeliveriesRouter({ store, deliveryStore }: ManagerD
     res.json({ runId: req.params.runId, status: "cancelled" });
   }));
 
+  router.post("/robots/:robotId/recall", handle(async (req, res) => {
+    const user = await findCurrentUser(store, req);
+    if (!user) return res.status(401).json({ error: "Not logged in." });
+    if (user.role !== "admin") return res.status(403).json({ error: "Manager access is required." });
+    if (!deliveryStore.recallRobot) return res.status(501).json({ error: "Robot recall is not available." });
+
+    const result = await deliveryStore.recallRobot(req.params.robotId);
+    if (result.status === "not-found") return res.status(404).json({ error: "Robot not found." });
+    res.json({
+      robotId: req.params.robotId,
+      status: result.status,
+      returnRunId: result.returnRunId,
+      cancelledRunId: result.cancelledRunId,
+    });
+  }));
+
   router.post("/dispatch", handle(async (req, res) => {
     const user = await findCurrentUser(store, req);
     if (!user) return res.status(401).json({ error: "Not logged in." });

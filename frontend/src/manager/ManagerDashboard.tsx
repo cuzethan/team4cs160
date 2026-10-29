@@ -11,7 +11,7 @@ import {
 import { SiteHeader } from "../components/SiteHeader";
 import { emojiFor } from "../inventory/api";
 import type { InventoryProduct } from "../inventory/types";
-import { cancelDeliveryRun, dispatchDeliveries, fetchDeliveries, fetchDeliveryRobots, fetchDeliveryRuns, fetchDeliverySettings, fetchManagedInventory, fetchManagerAudit, fetchSales, fetchSalesAnalytics, refundDeliveryOrder, saveDeliverySettings, updateProduct, type DeliveryRobot, type DeliveryRun, type DeliverySettings, type ManagedProduct, type ManagerAuditEntry, type ManagerDelivery, type ProductCategory, type SalesAnalytics, type SalesBucket, type SalesRange } from "./api";
+import { cancelDeliveryRun, dispatchDeliveries, fetchDeliveries, fetchDeliveryRobots, fetchDeliveryRuns, fetchDeliverySettings, fetchManagedInventory, fetchManagerAudit, fetchSales, fetchSalesAnalytics, recallDeliveryRobot, refundDeliveryOrder, saveDeliverySettings, updateProduct, type DeliveryRobot, type DeliveryRun, type DeliverySettings, type ManagedProduct, type ManagerAuditEntry, type ManagerDelivery, type ProductCategory, type SalesAnalytics, type SalesBucket, type SalesRange } from "./api";
 import { ProductFormDialog, ProductTable } from "./ProductManager";
 
 import Map, { Layer, Marker, NavigationControl, Source } from "react-map-gl/maplibre";
@@ -1691,6 +1691,34 @@ function RobotPanel() {
     }
   };
 
+  const recallRobot = async (robot: DeliveryRobot) => {
+    const activeRun = runs.find((run) => run.robotId === robot.robotId && ["assigned", "active"].includes(run.status));
+    const returningRun = runs.find((run) => run.robotId === robot.robotId && run.status === "returning");
+    if (returningRun) return;
+    if (activeRun) {
+      const proceed = window.confirm(
+        `${robot.robotName} is delivering an order. Recall it now? The active delivery will be cancelled and its undelivered orders will return to the paid queue for later dispatch.`,
+      );
+      if (!proceed) return;
+    }
+
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const result = await recallDeliveryRobot(robot.robotId);
+      setNotice(activeRun
+        ? `${robot.robotName} is returning to the store. The active delivery was cancelled and returned to the paid queue.`
+        : `${robot.robotName} is returning to the store.`);
+      await refresh();
+      if (result.returnRunId) setSelectedRunId(result.returnRunId);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Unable to recall the robot.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div>
       <div className="mb-5">
@@ -1716,6 +1744,14 @@ function RobotPanel() {
                     : "Position unavailable"}
                 </p>
                 <p className="mt-1 text-xs text-[#899188]">Updated {new Date(robot.lastUpdated).toLocaleTimeString()}</p>
+                <button
+                  type="button"
+                  disabled={busy || runs.some((run) => run.robotId === robot.robotId && run.status === "returning")}
+                  onClick={() => void recallRobot(robot)}
+                  className="mt-3 w-full rounded-full border border-[#d9e2d2] px-3 py-2 text-sm font-bold text-[#416449] hover:bg-[#f1f5eb] disabled:cursor-wait disabled:opacity-50"
+                >
+                  {runs.some((run) => run.robotId === robot.robotId && run.status === "returning") ? "Returning to store…" : busy ? "Recalling…" : "Recall to store"}
+                </button>
               </article>
             ))}
             {robots.length === 0 && <p className="rounded-2xl border border-[#e8e7dc] bg-white p-5 text-sm text-[#667269]">No robots have been registered.</p>}

@@ -122,6 +122,13 @@ export function cancelDeliveryRun(runId: string) {
   return deliveryRequest<{ runId: string; status: string }>(`/runs/${encodeURIComponent(runId)}/cancel`, { method: "POST" });
 }
 
+export function recallDeliveryRobot(robotId: string) {
+  return deliveryRequest<{ robotId: string; status: string; returnRunId: string | null; cancelledRunId: string | null }>(
+    `/robots/${encodeURIComponent(robotId)}/recall`,
+    { method: "POST" },
+  );
+}
+
 export async function dispatchDeliveries(): Promise<DispatchResult> {
   let response: Response;
   try {

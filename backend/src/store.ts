@@ -1,6 +1,7 @@
 import type pg from "pg";
 import { getRobotBaseLocation } from "./robotBase.js";
 import { DEFAULT_DELIVERY_SETTINGS, deliveryFeeFor, roundCents, type DeliverySettings } from "./pricing.js";
+import { calculateDeliveryRoute } from "./routeService.js";
 
 export type { DeliverySettings } from "./pricing.js";
 export { DEFAULT_DELIVERY_SETTINGS } from "./pricing.js";
@@ -456,6 +457,11 @@ export type DeliveryNotification = {
 
 export type ReceiptResult = "completed" | "not-found" | "not-delivered";
 export type CancelRunResult = "cancelled" | "not-found" | "not-active";
+export type RecallRobotResult = {
+  status: "returning" | "not-found";
+  returnRunId: string | null;
+  cancelledRunId: string | null;
+};
 export type RefundResult =
   | "refunded"
   | "not-found"
@@ -499,6 +505,67 @@ export class DeliveryAssignmentError extends Error {
 const MAX_DELIVERY_RUN_ORDERS = 10;
 const MAX_DELIVERY_RUN_WEIGHT_LBS = 200;
 
+function distanceMetersBetween(first: [number, number], second: [number, number]) {
+  const earthRadiusMeters = 6_371_000;
+  const radians = (degrees: number) => degrees * Math.PI / 180;
+  const latitudeDelta = radians(second[1] - first[1]);
+  const longitudeDelta = radians(second[0] - first[0]);
+  const value = Math.sin(latitudeDelta / 2) ** 2 +
+    Math.cos(radians(first[1])) * Math.cos(radians(second[1])) * Math.sin(longitudeDelta / 2) ** 2;
+  return 2 * earthRadiusMeters * Math.asin(Math.sqrt(value));
+}
+
+function returnRouteFromCurrentPosition(
+  current: [number, number],
+  originalGeometry: [number, number][] | null,
+  base: [number, number],
+) {
+  if (!originalGeometry || originalGeometry.length === 0) return [current, base];
+  let nearestIndex = 0;
+  let nearestDistance = distanceMetersBetween(current, originalGeometry[0]);
+  for (let index = 1; index < originalGeometry.length; index += 1) {
+    const candidateDistance = distanceMetersBetween(current, originalGeometry[index]);
+    if (candidateDistance < nearestDistance) {
+      nearestIndex = index;
+      nearestDistance = candidateDistance;
+    }
+  }
+  const reversedTraversedPath = originalGeometry.slice(0, nearestIndex + 1).reverse();
+  return [current, ...reversedTraversedPath, base].filter((point, index, points) =>
+    index === 0 || point[0] !== points[index - 1][0] || point[1] !== points[index - 1][1]);
+}
+
+function routeDistanceMeters(geometry: [number, number][]) {
+  return geometry.slice(1).reduce((total, point, index) => total + distanceMetersBetween(geometry[index], point), 0);
+}
+
+async function buildReturnRoute(
+  current: [number, number],
+  originalGeometry: [number, number][] | null,
+  originalSource: string | null,
+  base: [number, number],
+) {
+  if (originalGeometry && originalGeometry.length > 0) {
+    return {
+      geometry: returnRouteFromCurrentPosition(current, originalGeometry, base),
+      source: originalSource === "valhalla" ? "valhalla" as const : "approximate" as const,
+    };
+  }
+
+  try {
+    const routed = await calculateDeliveryRoute(
+      { id: "store", latitude: base[1], longitude: base[0] },
+      [{ id: "robot", latitude: current[1], longitude: current[0] }],
+    );
+    return {
+      geometry: returnRouteFromCurrentPosition(current, routed.geometry, base),
+      source: routed.source,
+    };
+  } catch {
+    return { geometry: [current, base], source: "approximate" as const };
+  }
+}
+
 export interface SalesStore {
   listSales(range: SalesRange): Promise<SalesBucket[]>;
   listSalesAnalytics(range: SalesRange): Promise<SalesAnalytics>;
@@ -528,6 +595,7 @@ export interface DeliveryStore {
   listRobots?(): Promise<DeliveryRobot[]>;
   listRuns?(): Promise<DeliveryRun[]>;
   cancelDeliveryRun?(runId: string): Promise<CancelRunResult>;
+  recallRobot?(robotId: string): Promise<RecallRobotResult>;
   /** Refund a paid order that is not on an active robot run, and restock its items. */
   refundOrder?(managerUserId: string, orderId: string): Promise<RefundResult>;
   getCustomerTracking?(userId: string, orderId: string): Promise<DeliveryTracking | null>;
@@ -1036,6 +1104,111 @@ export function createPgDeliveryStore(pool: pg.Pool): DeliveryStore {
       }
     },
 
+    async recallRobot(robotId) {
+      if (!UUID_PATTERN.test(robotId)) return { status: "not-found", returnRunId: null, cancelledRunId: null };
+      const base = getRobotBaseLocation();
+      const basePoint: [number, number] = [base.longitude, base.latitude];
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const { rows: robots } = await client.query<{ robotId: string; latitude: number | null; longitude: number | null }>(
+          `SELECT robot_id AS "robotId", current_latitude::float8 AS latitude,
+                  current_longitude::float8 AS longitude
+           FROM Robot WHERE robot_id = $1 FOR UPDATE`,
+          [robotId],
+        );
+        if (!robots[0]) {
+          await client.query("COMMIT");
+          return { status: "not-found", returnRunId: null, cancelledRunId: null };
+        }
+
+        const { rows: runs } = await client.query<{ runId: string; status: string; routeGeometry: [number, number][] | null; routeSource: string | null }>(
+          `SELECT run_id AS "runId", run_status AS status, route_geometry AS "routeGeometry",
+                  route_source AS "routeSource"
+           FROM DeliveryRun
+           WHERE robot_id = $1 AND run_status IN ('assigned', 'active', 'returning')
+           ORDER BY created_at DESC, run_id DESC
+           LIMIT 1 FOR UPDATE`,
+          [robotId],
+        );
+        const activeRun = runs[0] ?? null;
+        const { rows: previousRuns } = activeRun
+          ? { rows: [] as { routeGeometry: [number, number][] | null; routeSource: string | null }[] }
+          : await client.query<{ routeGeometry: [number, number][] | null; routeSource: string | null }>(
+            `SELECT route_geometry AS "routeGeometry", route_source AS "routeSource"
+             FROM DeliveryRun
+             WHERE robot_id = $1 AND route_geometry IS NOT NULL
+             ORDER BY created_at DESC, run_id DESC
+             LIMIT 1`,
+            [robotId],
+          );
+        const previousRun = previousRuns[0] ?? null;
+        if (activeRun && activeRun.status !== "returning") {
+          await client.query(
+            `UPDATE Delivery SET delivery_status = 'cancelled', updated_at = now()
+             WHERE run_id = $1 AND delivery_status <> 'delivered'`,
+            [activeRun.runId],
+          );
+          await client.query(
+            `UPDATE Orders SET order_status = 'placed', updated_at = now()
+             WHERE order_id IN (SELECT order_id FROM Delivery WHERE run_id = $1 AND delivery_status = 'cancelled')`,
+            [activeRun.runId],
+          );
+        }
+
+        const currentPoint: [number, number] = [
+          robots[0].longitude ?? base.longitude,
+          robots[0].latitude ?? base.latitude,
+        ];
+        const routeToReverse = activeRun ?? previousRun;
+        const returnRoute = activeRun?.status === "returning"
+          ? { geometry: activeRun.routeGeometry ?? [currentPoint, basePoint], source: "approximate" as const }
+          : await buildReturnRoute(
+            currentPoint,
+            routeToReverse?.routeGeometry ?? null,
+            routeToReverse?.routeSource ?? null,
+            basePoint,
+          );
+        const returnGeometry = returnRoute.geometry;
+        const distance = routeDistanceMeters(returnGeometry);
+        const durationSeconds = Math.max(1, Math.round(distance / 1.2));
+        let returnRunId: string;
+        if (activeRun) {
+          returnRunId = activeRun.runId;
+          await client.query(
+            `UPDATE DeliveryRun
+             SET run_status = 'returning', route_geometry = $2, route_source = $5,
+                 route_distance = $3, estimated_duration = $4, created_at = now(),
+                 started_at = now(), completed_at = NULL, updated_at = now()
+             WHERE run_id = $1`,
+            [returnRunId, JSON.stringify(returnGeometry), Math.round(distance), durationSeconds, returnRoute.source],
+          );
+        } else {
+          const { rows: createdRuns } = await client.query<{ runId: string }>(
+            `INSERT INTO DeliveryRun
+               (robot_id, run_status, route_distance, estimated_duration, route_geometry, route_source, created_at, started_at)
+             VALUES ($1, 'returning', $2, $3, $4, $5, now(), now())
+             RETURNING run_id AS "runId"`,
+            [robotId, Math.round(distance), durationSeconds, JSON.stringify(returnGeometry), returnRoute.source],
+          );
+          returnRunId = createdRuns[0].runId;
+        }
+        await client.query(
+          `UPDATE Robot
+           SET robot_status = 'returning', last_updated = now()
+           WHERE robot_id = $1`,
+          [robotId],
+        );
+        await client.query("COMMIT");
+        return { status: "returning", returnRunId, cancelledRunId: activeRun && activeRun.status !== "returning" ? activeRun.runId : null };
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+
     async refundOrder(managerUserId, orderId) {
       if (!UUID_PATTERN.test(orderId) || !UUID_PATTERN.test(managerUserId)) return "not-found";
       const client = await pool.connect();
@@ -1291,7 +1464,7 @@ export function createPgDeliveryStore(pool: pg.Pool): DeliveryStore {
       const { rows: runs } = await pool.query<Omit<SimulatableDeliveryRun, "stops">>(
         `SELECT run_id AS "runId", robot_id AS "robotId", created_at AS "createdAt",
                 estimated_duration AS "estimatedDurationSeconds", route_geometry AS "routeGeometry"
-         FROM DeliveryRun WHERE run_status IN ('assigned', 'active')
+         FROM DeliveryRun WHERE run_status IN ('assigned', 'active', 'returning')
          ORDER BY created_at, run_id`,
       );
       if (runs.length === 0) return [];
@@ -1299,7 +1472,7 @@ export function createPgDeliveryStore(pool: pg.Pool): DeliveryStore {
         `SELECT run_id AS "runId", order_id AS "orderId", stop_number AS "stopNumber",
                 estimated_delivery_time AS eta, delivery_status AS status
          FROM Delivery
-         WHERE run_id = ANY($1) AND delivery_status <> 'delivered'
+         WHERE run_id = ANY($1) AND delivery_status IN ('scheduled', 'in_transit')
          ORDER BY run_id, stop_number`,
         [runs.map(({ runId }) => runId)],
       );
@@ -1322,18 +1495,23 @@ export function createPgDeliveryStore(pool: pg.Pool): DeliveryStore {
           [tick.runId],
         );
         const run = runs[0];
-        if (!run || !["assigned", "active"].includes(run.status)) {
+        if (!run || !["assigned", "active", "returning"].includes(run.status)) {
           await client.query("COMMIT");
           return;
         }
 
         await client.query(
-          `UPDATE DeliveryRun SET run_status = 'active', started_at = COALESCE(started_at, $2), updated_at = $2
+          `UPDATE DeliveryRun
+           SET run_status = CASE WHEN run_status = 'returning' THEN 'returning' ELSE 'active' END,
+               started_at = CASE WHEN run_status = 'returning' THEN started_at ELSE COALESCE(started_at, $2) END,
+               updated_at = $2
            WHERE run_id = $1`,
           [tick.runId, tick.occurredAt],
         );
         await client.query(
-          `UPDATE Robot SET current_latitude = $2, current_longitude = $3, last_updated = $4, robot_status = 'on_delivery'
+          `UPDATE Robot SET current_latitude = $2, current_longitude = $3, last_updated = $4,
+             robot_status = CASE WHEN (SELECT run_status FROM DeliveryRun WHERE run_id = $1) = 'returning'
+                                 THEN 'returning' ELSE 'on_delivery' END
            WHERE robot_id = $1`,
           [run.robotId, tick.latitude, tick.longitude, tick.occurredAt],
         );
