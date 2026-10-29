@@ -16,9 +16,6 @@ import { ProductFormDialog, ProductTable } from "./ProductManager";
 
 import Map, { Layer, Marker, NavigationControl, Source } from "react-map-gl/maplibre";
 
-
-
-
 const tabs = ["Overview", "Customers", "Inventory", "Delivery", "Robot", "Sales", "Audit", "Settings"] as const;
 type DashboardTab = (typeof tabs)[number];
 

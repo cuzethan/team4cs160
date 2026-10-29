@@ -4,7 +4,9 @@ import { useAuth } from "../auth/AuthContext";
 import type { InventoryProduct } from "../inventory/types";
 import { addToCart } from "./api";
 
-type Notice = { tone: "success" | "error"; text: string };
+type Notice =
+  | { tone: "success"; productId: string; productName: string; quantity: number }
+  | { tone: "error"; text: string };
 
 // Shared "Add to cart" behavior for product cards and the product detail dialog.
 // Sends logged-out shoppers to the customer login first.
@@ -26,7 +28,11 @@ export function useAddToCart() {
     }
     try {
       await addToCart(product.id, quantity);
-      setNotice({ tone: "success", text: `Added ${quantity} × ${product.name} to your cart.` });
+      setNotice((current) =>
+        current?.tone === "success" && current.productId === product.id
+          ? { ...current, quantity: current.quantity + quantity }
+          : { tone: "success", productId: product.id, productName: product.name, quantity },
+      );
     } catch (error) {
       setNotice({ tone: "error", text: (error as Error).message });
     }
@@ -37,7 +43,9 @@ export function useAddToCart() {
       role="status"
       className={`fixed bottom-6 left-1/2 z-[60] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-xl px-5 py-3 text-sm font-semibold shadow-lg ${notice.tone === "success" ? "bg-[#416449] text-white" : "bg-white text-red-800 ring-1 ring-red-200"}`}
     >
-      {notice.text}
+      {notice.tone === "success"
+        ? `Added ${notice.quantity} × ${notice.productName} to your cart.`
+        : notice.text}
     </p>
   );
 
