@@ -1,5 +1,5 @@
 import type pg from "pg";
-import { getRobotBaseLocation } from "./robotBase.js";
+import { getRobotBaseLocation, isAtRobotBaseLocation } from "./robotBase.js";
 import { DEFAULT_DELIVERY_SETTINGS, deliveryFeeFor, roundCents, type DeliverySettings } from "./pricing.js";
 import { calculateDeliveryRoute } from "./routeService.js";
 
@@ -476,7 +476,7 @@ export type DeliveryNotification = {
 export type ReceiptResult = "completed" | "not-found" | "not-delivered";
 export type CancelRunResult = "cancelled" | "not-found" | "not-active";
 export type RecallRobotResult = {
-  status: "returning" | "not-found";
+  status: "returning" | "not-found" | "already-at-base";
   returnRunId: string | null;
   cancelledRunId: string | null;
 };
@@ -1144,6 +1144,10 @@ export function createPgDeliveryStore(pool: pg.Pool): DeliveryStore {
         if (!robots[0]) {
           await client.query("COMMIT");
           return { status: "not-found", returnRunId: null, cancelledRunId: null };
+        }
+        if (isAtRobotBaseLocation(robots[0].latitude, robots[0].longitude, base)) {
+          await client.query("COMMIT");
+          return { status: "already-at-base", returnRunId: null, cancelledRunId: null };
         }
 
         const { rows: runs } = await client.query<{ runId: string; status: string; routeGeometry: [number, number][] | null; routeSource: string | null }>(

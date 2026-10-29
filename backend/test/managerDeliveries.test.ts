@@ -100,6 +100,29 @@ describe("manager deliveries API", () => {
     expect(recallRobot).toHaveBeenCalledWith("robot-1");
   });
 
+  it("prevents a recall when the robot is already at home base", async () => {
+    const memory = createMemoryStore();
+    const cart = createMemoryCartStore([]);
+    const recallRobot = vi.fn(async () => ({ status: "already-at-base" as const, returnRunId: null, cancelledRunId: null }));
+    const app = createApp({
+      store: memory.store,
+      cartStore: cart.cartStore,
+      orderStore: createMemoryOrderStore(cart).orderStore,
+      productStore: createMemoryProductStore(cart).productStore,
+      salesStore: { listSales: async () => [], listSalesAnalytics: async () => ({ profitBuckets: [], items: [], categories: [] }) },
+      deliveryStore: { listDeliveries: async () => [], recallRobot },
+      appUrl: "http://localhost:5173",
+      secureCookies: false,
+      checkDatabase: async () => {},
+    });
+
+    const manager = await managerAgent(app, memory);
+    const response = await manager.post("/api/manager/deliveries/robots/robot-1/recall");
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toBe("This robot is already at the configured home base.");
+  });
+
   it("refunds an undispatched paid order and restocks its items", async () => {
     const memory = createMemoryStore();
     const cart = createMemoryCartStore([

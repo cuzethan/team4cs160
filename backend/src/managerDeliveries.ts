@@ -54,6 +54,7 @@ export function createManagerDeliveriesRouter({ store, deliveryStore }: ManagerD
 
     const result = await deliveryStore.recallRobot(req.params.robotId);
     if (result.status === "not-found") return res.status(404).json({ error: "Robot not found." });
+    if (result.status === "already-at-base") return res.status(409).json({ error: "This robot is already at the configured home base." });
     res.json({
       robotId: req.params.robotId,
       status: result.status,
