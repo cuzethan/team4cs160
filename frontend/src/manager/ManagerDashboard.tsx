@@ -1619,6 +1619,7 @@ function LowStockTable({ products, action }: { products: InventoryProduct[]; act
 function RobotPanel() {
   const [robots, setRobots] = useState<DeliveryRobot[]>([]);
   const [runs, setRuns] = useState<DeliveryRun[]>([]);
+  const [runFilter, setRunFilter] = useState<"all" | "delivery" | "recall">("all");
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -1647,7 +1648,11 @@ function RobotPanel() {
     return () => window.clearInterval(timer);
   }, [refresh]);
 
-  const selectedRun = runs.find((run) => run.runId === selectedRunId) ?? null;
+  const filteredRuns = useMemo(
+    () => runFilter === "all" ? runs : runs.filter((run) => run.runType === runFilter),
+    [runFilter, runs],
+  );
+  const selectedRun = filteredRuns.find((run) => run.runId === selectedRunId) ?? null;
   const selectedRobot = robots.find((robot) => robot.robotId === selectedRun?.robotId) ?? null;
   const route = useMemo(() => selectedRun?.routeGeometry && selectedRun.routeGeometry.length > 0
     ? {
@@ -1760,22 +1765,35 @@ function RobotPanel() {
           <div className="grid items-start gap-5 xl:grid-cols-[minmax(15rem,0.8fr)_minmax(0,2fr)]">
             <section aria-label="Delivery runs" className="overflow-hidden rounded-2xl border border-[#e8e7dc] bg-white">
               <div className="border-b border-[#ecebe2] px-4 py-3">
-                <h3 className="font-extrabold text-[#294332]">Runs</h3>
-                <p className="mt-1 text-xs text-[#7d887b]">Refreshes every few seconds</p>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="font-extrabold text-[#294332]">Runs</h3>
+                  <label className="sr-only" htmlFor="robot-run-filter">Filter robot runs</label>
+                  <select
+                    id="robot-run-filter"
+                    value={runFilter}
+                    onChange={(event) => setRunFilter(event.target.value as typeof runFilter)}
+                    className="rounded-lg border border-[#d9e2d2] bg-white px-2 py-1 text-xs font-bold text-[#416449]"
+                  >
+                    <option value="all">All runs</option>
+                    <option value="delivery">Delivery runs</option>
+                    <option value="recall">Recall runs</option>
+                  </select>
+                </div>
+                <p className="mt-1 text-xs text-[#7d887b]">Refreshes every few seconds · {filteredRuns.length} shown</p>
               </div>
               <ul className="max-h-[32rem] divide-y divide-[#ecebe2] overflow-y-auto">
-                {runs.map((run) => (
+                {filteredRuns.map((run) => (
                   <li key={run.runId}>
                     <button type="button" aria-pressed={selectedRunId === run.runId} onClick={() => setSelectedRunId(run.runId)} className={`w-full px-4 py-3 text-left ${selectedRunId === run.runId ? "bg-[#e9f1df]" : "hover:bg-[#f8f8f3]"}`}>
                       <span className="flex items-center justify-between gap-2">
                         <span className="font-mono text-xs font-bold text-[#294332]">{shortOrderId(run.runId)}</span>
                         <span className="text-xs capitalize text-[#667269]">{run.status}</span>
                       </span>
-                      <span className="mt-1 block text-xs text-[#667269]">{run.robotName} · {run.stops.length} stops</span>
+                      <span className="mt-1 block text-xs text-[#667269]">{run.runType === "recall" ? "Recall" : "Delivery"} · {run.robotName} · {run.stops.length} stops</span>
                     </button>
                   </li>
                 ))}
-                {runs.length === 0 && <li className="px-4 py-5 text-sm text-[#667269]">No runs have been dispatched.</li>}
+                {filteredRuns.length === 0 && <li className="px-4 py-5 text-sm text-[#667269]">No {runFilter === "all" ? "robot" : runFilter} runs found.</li>}
               </ul>
             </section>
 

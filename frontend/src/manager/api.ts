@@ -88,6 +88,7 @@ export type DeliveryRun = {
   runId: string;
   robotId: string;
   robotName: string;
+  runType: "delivery" | "recall";
   status: string;
   routeDistanceMeters: number | null;
   estimatedDurationSeconds: number | null;

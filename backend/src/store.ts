@@ -52,6 +52,7 @@ export async function ensureDeliveryTrackingSchema(pool: pg.Pool) {
     ALTER TABLE DeliveryRun
       ADD COLUMN IF NOT EXISTS route_geometry JSONB,
       ADD COLUMN IF NOT EXISTS route_source VARCHAR(30),
+      ADD COLUMN IF NOT EXISTS run_type VARCHAR(20),
       ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
       ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
   `);
@@ -419,6 +420,7 @@ export type DeliveryRun = {
   runId: string;
   robotId: string;
   robotName: string;
+  runType: "delivery" | "recall";
   status: string;
   routeDistanceMeters: number | null;
   estimatedDurationSeconds: number | null;
@@ -1037,6 +1039,12 @@ export function createPgDeliveryStore(pool: pg.Pool): DeliveryStore {
     async listRuns() {
       const { rows: runs } = await pool.query<Omit<DeliveryRun, "stops">>(
         `SELECT dr.run_id AS "runId", dr.robot_id AS "robotId", r.robot_name AS "robotName",
+                CASE
+                  WHEN dr.run_type = 'recall' OR dr.run_status = 'returning' THEN 'recall'
+                  WHEN dr.run_type = 'delivery' THEN 'delivery'
+                  WHEN NOT EXISTS (SELECT 1 FROM Delivery d WHERE d.run_id = dr.run_id) THEN 'recall'
+                  ELSE 'delivery'
+                END AS "runType",
                 dr.run_status AS status, dr.route_distance::float8 AS "routeDistanceMeters",
                 dr.estimated_duration AS "estimatedDurationSeconds", dr.route_geometry AS "routeGeometry",
                 dr.route_source AS "routeSource", dr.started_at AS "startedAt", dr.completed_at AS "completedAt"
@@ -1177,7 +1185,7 @@ export function createPgDeliveryStore(pool: pg.Pool): DeliveryStore {
           returnRunId = activeRun.runId;
           await client.query(
             `UPDATE DeliveryRun
-             SET run_status = 'returning', route_geometry = $2, route_source = $5,
+             SET run_type = 'recall', run_status = 'returning', route_geometry = $2, route_source = $5,
                  route_distance = $3, estimated_duration = $4, created_at = now(),
                  started_at = now(), completed_at = NULL, updated_at = now()
              WHERE run_id = $1`,
@@ -1186,8 +1194,8 @@ export function createPgDeliveryStore(pool: pg.Pool): DeliveryStore {
         } else {
           const { rows: createdRuns } = await client.query<{ runId: string }>(
             `INSERT INTO DeliveryRun
-               (robot_id, run_status, route_distance, estimated_duration, route_geometry, route_source, created_at, started_at)
-             VALUES ($1, 'returning', $2, $3, $4, $5, now(), now())
+               (robot_id, run_type, run_status, route_distance, estimated_duration, route_geometry, route_source, created_at, started_at)
+             VALUES ($1, 'recall', 'returning', $2, $3, $4, $5, now(), now())
              RETURNING run_id AS "runId"`,
             [robotId, Math.round(distance), durationSeconds, JSON.stringify(returnGeometry), returnRoute.source],
           );
@@ -1421,8 +1429,8 @@ export function createPgDeliveryStore(pool: pg.Pool): DeliveryStore {
 
         const { rows: [{ runId }] } = await client.query<{ runId: string }>(
           `INSERT INTO DeliveryRun
-             (robot_id, run_status, route_distance, estimated_duration, route_geometry, route_source, started_at)
-           VALUES ($1, 'assigned', $2, $3, $4::jsonb, $5, NULL)
+             (robot_id, run_type, run_status, route_distance, estimated_duration, route_geometry, route_source, started_at)
+           VALUES ($1, 'delivery', 'assigned', $2, $3, $4::jsonb, $5, NULL)
            RETURNING run_id AS "runId"`,
           [run.robotId, run.routeDistanceMeters, run.estimatedDurationSeconds, JSON.stringify(run.routeGeometry), run.routeSource],
         );
