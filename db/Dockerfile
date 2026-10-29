@@ -1,3 +1,7 @@
-FROM postgres:16-alpine
+FROM postgres:16
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends postgresql-16-pgtap pgtap \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY init/ /docker-entrypoint-initdb.d/

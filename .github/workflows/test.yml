@@ -5,6 +5,16 @@ on:
   pull_request:
 
 jobs:
+  database:
+    name: Database
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose up -d --build --wait db
+      - run: docker compose exec -T -e PGPASSWORD=ofs db pg_prove --dbname ofs --username ofs --host localhost /tests/schema.sql
+      - if: always()
+        run: docker compose down -v
+
   backend:
     name: Backend
     runs-on: ubuntu-latest

@@ -106,6 +106,24 @@ For all relational database tables, type "\d" (press Enter to view more)
 To see attributes of a table, type "\d {TABLE}" (ie \d users for users table)
 To see contents of a table, use SQL (ie SELECT * FROM users for user data)
 
+### Database tests (pgTAP)
+
+The database image includes pgTAP and enables it automatically when a new
+database volume is initialized. Start the database and run the schema tests:
+
+```bash
+docker compose up -d --build db
+docker compose exec -e PGPASSWORD=ofs db pg_prove --dbname ofs --username ofs --host localhost /tests/schema.sql
+```
+
+The tests inspect the schema and starter data without changing application
+records. The same command runs in the database CI job. Existing database
+volumes do not rerun initialization scripts; enable pgTAP on one with:
+
+```bash
+docker compose exec db psql -U ofs -d ofs -c "CREATE EXTENSION IF NOT EXISTS pgtap;"
+```
+
 ## Accounts and login
 
 Customers sign up at http://localhost:5173/register. Manager accounts can't sign up on the site; create one from the command line while the stack is running:
