@@ -29,8 +29,8 @@ function CategorySidebar({
   ];
 
   return (
-    <aside className="rounded-2xl border border-[#e8e7dc] bg-white p-5 shadow-[0_3px_12px_rgba(42,65,48,0.04)]">
-      <h2 className="text-xs font-bold uppercase tracking-[0.16em] text-[#7d887b]">
+    <aside className="rounded-2xl border border-border bg-white p-5 shadow-[0_3px_12px_rgba(0,0,0,0.06)]">
+      <h2 className="text-xs font-bold uppercase tracking-[0.16em] text-muted">
         Shop by category
       </h2>
       <ul className="mt-4 space-y-1">
@@ -40,10 +40,10 @@ function CategorySidebar({
               type="button"
               onClick={() => onSelect(category.name)}
               aria-pressed={category.name === selected}
-              className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm transition ${category.name === selected ? "bg-[#e9f1df] font-bold text-[#416449]" : "font-medium text-[#667269] hover:bg-[#f6f7f1]"}`}
+              className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm transition ${category.name === selected ? "bg-accent-soft font-bold text-accent-ink" : "font-medium text-muted hover:bg-canvas"}`}
             >
               <span>{category.name}</span>
-              <span className="text-xs text-[#90998f]">{category.count}</span>
+              <span className="text-xs text-muted">{category.count}</span>
             </button>
           </li>
         ))}
@@ -54,7 +54,7 @@ function CategorySidebar({
 
 function InventorySearch({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   return (
-    <label className="flex h-12 flex-1 items-center gap-3 rounded-xl border border-[#e6e6dc] bg-white px-4 text-[#899188] shadow-sm">
+    <label className="flex h-12 flex-1 items-center gap-3 rounded-xl border border-border bg-white px-4 text-muted shadow-sm">
       <svg
         aria-hidden="true"
         viewBox="0 0 24 24"
@@ -70,7 +70,7 @@ function InventorySearch({ value, onChange }: { value: string; onChange: (value:
         aria-label="Search groceries"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full bg-transparent text-sm text-[#304336] outline-none placeholder:text-[#a3aaa1]"
+        className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-muted"
       />
     </label>
   );
@@ -86,13 +86,13 @@ function SortControl({
   onChange: (value: SortOption) => void;
 }) {
   return (
-    <label className="flex h-12 items-center gap-2 rounded-xl border border-[#e6e6dc] bg-white px-4 text-sm text-[#667269] shadow-sm">
+    <label className="flex h-12 items-center gap-2 rounded-xl border border-border bg-white px-4 text-sm text-muted shadow-sm">
       <span className="whitespace-nowrap">Sort by</span>
       <select
         aria-label="Sort products"
         value={value}
         onChange={(event) => onChange(event.target.value as SortOption)}
-        className="max-w-36 bg-transparent font-semibold text-[#304336] outline-none"
+        className="max-w-36 bg-transparent font-semibold text-ink outline-none"
       >
         <option value="featured">Featured</option>
         <option value="price-low">Price: low to high</option>
@@ -158,13 +158,13 @@ export function InventoryPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#fbfaf5] text-[#253b2d]">
+    <div className="min-h-screen bg-canvas text-ink">
       <SiteHeader />
 
       <main className="mx-auto max-w-7xl px-5 py-8 sm:px-8 sm:py-12">
         <div className="mb-8 flex flex-col justify-between gap-5 md:flex-row md:items-end">
           <div>
-            <h1 className="text-4xl font-extrabold tracking-tight text-[#294332] sm:text-5xl">
+            <h1 className="text-4xl font-extrabold tracking-tight text-ink sm:text-5xl">
               Inventory
             </h1>
           </div>
@@ -188,25 +188,25 @@ export function InventoryPage() {
               </p>
             )}
             <div className="mb-4 flex items-center justify-between">
-              <p className="text-sm font-semibold text-[#718071]">
+              <p className="text-sm font-semibold text-muted">
                 Showing{" "}
-                <span className="text-[#314a37]">
+                <span className="text-ink">
                   {sortedProducts.length} {sortedProducts.length === 1 ? "item" : "items"}
                 </span>
               </p>
-              <p className="text-xs font-medium text-[#9aa197]">
+              <p className="text-xs font-medium text-muted">
                 Prices shown per item
               </p>
             </div>
             {isLoading ? (
-              <p role="status" className="rounded-2xl bg-white p-6 text-[#5f6b61]">Loading groceries…</p>
+              <p role="status" className="rounded-2xl bg-white p-6 text-muted">Loading groceries…</p>
             ) : error ? (
               <div role="alert" className="rounded-2xl border border-red-200 bg-white p-6">
                 <p className="text-red-800">{error}</p>
-                <button type="button" onClick={() => void reload()} className="mt-4 font-bold text-[#416449] underline">Try again</button>
+                <button type="button" onClick={() => void reload()} className="mt-4 font-bold text-accent-ink underline">Try again</button>
               </div>
             ) : sortedProducts.length === 0 ? (
-              <p className="rounded-2xl border border-[#e8e7dc] bg-white p-8 text-center text-[#667269]">
+              <p className="rounded-2xl border border-border bg-white p-8 text-center text-muted">
                 No groceries match your search.
               </p>
             ) : (

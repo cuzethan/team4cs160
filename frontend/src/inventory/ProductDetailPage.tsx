@@ -21,7 +21,7 @@ export function ProductDetailPage({ product, onClose, onAddToCart }: ProductDeta
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#1c2c20]/55 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/55 p-4 backdrop-blur-sm"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
@@ -31,49 +31,49 @@ export function ProductDetailPage({ product, onClose, onAddToCart }: ProductDeta
         role="dialog"
         aria-modal="true"
         aria-labelledby="product-detail-title"
-        className="relative grid w-full max-w-3xl overflow-hidden rounded-3xl bg-[#fffefa] shadow-2xl md:grid-cols-2"
+        className="relative grid w-full max-w-3xl overflow-hidden rounded-3xl bg-surface shadow-2xl md:grid-cols-2"
       >
         <button
           type="button"
           onClick={onClose}
-          className="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-xl text-[#536459] shadow-sm transition hover:bg-white hover:text-[#253b2d]"
+          className="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-xl text-muted shadow-sm transition hover:bg-white hover:text-ink"
           aria-label="Close product details"
         >
           ×
         </button>
 
-        <div className="flex min-h-64 items-center justify-center bg-[#f1f4e6] text-9xl md:min-h-[28rem]">
+        <div className="flex min-h-64 items-center justify-center bg-canvas text-9xl md:min-h-[28rem]">
           {/* Temporary placeholder; replace with the product image. */}
           <span aria-hidden="true">{product.emoji}</span>
         </div>
 
         <div className="flex flex-col p-7 md:p-9">
-          <span className="w-fit rounded-full bg-[#e9f1df] px-3 py-1 text-xs font-bold uppercase tracking-wide text-[#55705b]">
+          <span className="w-fit rounded-full bg-accent-soft px-3 py-1 text-xs font-bold uppercase tracking-wide text-muted">
             {product.category}
           </span>
-          <h2 id="product-detail-title" className="mt-4 text-3xl font-bold tracking-tight text-[#253b2d]">
+          <h2 id="product-detail-title" className="mt-4 text-3xl font-bold tracking-tight text-ink">
             {product.name}
           </h2>
-          <p className="mt-3 text-2xl font-bold text-[#42674a]">
-            ${product.price.toFixed(2)} <span className="text-sm font-medium text-[#788078]">/ {product.unit}</span>
+          <p className="mt-3 text-2xl font-bold text-accent-ink">
+            ${product.price.toFixed(2)} <span className="text-sm font-medium text-muted">/ {product.unit}</span>
           </p>
-          <p className="mt-5 leading-7 text-[#69756b]">{product.description}</p>
+          <p className="mt-5 leading-7 text-muted">{product.description}</p>
           {product.quantityInStock === 0 ? (
-            <p className="mt-5 text-sm font-bold text-[#8b5145]">Out of stock</p>
+            <p className="mt-5 text-sm font-bold text-red-700">Out of stock</p>
           ) : (
-            <p className="mt-5 text-sm font-semibold text-[#536459]">
+            <p className="mt-5 text-sm font-semibold text-muted">
               {product.quantityInStock} {product.unit === "each" ? "available" : "in stock"}
             </p>
           )}
 
           <div className="mt-auto flex flex-col gap-3 pt-8 sm:flex-row">
-            <label className="flex items-center justify-between gap-3 rounded-xl border border-[#dedfd5] px-4 py-3 text-sm font-semibold text-[#536459]">
+            <label className="flex items-center justify-between gap-3 rounded-xl border border-border px-4 py-3 text-sm font-semibold text-muted">
               Quantity
               <select
                 aria-label="Quantity"
                 value={quantity}
                 onChange={(event) => setQuantity(Number(event.target.value))}
-                className="bg-transparent font-bold text-[#253b2d] outline-none"
+                className="bg-transparent font-bold text-ink outline-none"
               >
                 {quantityChoices.map((choice) => (
                   <option key={choice} value={choice}>{choice}</option>
@@ -84,7 +84,7 @@ export function ProductDetailPage({ product, onClose, onAddToCart }: ProductDeta
               type="button"
               onClick={handleAddToCartClick}
               disabled={product.quantityInStock === 0}
-              className="flex-1 rounded-xl bg-[#416449] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#35563c] disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex-1 rounded-xl bg-accent px-5 py-3 text-sm font-bold text-on-accent transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
               Add to cart
             </button>

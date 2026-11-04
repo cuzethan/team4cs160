@@ -41,7 +41,7 @@ export function useAddToCart() {
   const noticeElement = notice && (
     <p
       role="status"
-      className={`fixed bottom-6 left-1/2 z-[60] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-xl px-5 py-3 text-sm font-semibold shadow-lg ${notice.tone === "success" ? "bg-[#416449] text-white" : "bg-white text-red-800 ring-1 ring-red-200"}`}
+      className={`fixed bottom-6 left-1/2 z-[60] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-xl px-5 py-3 text-sm font-semibold shadow-lg ${notice.tone === "success" ? "bg-accent text-on-accent" : "bg-white text-red-800 ring-1 ring-red-200"}`}
     >
       {notice.tone === "success"
         ? `Added ${notice.quantity} × ${notice.productName} to your cart.`

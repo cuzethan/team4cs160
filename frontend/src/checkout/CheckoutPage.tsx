@@ -21,7 +21,7 @@ const emptyAddress: CheckoutAddress = {
 };
 
 const inputClassName =
-  "mt-1 w-full rounded-xl border border-[#dedfd5] bg-white px-4 py-3 text-sm text-[#253b2d] outline-none focus:border-[#416449]";
+  "mt-1 w-full rounded-xl border border-border bg-white px-4 py-3 text-sm text-ink outline-none focus:border-accent-ink";
 
 type CheckoutFormProps = {
   lines: CartLine[];
@@ -44,62 +44,62 @@ function CheckoutForm({
   return (
     <form onSubmit={onSubmit} className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
       <div className="space-y-6">
-        <section aria-labelledby="address-heading" className="rounded-2xl border border-[#e8e7dc] bg-white p-6">
+        <section aria-labelledby="address-heading" className="rounded-2xl border border-border bg-white p-6">
           <h2 id="address-heading" className="text-xl font-extrabold">Delivery address</h2>
           <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-6">
-            <label className="text-sm font-semibold text-[#536459] sm:col-span-6">
+            <label className="text-sm font-semibold text-muted sm:col-span-6">
               Street address
               <input required autoComplete="street-address" value={address.street} onChange={(event) => updateField("street")(event.target.value)} className={inputClassName} />
             </label>
-            <label className="text-sm font-semibold text-[#536459] sm:col-span-3">
+            <label className="text-sm font-semibold text-muted sm:col-span-3">
               City
               <input required autoComplete="address-level2" value={address.city} onChange={(event) => updateField("city")(event.target.value)} className={inputClassName} />
             </label>
-            <label className="text-sm font-semibold text-[#536459] sm:col-span-1">
+            <label className="text-sm font-semibold text-muted sm:col-span-1">
               State
               <input required autoComplete="address-level1" value={address.state} onChange={(event) => updateField("state")(event.target.value)} className={inputClassName} />
             </label>
-            <label className="text-sm font-semibold text-[#536459] sm:col-span-2">
+            <label className="text-sm font-semibold text-muted sm:col-span-2">
               ZIP code
               <input required autoComplete="postal-code" inputMode="numeric" pattern="\d{5}(-\d{4})?" title="5-digit ZIP code" value={address.zipCode} onChange={(event) => updateField("zipCode")(event.target.value)} className={inputClassName} />
             </label>
-            <label className="text-sm font-semibold text-[#536459] sm:col-span-6">
-              Drop-off instructions <span className="font-normal text-[#899188]">(optional)</span>
+            <label className="text-sm font-semibold text-muted sm:col-span-6">
+              Drop-off instructions <span className="font-normal text-muted">(optional)</span>
               <textarea rows={2} placeholder="Front door by default" value={address.deliveryInstructions} onChange={(event) => updateField("deliveryInstructions")(event.target.value)} className={inputClassName} />
             </label>
           </div>
         </section>
 
-        <section aria-labelledby="payment-heading" className="rounded-2xl border border-[#e8e7dc] bg-white p-6">
+        <section aria-labelledby="payment-heading" className="rounded-2xl border border-border bg-white p-6">
           <h2 id="payment-heading" className="text-xl font-extrabold">Payment</h2>
           {payment}
         </section>
       </div>
 
-      <aside className="rounded-2xl border border-[#e8e7dc] bg-white p-6 shadow-[0_3px_12px_rgba(42,65,48,0.04)]">
+      <aside className="rounded-2xl border border-border bg-white p-6 shadow-[0_3px_12px_rgba(0,0,0,0.06)]">
         <h2 className="text-xl font-extrabold">Order summary</h2>
-        <ul className="mt-5 space-y-2 border-b border-[#ecebe2] pb-4 text-sm text-[#5f6b61]">
+        <ul className="mt-5 space-y-2 border-b border-border pb-4 text-sm text-muted">
           {lines.map((line) => (
             <li key={line.cartItemId} className="flex justify-between gap-4">
-              <span>{line.name} <span className="text-[#899188]">× {line.quantity}</span></span>
+              <span>{line.name} <span className="text-muted">× {line.quantity}</span></span>
               <span className="shrink-0">${(line.price * line.quantity).toFixed(2)}</span>
             </li>
           ))}
         </ul>
         <dl className="mt-4 space-y-3 text-sm">
           <div className="flex justify-between gap-4">
-            <dt className="text-[#667269]">Subtotal</dt>
+            <dt className="text-muted">Subtotal</dt>
             <dd className="font-bold">${subtotal.toFixed(2)}</dd>
           </div>
           <div className="flex justify-between gap-4">
-            <dt className="text-[#667269]">Total weight</dt>
+            <dt className="text-muted">Total weight</dt>
             <dd className="font-bold">{totalWeight.toFixed(1)} lb</dd>
           </div>
           <div className="flex justify-between gap-4">
-            <dt className="text-[#667269]">Delivery fee</dt>
+            <dt className="text-muted">Delivery fee</dt>
             <dd className="font-bold">{deliveryFee === 0 ? "Free" : `$${deliveryFee.toFixed(2)}`}</dd>
           </div>
-          <div className="flex justify-between gap-4 border-t border-[#ecebe2] pt-3 text-base">
+          <div className="flex justify-between gap-4 border-t border-border pt-3 text-base">
             <dt className="font-bold">Total</dt>
             <dd className="font-extrabold">${(subtotal + deliveryFee).toFixed(2)}</dd>
           </div>
@@ -110,7 +110,7 @@ function CheckoutForm({
         <button
           type="submit"
           disabled={!canSubmit || isSubmitting}
-          className="mt-6 w-full rounded-xl bg-[#416449] px-5 py-3 font-bold text-white transition cursor-pointer hover:bg-[#35563c] disabled:cursor-not-allowed disabled:opacity-60"
+          className="mt-6 w-full rounded-xl bg-accent px-5 py-3 font-bold text-on-accent transition cursor-pointer hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isSubmitting ? "Placing order…" : "Place order"}
         </button>
@@ -233,37 +233,37 @@ export function CheckoutPage() {
   const deliveryFee = deliveryFeeFor(totalWeight, deliverySettings);
 
   return (
-    <div className="min-h-screen bg-[#fbfaf5] text-[#253b2d]">
+    <div className="min-h-screen bg-canvas text-ink">
       <SiteHeader />
       <main className="mx-auto max-w-7xl px-5 py-8 sm:px-8 sm:py-12">
         <div className="mb-8">
-          <Link to="/cart" className="text-sm font-bold text-[#416449] underline-offset-4 hover:underline">← Back to cart</Link>
-          <h1 className="mt-2 text-4xl font-extrabold tracking-tight text-[#294332] sm:text-5xl">Checkout</h1>
+          <Link to="/cart" className="text-sm font-bold text-accent-ink underline-offset-4 hover:underline">← Back to cart</Link>
+          <h1 className="mt-2 text-4xl font-extrabold tracking-tight text-ink sm:text-5xl">Checkout</h1>
         </div>
 
         {authLoading || (user && isLoading) ? (
-          <p role="status" className="rounded-2xl bg-white p-6 text-[#5f6b61]">Loading checkout…</p>
+          <p role="status" className="rounded-2xl bg-white p-6 text-muted">Loading checkout…</p>
         ) : !user ? (
-          <section className="rounded-2xl border border-[#e8e7dc] bg-white p-8 text-center">
+          <section className="rounded-2xl border border-border bg-white p-8 text-center">
             <p className="text-lg font-bold">Log in to check out</p>
-            <Link to="/customer-login" className="mt-4 inline-block font-bold text-[#416449] underline">Customer login</Link>
+            <Link to="/customer-login" className="mt-4 inline-block font-bold text-accent-ink underline">Customer login</Link>
           </section>
         ) : loadError ? (
           <section role="alert" className="rounded-2xl border border-red-200 bg-white p-6">
             <p className="text-red-800">{loadError}</p>
-            <button type="button" onClick={() => void loadCart()} className="mt-4 font-bold text-[#416449] underline">Try again</button>
+            <button type="button" onClick={() => void loadCart()} className="mt-4 font-bold text-accent-ink underline">Try again</button>
           </section>
         ) : lines.length === 0 ? (
-          <section className="rounded-2xl border border-[#e8e7dc] bg-white p-8 text-center">
+          <section className="rounded-2xl border border-border bg-white p-8 text-center">
             <p className="text-lg font-bold">Your cart is empty</p>
-            <Link to="/inventory" className="mt-4 inline-block font-bold text-[#416449] underline">Browse groceries</Link>
+            <Link to="/inventory" className="mt-4 inline-block font-bold text-accent-ink underline">Browse groceries</Link>
           </section>
         ) : clientSecret ? (
           <Elements
             stripe={stripePromise}
             options={{
               clientSecret,
-              appearance: { theme: "stripe", variables: { colorPrimary: "#416449", borderRadius: "12px" } },
+              appearance: { theme: "stripe", variables: { colorPrimary: "#B6EAF5", borderRadius: "12px" } },
             }}
           >
             <PayableCheckout
@@ -287,11 +287,11 @@ export function CheckoutPage() {
               !publishableKey ? (
                 <p role="alert" className="mt-4 text-sm text-red-800">Card payments are not configured.</p>
               ) : paymentLoading ? (
-                <p role="status" className="mt-4 text-sm text-[#667269]">Loading payment…</p>
+                <p role="status" className="mt-4 text-sm text-muted">Loading payment…</p>
               ) : paymentError ? (
                 <div role="alert" className="mt-4">
                   <p className="text-sm text-red-800">{paymentError}</p>
-                  <button type="button" onClick={() => void loadPaymentIntent()} className="mt-3 font-bold text-[#416449] underline">Try again</button>
+                  <button type="button" onClick={() => void loadPaymentIntent()} className="mt-3 font-bold text-accent-ink underline">Try again</button>
                 </div>
               ) : null
             }
