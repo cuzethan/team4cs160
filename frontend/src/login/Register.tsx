@@ -43,37 +43,37 @@ export function Register() {
   };
 
   return (
-    <div className="box-border flex min-h-screen items-stretch justify-center bg-[#fbfaf5] p-6">
-      <div className="my-auto box-border w-full max-w-[620px] rounded-[18px] border border-[#e8e7dc] bg-white px-7 py-8 shadow-[0_12px_28px_rgba(42,65,48,0.08)]">
-        <header className="mb-7 text-center text-[2rem] font-bold text-[#294332]">Create Account</header>
+    <div className="box-border flex min-h-screen items-stretch justify-center bg-canvas p-6">
+      <div className="my-auto box-border w-full max-w-[620px] rounded-[18px] border border-border bg-white px-7 py-8 shadow-[0_12px_28px_rgba(0,0,0,0.08)]">
+        <header className="mb-7 text-center text-[2rem] font-bold text-ink">Create Account</header>
         <form onSubmit={handleSubmit}>
           <div className="grid grid-cols-1">
             <div className="mb-4 flex flex-col">
-              <label htmlFor="firstName" className="mb-2 text-[0.96rem] font-semibold text-[#253b2d]">First Name <span className="text-[#b42318]" aria-hidden="true">*</span></label>
-              <input id="firstName" name="firstName" className="box-border w-full rounded-[10px] border border-[#e6e6dc] bg-white px-[14px] py-3 text-base text-[#253b2d] transition-[border-color,box-shadow] duration-200 ease-in-out focus:border-[#416449] focus:outline-none focus:ring-[3px] focus:ring-[rgba(65,100,73,0.18)]" type="text" autoComplete="given-name" required />
+              <label htmlFor="firstName" className="mb-2 text-[0.96rem] font-semibold text-ink">First Name <span className="text-red-700" aria-hidden="true">*</span></label>
+              <input id="firstName" name="firstName" className="box-border w-full rounded-[10px] border border-border bg-white px-[14px] py-3 text-base text-ink transition-[border-color,box-shadow] duration-200 ease-in-out focus:border-accent-ink focus:outline-none focus:ring-[3px] focus:ring-accent-ink/20" type="text" autoComplete="given-name" required />
             </div>
 
             <div className="mb-4 flex flex-col">
-              <label htmlFor="lastName" className="mb-2 text-[0.96rem] font-semibold text-[#253b2d]">Last Name <span className="text-[#b42318]" aria-hidden="true">*</span></label>
-              <input id="lastName" name="lastName" className="box-border w-full rounded-[10px] border border-[#e6e6dc] bg-white px-[14px] py-3 text-base text-[#253b2d] transition-[border-color,box-shadow] duration-200 ease-in-out focus:border-[#416449] focus:outline-none focus:ring-[3px] focus:ring-[rgba(65,100,73,0.18)]" type="text" autoComplete="family-name" required />
+              <label htmlFor="lastName" className="mb-2 text-[0.96rem] font-semibold text-ink">Last Name <span className="text-red-700" aria-hidden="true">*</span></label>
+              <input id="lastName" name="lastName" className="box-border w-full rounded-[10px] border border-border bg-white px-[14px] py-3 text-base text-ink transition-[border-color,box-shadow] duration-200 ease-in-out focus:border-accent-ink focus:outline-none focus:ring-[3px] focus:ring-accent-ink/20" type="text" autoComplete="family-name" required />
             </div>
 
             <div className="mb-4 flex flex-col">
-              <label htmlFor="phone" className="mb-2 text-[0.96rem] font-semibold text-[#253b2d]">Phone Number <span className="text-[#b42318]" aria-hidden="true">*</span></label>
-              <input id="phone" name="phone" className="box-border w-full rounded-[10px] border border-[#e6e6dc] bg-white px-[14px] py-3 text-base text-[#253b2d] transition-[border-color,box-shadow] duration-200 ease-in-out focus:border-[#416449] focus:outline-none focus:ring-[3px] focus:ring-[rgba(65,100,73,0.18)]" type="tel" placeholder="e.g. (123) 456-7890" autoComplete="tel" required />
+              <label htmlFor="phone" className="mb-2 text-[0.96rem] font-semibold text-ink">Phone Number <span className="text-red-700" aria-hidden="true">*</span></label>
+              <input id="phone" name="phone" className="box-border w-full rounded-[10px] border border-border bg-white px-[14px] py-3 text-base text-ink transition-[border-color,box-shadow] duration-200 ease-in-out focus:border-accent-ink focus:outline-none focus:ring-[3px] focus:ring-accent-ink/20" type="tel" placeholder="e.g. (123) 456-7890" autoComplete="tel" required />
             </div>
 
             <div className="mb-4 flex flex-col">
-              <label htmlFor="email" className="mb-2 text-[0.96rem] font-semibold text-[#253b2d]">Email <span className="text-[#b42318]" aria-hidden="true">*</span></label>
-              <input id="email" name="email" className="box-border w-full rounded-[10px] border border-[#e6e6dc] bg-white px-[14px] py-3 text-base text-[#253b2d] transition-[border-color,box-shadow] duration-200 ease-in-out focus:border-[#416449] focus:outline-none focus:ring-[3px] focus:ring-[rgba(65,100,73,0.18)]" type="email" autoComplete="email" required />
+              <label htmlFor="email" className="mb-2 text-[0.96rem] font-semibold text-ink">Email <span className="text-red-700" aria-hidden="true">*</span></label>
+              <input id="email" name="email" className="box-border w-full rounded-[10px] border border-border bg-white px-[14px] py-3 text-base text-ink transition-[border-color,box-shadow] duration-200 ease-in-out focus:border-accent-ink focus:outline-none focus:ring-[3px] focus:ring-accent-ink/20" type="email" autoComplete="email" required />
             </div>
 
             <div className="mb-4 flex flex-col">
-              <label htmlFor="password" className="mb-2 text-[0.96rem] font-semibold text-[#253b2d]">Password <span className="text-[#b42318]" aria-hidden="true">*</span></label>
+              <label htmlFor="password" className="mb-2 text-[0.96rem] font-semibold text-ink">Password <span className="text-red-700" aria-hidden="true">*</span></label>
               <input
                 id="password"
                 name="password"
-                className="box-border w-full rounded-[10px] border border-[#e6e6dc] bg-white px-[14px] py-3 text-base text-[#253b2d] transition-[border-color,box-shadow] duration-200 ease-in-out focus:border-[#416449] focus:outline-none focus:ring-[3px] focus:ring-[rgba(65,100,73,0.18)]"
+                className="box-border w-full rounded-[10px] border border-border bg-white px-[14px] py-3 text-base text-ink transition-[border-color,box-shadow] duration-200 ease-in-out focus:border-accent-ink focus:outline-none focus:ring-[3px] focus:ring-accent-ink/20"
                 type="password"
                 autoComplete="new-password"
                 value={password}
@@ -86,11 +86,11 @@ export function Register() {
             </div>
 
             <div className="mb-4 flex flex-col">
-              <label htmlFor="confirmPassword" className="mb-2 text-[0.96rem] font-semibold text-[#253b2d]">Confirm Password <span className="text-[#b42318]" aria-hidden="true">*</span></label>
+              <label htmlFor="confirmPassword" className="mb-2 text-[0.96rem] font-semibold text-ink">Confirm Password <span className="text-red-700" aria-hidden="true">*</span></label>
               <input
                 id="confirmPassword"
                 name="confirmPassword"
-                className="box-border w-full rounded-[10px] border border-[#e6e6dc] bg-white px-[14px] py-3 text-base text-[#253b2d] transition-[border-color,box-shadow] duration-200 ease-in-out focus:border-[#416449] focus:outline-none focus:ring-[3px] focus:ring-[rgba(65,100,73,0.18)]"
+                className="box-border w-full rounded-[10px] border border-border bg-white px-[14px] py-3 text-base text-ink transition-[border-color,box-shadow] duration-200 ease-in-out focus:border-accent-ink focus:outline-none focus:ring-[3px] focus:ring-accent-ink/20"
                 type="password"
                 autoComplete="new-password"
                 value={confirmPassword}
@@ -103,11 +103,11 @@ export function Register() {
             </div>
 
             <div className="mb-4 flex flex-col">
-              <label htmlFor="securityQuestion" className="mb-2 text-[0.96rem] font-semibold text-[#253b2d]">Choose a question <span className="text-[#b42318]" aria-hidden="true">*</span></label>
+              <label htmlFor="securityQuestion" className="mb-2 text-[0.96rem] font-semibold text-ink">Choose a question <span className="text-red-700" aria-hidden="true">*</span></label>
               <select
                 id="securityQuestion"
                 name="securityQuestion"
-                className="box-border w-full rounded-[10px] border border-[#e6e6dc] bg-white px-[14px] py-3 text-base text-[#253b2d] transition-[border-color,box-shadow] duration-200 ease-in-out focus:border-[#416449] focus:outline-none focus:ring-[3px] focus:ring-[rgba(65,100,73,0.18)]"
+                className="box-border w-full rounded-[10px] border border-border bg-white px-[14px] py-3 text-base text-ink transition-[border-color,box-shadow] duration-200 ease-in-out focus:border-accent-ink focus:outline-none focus:ring-[3px] focus:ring-accent-ink/20"
                 defaultValue=""
                 required
               >
@@ -119,11 +119,11 @@ export function Register() {
             </div>
 
             <div className="mb-4 flex flex-col">
-              <label htmlFor="securityAnswer" className="mb-2 text-[0.96rem] font-semibold text-[#253b2d]">Answer <span className="text-[#b42318]" aria-hidden="true">*</span></label>
+              <label htmlFor="securityAnswer" className="mb-2 text-[0.96rem] font-semibold text-ink">Answer <span className="text-red-700" aria-hidden="true">*</span></label>
               <input
                 id="securityAnswer"
                 name="securityAnswer"
-                className="box-border w-full rounded-[10px] border border-[#e6e6dc] bg-white px-[14px] py-3 text-base text-[#253b2d] transition-[border-color,box-shadow] duration-200 ease-in-out focus:border-[#416449] focus:outline-none focus:ring-[3px] focus:ring-[rgba(65,100,73,0.18)]"
+                className="box-border w-full rounded-[10px] border border-border bg-white px-[14px] py-3 text-base text-ink transition-[border-color,box-shadow] duration-200 ease-in-out focus:border-accent-ink focus:outline-none focus:ring-[3px] focus:ring-accent-ink/20"
                 type="text"
                 autoComplete="off"
                 required
@@ -131,12 +131,12 @@ export function Register() {
             </div>
           </div>
 
-          {formMessage && <p className="mb-[14px] text-[0.92rem] text-[#8b342b]" role="alert">{formMessage}</p>}
-          <button disabled={submitting} className="w-full cursor-pointer disabled:cursor-wait disabled:opacity-70 rounded-[10px] border-0 bg-[#2e4935] px-4 py-[14px] text-base font-semibold text-white transition-[transform,box-shadow] duration-200 hover:-translate-y-px hover:bg-[#253b2d] hover:shadow-[0_10px_20px_rgba(42,65,48,0.2)] active:translate-y-0" type="submit">{submitting ? "Creating account..." : "Create Account"}</button>
+          {formMessage && <p className="mb-[14px] text-[0.92rem] text-red-700" role="alert">{formMessage}</p>}
+          <button disabled={submitting} className="w-full cursor-pointer disabled:cursor-wait disabled:opacity-70 rounded-[10px] border-0 bg-accent px-4 py-[14px] text-base font-semibold text-on-accent transition-[transform,box-shadow] duration-200 hover:-translate-y-px hover:bg-accent-hover hover:shadow-[0_10px_20px_rgba(0,0,0,0.12)] active:translate-y-0" type="submit">{submitting ? "Creating account..." : "Create Account"}</button>
         </form>
 
-        <p className="mt-5 text-center text-[0.94rem] text-[#526157]">
-          Already have an account? <Link className="font-semibold text-[#416449] no-underline hover:underline" to="/login">Log in</Link>
+        <p className="mt-5 text-center text-[0.94rem] text-muted">
+          Already have an account? <Link className="font-semibold text-accent-ink no-underline hover:underline" to="/login">Log in</Link>
         </p>
       </div>
     </div>
