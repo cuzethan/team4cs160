@@ -257,3 +257,67 @@ export async function fetchManagerAudit(limit = 100): Promise<ManagerAuditEntry[
   );
   return data.entries;
 }
+
+export type StockStatus = "out" | "low" | "slow" | "ok";
+
+export type InventoryReport = {
+  range: SalesRange;
+  rangeDays: number;
+  summary: {
+    stockValue: number;
+    retailValue: number;
+    productsWithoutCost: number;
+    outOfStock: number;
+    lowStock: number;
+    slowMovers: number;
+  };
+  products: {
+    productId: string;
+    name: string;
+    category: string;
+    unit: string;
+    active: boolean;
+    quantityInStock: number;
+    price: number;
+    unitCost: number | null;
+    stockValue: number | null;
+    unitsSold: number;
+    revenue: number;
+    lastSoldAt: string | null;
+    daysOfStockLeft: number | null;
+    status: StockStatus;
+  }[];
+  movements: { type: "restock" | "removal" | "sale" | "refund"; reason: string | null; quantity: number; count: number }[];
+  categories: { category: string; revenue: number; previousRevenue: number | null }[];
+};
+
+export type FailedPaymentsReport = {
+  range: SalesRange;
+  summary: { count: number; previousCount: number | null; amount: number; customers: number };
+  reasons: { reason: string; count: number }[];
+  payments: {
+    id: string;
+    customerName: string;
+    customerEmail: string;
+    amount: number;
+    failureCode: string | null;
+    declineCode: string | null;
+    message: string;
+    failedAt: string;
+  }[];
+};
+
+async function fetchReport<T>(path: string, range: SalesRange): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/manager/reports/${path}?range=${range}`, { credentials: "same-origin" });
+  } catch {
+    throw new Error("Can't reach the server. Please try again.");
+  }
+  const data = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(data?.error ?? "Unable to load this report.");
+  return data.report as T;
+}
+
+export const fetchInventoryReport = (range: SalesRange) => fetchReport<InventoryReport>("inventory", range);
+export const fetchFailedPaymentsReport = (range: SalesRange) => fetchReport<FailedPaymentsReport>("failed-payments", range);
