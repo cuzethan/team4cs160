@@ -13,10 +13,11 @@ import { emojiFor } from "../inventory/api";
 import type { InventoryProduct } from "../inventory/types";
 import { cancelDeliveryRun, dispatchDeliveries, fetchDeliveries, fetchDeliveryRobots, fetchDeliveryRuns, fetchDeliverySettings, fetchRobotBaseLocation, fetchManagedInventory, fetchManagerAudit, fetchSales, fetchSalesAnalytics, recallDeliveryRobot, refundDeliveryOrder, saveDeliverySettings, saveRobotBaseLocation, updateProduct, type DeliveryRobot, type DeliveryRun, type DeliverySettings, type ManagedProduct, type ManagerAuditEntry, type ManagerDelivery, type ProductCategory, type RobotBaseLocation, type SalesAnalytics, type SalesBucket, type SalesRange } from "./api";
 import { ProductFormDialog, ProductTable } from "./ProductManager";
+import { FailedPaymentsPanel, InventoryReportPanel } from "./ReportsPanel";
 
 import Map, { Layer, Marker, NavigationControl, Source } from "react-map-gl/maplibre";
 
-const tabs = ["Overview", "Customers", "Inventory", "Delivery", "Robot", "Sales", "Audit", "Settings"] as const;
+const tabs = ["Overview", "Customers", "Inventory", "Delivery", "Robot", "Sales", "Stock report", "Failed payments", "Audit", "Settings"] as const;
 type DashboardTab = (typeof tabs)[number];
 
 // Sidebar sections. A null heading means the tab stands on its own.
@@ -24,7 +25,7 @@ const tabGroups: { heading: string | null; tabs: DashboardTab[] }[] = [
   { heading: null, tabs: ["Overview"] },
   { heading: "Store", tabs: ["Inventory", "Customers"] },
   { heading: "Orders", tabs: ["Delivery", "Robot"] },
-  { heading: "Reports", tabs: ["Sales", "Audit"] },
+  { heading: "Reports", tabs: ["Sales", "Stock report", "Failed payments", "Audit"] },
   { heading: null, tabs: ["Settings"] },
 ];
 
@@ -98,6 +99,10 @@ export function ManagerDashboard() {
             <OverviewPanel onOpenTab={setActiveTab} />
           ) : activeTab === "Sales" ? (
             <SalesOverview dateRange={dateRange} onDateRangeChange={setDateRange} />
+          ) : activeTab === "Stock report" ? (
+            <InventoryReportPanel />
+          ) : activeTab === "Failed payments" ? (
+            <FailedPaymentsPanel />
           ) : activeTab === "Audit" ? (
             <AuditLogPanel />
           ) : activeTab === "Inventory" ? (

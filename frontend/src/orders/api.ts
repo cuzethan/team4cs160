@@ -94,6 +94,12 @@ export async function fetchLatestCheckoutAddress() {
   return (await request<{ address: CheckoutAddress | null }>("GET", "/latest-address")).address;
 }
 
+// Tells the server a card was declined, for the manager's failed-payments report. The server
+// reads the details from Stripe; the checkout page doesn't wait for or depend on this.
+export async function reportFailedPayment(paymentIntentId: string) {
+  await request<null>("POST", "/payment-failed", { paymentIntentId });
+}
+
 // Asks the server to price the cart and start a Stripe PaymentIntent. The client secret
 // lets the checkout page collect the card without ever seeing the secret key.
 export async function createPaymentIntent() {

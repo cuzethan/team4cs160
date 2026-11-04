@@ -4,6 +4,7 @@ import { createStripePayments } from "./payments.js";
 import { startDeliverySimulator } from "./robotSimulator.js";
 import { createPgCartStore, createPgDeliveryStore, createPgOrderStore, createPgProductStore, createPgSalesStore, createPgSettingsStore, createPgStore, ensureDeliveryTrackingSchema, ensureGlobalSettingsSchema, ensureInventoryManagementSchema, ensureProductCostSchema } from "./store.js";
 import { configureRobotBaseLocation } from "./robotBase.js";
+import { createPgReportsStore, ensureFailedPaymentSchema } from "./reports.js";
 
 const port = Number(process.env.PORT ?? 3001);
 const pool = new pg.Pool({
@@ -16,6 +17,7 @@ configureRobotBaseLocation(await settingsStore.getRobotBase());
 await ensureInventoryManagementSchema(pool);
 await ensureDeliveryTrackingSchema(pool);
 await ensureProductCostSchema(pool);
+await ensureFailedPaymentSchema(pool);
 const deliveryStore = createPgDeliveryStore(pool);
 const app = createApp({
   store: createPgStore(pool),
@@ -24,6 +26,7 @@ const app = createApp({
   settingsStore,
   productStore: createPgProductStore(pool),
   salesStore: createPgSalesStore(pool),
+  reportsStore: createPgReportsStore(pool),
   deliveryStore,
   payments: createStripePayments(process.env.STRIPE_SECRET_KEY),
   appUrl: process.env.APP_URL ?? "http://localhost:5173",
