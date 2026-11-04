@@ -13,16 +13,16 @@ export function CartItemCard({ item, onIncrease, onDecrease, onRemove }: CartIte
   const handleRemoveClick = () => onRemove(item.cartItemId);
 
   return (
-    <article className="flex flex-col gap-4 rounded-2xl border border-[#e8e7dc] bg-white p-5 shadow-[0_3px_12px_rgba(42,65,48,0.04)] sm:flex-row sm:items-center">
-      <span aria-hidden="true" className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-[#f3f5e9] text-4xl">
+    <article className="flex flex-col gap-4 rounded-2xl border border-border bg-white p-5 shadow-[0_3px_12px_rgba(0,0,0,0.06)] sm:flex-row sm:items-center">
+      <span aria-hidden="true" className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-canvas text-4xl">
         {item.emoji}
       </span>
       <div className="min-w-0 flex-1">
         <h2 className="truncate text-lg font-bold">{item.name}</h2>
-        <p className="mt-1 text-sm text-[#788078]">${item.price.toFixed(2)} / {item.unit}</p>
-        <p className="mt-1 text-sm text-[#788078]">{(item.weightLbs * item.quantity).toFixed(1)} lb total</p>
+        <p className="mt-1 text-sm text-muted">${item.price.toFixed(2)} / {item.unit}</p>
+        <p className="mt-1 text-sm text-muted">{(item.weightLbs * item.quantity).toFixed(1)} lb total</p>
         {!item.available && (
-          <p className="mt-2 w-fit rounded-full bg-[#fbeee9] px-3 py-1 text-xs font-bold text-[#8b5145]">
+          <p className="mt-2 w-fit rounded-full bg-red-50 px-3 py-1 text-xs font-bold text-red-700">
             No longer available. Remove it to check out.
           </p>
         )}
@@ -32,7 +32,7 @@ export function CartItemCard({ item, onIncrease, onDecrease, onRemove }: CartIte
           type="button"
           onClick={handleDecreaseClick}
           aria-label={`Decrease ${item.name} quantity`}
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-[#dce2d5] font-bold hover:bg-[#f3f5e9]"
+          className="flex h-9 w-9 items-center justify-center rounded-full border border-border font-bold hover:bg-canvas"
         >
           −
         </button>
@@ -44,7 +44,7 @@ export function CartItemCard({ item, onIncrease, onDecrease, onRemove }: CartIte
           onClick={handleIncreaseClick}
           disabled={!item.available || item.quantity >= item.quantityInStock}
           aria-label={`Increase ${item.name} quantity`}
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-[#dce2d5] font-bold hover:bg-[#f3f5e9] disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex h-9 w-9 items-center justify-center rounded-full border border-border font-bold hover:bg-canvas disabled:cursor-not-allowed disabled:opacity-40"
         >
           +
         </button>
@@ -53,7 +53,7 @@ export function CartItemCard({ item, onIncrease, onDecrease, onRemove }: CartIte
       <button
         type="button"
         onClick={handleRemoveClick}
-        className="text-left text-sm font-bold text-[#8b5145] underline sm:text-center"
+        className="text-left text-sm font-bold text-red-700 underline sm:text-center"
       >
         Remove
       </button>

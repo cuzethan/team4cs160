@@ -85,32 +85,32 @@ export function CartPage() {
   const deliveryFee = deliveryFeeFor(calculateTotalWeight(), deliverySettings);
 
   return (
-    <div className="min-h-screen bg-[#fbfaf5] text-[#253b2d]">
+    <div className="min-h-screen bg-canvas text-ink">
       <SiteHeader />
       <main className="mx-auto max-w-7xl px-5 py-8 sm:px-8 sm:py-12">
         <div className="mb-8">
-          <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#7d887b]">Your groceries</p>
-          <h1 className="mt-2 text-4xl font-extrabold tracking-tight text-[#294332] sm:text-5xl">Shopping cart</h1>
+          <p className="text-sm font-bold uppercase tracking-[0.16em] text-muted">Your groceries</p>
+          <h1 className="mt-2 text-4xl font-extrabold tracking-tight text-ink sm:text-5xl">Shopping cart</h1>
         </div>
 
         {authLoading ? (
-          <p role="status" className="rounded-2xl bg-white p-6 text-[#5f6b61]">Loading your cart…</p>
+          <p role="status" className="rounded-2xl bg-white p-6 text-muted">Loading your cart…</p>
         ) : !user ? (
-          <section className="rounded-2xl border border-[#e8e7dc] bg-white p-8 text-center">
+          <section className="rounded-2xl border border-border bg-white p-8 text-center">
             <p className="text-lg font-bold">Log in to see your cart</p>
-            <Link to="/customer-login" className="mt-4 inline-block font-bold text-[#416449] underline">Customer login</Link>
+            <Link to="/customer-login" className="mt-4 inline-block font-bold text-accent-ink underline">Customer login</Link>
           </section>
         ) : isLoading ? (
-          <p role="status" className="rounded-2xl bg-white p-6 text-[#5f6b61]">Loading your cart…</p>
+          <p role="status" className="rounded-2xl bg-white p-6 text-muted">Loading your cart…</p>
         ) : error ? (
           <section role="alert" className="rounded-2xl border border-red-200 bg-white p-6">
             <p className="text-red-800">{error}</p>
-            <button type="button" onClick={() => void fetchCartItems()} className="mt-4 font-bold text-[#416449] underline">Try again</button>
+            <button type="button" onClick={() => void fetchCartItems()} className="mt-4 font-bold text-accent-ink underline">Try again</button>
           </section>
         ) : cartItems.length === 0 ? (
-          <section className="rounded-2xl border border-[#e8e7dc] bg-white p-8 text-center">
+          <section className="rounded-2xl border border-border bg-white p-8 text-center">
             <p className="text-lg font-bold">Your cart is empty</p>
-            <Link to="/inventory" className="mt-4 inline-block font-bold text-[#416449] underline">Browse groceries</Link>
+            <Link to="/inventory" className="mt-4 inline-block font-bold text-accent-ink underline">Browse groceries</Link>
           </section>
         ) : (
           <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
@@ -129,14 +129,14 @@ export function CartPage() {
               ))}
             </section>
 
-            <aside className="rounded-2xl border border-[#e8e7dc] bg-white p-6 shadow-[0_3px_12px_rgba(42,65,48,0.04)]">
+            <aside className="rounded-2xl border border-border bg-white p-6 shadow-[0_3px_12px_rgba(0,0,0,0.06)]">
               <CartSummary
                 totalPrice={calculateTotalPrice()}
                 totalWeight={calculateTotalWeight()}
                 deliveryStatus={deliveryFee === 0 ? "Free" : `$${deliveryFee.toFixed(2)}`}
               />
               {hasUnavailableItems && (
-                <p role="alert" className="mt-5 text-sm text-[#8b5145]">
+                <p role="alert" className="mt-5 text-sm text-red-700">
                   Remove items that are no longer available to check out.
                 </p>
               )}
@@ -144,7 +144,7 @@ export function CartPage() {
                 type="button"
                 onClick={handleCheckoutClick}
                 disabled={hasUnavailableItems}
-                className="mt-6 w-full rounded-xl bg-[#416449] px-5 py-3 font-bold text-white transition hover:bg-[#35563c] disabled:cursor-not-allowed disabled:opacity-50"
+                className="mt-6 w-full rounded-xl bg-accent px-5 py-3 font-bold text-on-accent transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Checkout
               </button>

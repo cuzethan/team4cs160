@@ -94,31 +94,31 @@ export function CustomerOrderHistoryPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#fbfaf5] text-[#253b2d]">
+    <div className="min-h-screen bg-canvas text-ink">
       <SiteHeader />
       <main className="mx-auto max-w-7xl px-5 py-8 sm:px-8 sm:py-12">
         <div className="mb-8">
-          <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#7d887b]">Your account</p>
-          <h1 className="mt-2 text-4xl font-extrabold tracking-tight text-[#294332] sm:text-5xl">Order history</h1>
-          <p className="mt-3 max-w-2xl text-[#667269]">Review your past purchases and check the status of current deliveries.</p>
+          <p className="text-sm font-bold uppercase tracking-[0.16em] text-muted">Your account</p>
+          <h1 className="mt-2 text-4xl font-extrabold tracking-tight text-ink sm:text-5xl">Order history</h1>
+          <p className="mt-3 max-w-2xl text-muted">Review your past purchases and check the status of current deliveries.</p>
         </div>
 
         {placedOrderId && (
-          <p role="status" className="mb-6 rounded-2xl bg-[#e9f1df] px-6 py-4 font-semibold text-[#416449]">
+          <p role="status" className="mb-6 rounded-2xl bg-accent-soft px-6 py-4 font-semibold text-accent-ink">
             Thanks! Order #{placedOrderId.slice(0, 8).toUpperCase()} has been placed.
           </p>
         )}
 
         {notifications.length > 0 && (
-          <section aria-label="Delivery notifications" className="mb-6 rounded-2xl border border-[#e8e7dc] bg-white p-5">
+          <section aria-label="Delivery notifications" className="mb-6 rounded-2xl border border-border bg-white p-5">
             <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="font-extrabold text-[#294332]">Delivery updates</h2>
-              <span className="text-xs font-bold text-[#7d887b]">{notifications.filter((notification) => !notification.isRead).length} unread</span>
+              <h2 className="font-extrabold text-ink">Delivery updates</h2>
+              <span className="text-xs font-bold text-muted">{notifications.filter((notification) => !notification.isRead).length} unread</span>
             </div>
             <ul className="space-y-2">
               {notifications.slice(0, 5).map((notification) => (
                 <li key={notification.notificationId}>
-                  <button type="button" onClick={() => void handleNotificationClick(notification)} className={`w-full rounded-xl px-4 py-3 text-left text-sm ${notification.isRead ? "bg-[#f7f7f1] text-[#667269]" : "bg-[#e9f1df] font-semibold text-[#35563c]"}`}>
+                  <button type="button" onClick={() => void handleNotificationClick(notification)} className={`w-full rounded-xl px-4 py-3 text-left text-sm ${notification.isRead ? "bg-canvas text-muted" : "bg-accent-soft font-semibold text-accent-ink"}`}>
                     <span>{notification.message}</span>
                     <span className="mt-1 block text-xs opacity-70">{new Date(notification.createdAt).toLocaleString()}</span>
                   </button>
@@ -131,16 +131,16 @@ export function CustomerOrderHistoryPage() {
         {actionError && <p role="alert" className="mb-5 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-800">{actionError}</p>}
 
         {isLoading ? (
-          <p role="status" className="rounded-2xl bg-white p-6 text-[#5f6b61]">Loading your orders…</p>
+          <p role="status" className="rounded-2xl bg-white p-6 text-muted">Loading your orders…</p>
         ) : error ? (
           <section role="alert" className="rounded-2xl border border-red-200 bg-white p-6">
             <p className="text-red-800">{error}</p>
-            <button type="button" onClick={() => void refreshOrders(true)} className="mt-4 font-bold text-[#416449] underline">Try again</button>
+            <button type="button" onClick={() => void refreshOrders(true)} className="mt-4 font-bold text-accent-ink underline">Try again</button>
           </section>
         ) : orders.length === 0 ? (
-          <section className="rounded-2xl border border-[#e8e7dc] bg-white p-8 text-center">
+          <section className="rounded-2xl border border-border bg-white p-8 text-center">
             <h2 className="text-lg font-bold">No orders yet</h2>
-            <p className="mt-2 text-[#667269]">Your completed purchases will appear here.</p>
+            <p className="mt-2 text-muted">Your completed purchases will appear here.</p>
           </section>
         ) : (
           <section aria-label="Your orders" className="space-y-4">

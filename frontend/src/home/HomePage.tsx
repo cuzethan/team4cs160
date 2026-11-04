@@ -39,32 +39,32 @@ function Hero({ threshold }: { threshold: number }) {
   const { user, loading } = useAuth();
 
   return (
-    <section className="overflow-hidden rounded-3xl bg-[#2e4935] text-white">
+    <section className="overflow-hidden rounded-3xl bg-ink text-white">
       <div className="grid items-center gap-8 px-6 py-10 sm:px-10 sm:py-14 md:grid-cols-[minmax(0,1fr)_auto]">
         <div>
           {user ? (
-            <p className="mb-4 text-3xl font-extrabold text-[#f5d77a]">Hello, {user.firstName}! 👋</p>
+            <p className="mb-4 text-3xl font-extrabold text-accent">Hello, {user.firstName}! 👋</p>
           ) : !loading ? (
-            <p className="mb-4 text-base text-[#e4eedb]">
+            <p className="mb-4 text-base text-white/70">
               You're not logged in.{" "}
-              <Link to="/login" className="font-bold text-[#f5d77a] underline-offset-2 hover:underline">Log in</Link>
+              <Link to="/login" className="font-bold text-accent underline-offset-2 hover:underline">Log in</Link>
               {" "}or{" "}
-              <Link to="/register" className="font-bold text-[#f5d77a] underline-offset-2 hover:underline">create an account</Link>.
+              <Link to="/register" className="font-bold text-accent underline-offset-2 hover:underline">create an account</Link>.
             </p>
           ) : null}
-          <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#cfe3c0]">
+          <p className="text-sm font-bold uppercase tracking-[0.16em] text-white/70">
             Organic Food Store · San Jose
           </p>
           <h1 className="mt-3 text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl">
             Fresh organic groceries, delivered to your door
           </h1>
-          <p className="mt-4 max-w-xl text-lg text-[#e4eedb]">
+          <p className="mt-4 max-w-xl text-lg text-white/70">
             Shop online and our delivery robot brings your order to you. Delivery is free
             for orders under {threshold} lbs.
           </p>
           <Link
             to="/inventory"
-            className="mt-7 inline-flex h-13 items-center rounded-full bg-[#f5d77a] px-7 text-base font-extrabold text-[#253b2d] transition hover:bg-[#f0cc5c] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            className="mt-7 inline-flex h-13 items-center rounded-full bg-accent px-7 text-base font-extrabold text-on-accent transition hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink"
           >
             Shop groceries
           </Link>
@@ -80,7 +80,7 @@ function Hero({ threshold }: { threshold: number }) {
 function CategoryTiles() {
   return (
     <section aria-labelledby="categories-heading">
-      <h2 id="categories-heading" className="text-2xl font-extrabold text-[#294332]">
+      <h2 id="categories-heading" className="text-2xl font-extrabold text-ink">
         Shop by category
       </h2>
       <ul className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -88,17 +88,17 @@ function CategoryTiles() {
           <li key={category.name}>
             <Link
               to={`/inventory?category=${encodeURIComponent(category.name)}`}
-              className="flex items-center gap-4 rounded-2xl border border-[#e8e7dc] bg-white p-5 shadow-[0_3px_12px_rgba(42,65,48,0.05)] transition hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(42,65,48,0.12)] focus-visible:outline-2 focus-visible:outline-emerald-700"
+              className="flex items-center gap-4 rounded-2xl border border-border bg-white p-5 shadow-[0_3px_12px_rgba(0,0,0,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(0,0,0,0.08)] focus-visible:outline-2 focus-visible:outline-accent-ink"
             >
               <span
                 aria-hidden="true"
-                className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-[#f3f5e9] text-4xl"
+                className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-canvas text-4xl"
               >
                 {category.emoji}
               </span>
               <span>
-                <span className="block text-lg font-bold text-[#253b2d]">{category.name}</span>
-                <span className="block text-sm text-[#5f6b61]">{category.blurb}</span>
+                <span className="block text-lg font-bold text-ink">{category.name}</span>
+                <span className="block text-sm text-muted">{category.blurb}</span>
               </span>
             </Link>
           </li>
@@ -111,20 +111,20 @@ function CategoryTiles() {
 function HowItWorks() {
   return (
     <section aria-labelledby="how-heading">
-      <h2 id="how-heading" className="text-2xl font-extrabold text-[#294332]">
+      <h2 id="how-heading" className="text-2xl font-extrabold text-ink">
         How it works
       </h2>
       <ol className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
         {steps.map((step, index) => (
           <li
             key={step.title}
-            className="rounded-2xl border border-[#e8e7dc] bg-white p-5 shadow-[0_3px_12px_rgba(42,65,48,0.04)]"
+            className="rounded-2xl border border-border bg-white p-5 shadow-[0_3px_12px_rgba(0,0,0,0.06)]"
           >
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#e9f1df] text-base font-extrabold text-[#416449]">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-accent-soft text-base font-extrabold text-accent-ink">
               {index + 1}
             </span>
-            <h3 className="mt-3 text-lg font-bold text-[#253b2d]">{step.title}</h3>
-            <p className="mt-1 text-base text-[#5f6b61]">{step.body}</p>
+            <h3 className="mt-3 text-lg font-bold text-ink">{step.title}</h3>
+            <p className="mt-1 text-base text-muted">{step.body}</p>
           </li>
         ))}
       </ol>
@@ -136,28 +136,28 @@ function DeliveryInfo({ settings }: { settings: DeliverySettings }) {
   return (
     <section
       aria-labelledby="delivery-heading"
-      className="rounded-2xl border border-[#e8e7dc] bg-white p-6 shadow-[0_3px_12px_rgba(42,65,48,0.04)] sm:p-8"
+      className="rounded-2xl border border-border bg-white p-6 shadow-[0_3px_12px_rgba(0,0,0,0.06)] sm:p-8"
     >
-      <h2 id="delivery-heading" className="text-2xl font-extrabold text-[#294332]">
+      <h2 id="delivery-heading" className="text-2xl font-extrabold text-ink">
         Delivery at a glance
       </h2>
       <dl className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-xl bg-[#e9f1df] p-4">
-          <dt className="text-sm font-bold text-[#416449]">Under {settings.freeDeliveryWeightThreshold} lbs</dt>
-          <dd className="mt-1 text-2xl font-extrabold text-[#253b2d]">Free delivery</dd>
+        <div className="rounded-xl bg-accent-soft p-4">
+          <dt className="text-sm font-bold text-accent-ink">Under {settings.freeDeliveryWeightThreshold} lbs</dt>
+          <dd className="mt-1 text-2xl font-extrabold text-ink">Free delivery</dd>
         </div>
-        <div className="rounded-xl bg-[#fbf1d6] p-4">
-          <dt className="text-sm font-bold text-[#7a5b12]">{settings.freeDeliveryWeightThreshold} lbs or more</dt>
-          <dd className="mt-1 text-2xl font-extrabold text-[#253b2d]">${settings.deliveryFee.toFixed(2)} fee</dd>
+        <div className="rounded-xl bg-warning-soft p-4">
+          <dt className="text-sm font-bold text-warning">{settings.freeDeliveryWeightThreshold} lbs or more</dt>
+          <dd className="mt-1 text-2xl font-extrabold text-ink">${settings.deliveryFee.toFixed(2)} fee</dd>
         </div>
-        <div className="rounded-xl bg-[#f3f5e9] p-4">
-          <dt className="text-sm font-bold text-[#55705b]">Drop-off spot</dt>
-          <dd className="mt-1 text-base font-semibold text-[#253b2d]">
+        <div className="rounded-xl bg-canvas p-4">
+          <dt className="text-sm font-bold text-muted">Drop-off spot</dt>
+          <dd className="mt-1 text-base font-semibold text-ink">
             Tell us exactly where to leave it. Front door by default.
           </dd>
         </div>
       </dl>
-      <p className="mt-4 text-sm text-[#5f6b61]">
+      <p className="mt-4 text-sm text-muted">
         Your cart always shows its total weight, so you'll know before checkout.
       </p>
     </section>
@@ -178,10 +178,10 @@ function FeaturedProducts() {
   return (
     <section aria-labelledby="featured-heading">
       <div className="flex items-end justify-between gap-4">
-        <h2 id="featured-heading" className="text-2xl font-extrabold text-[#294332]">
+        <h2 id="featured-heading" className="text-2xl font-extrabold text-ink">
           Fresh picks this week
         </h2>
-        <Link to="/inventory" className="text-sm font-bold text-[#416449] underline-offset-4 hover:underline">
+        <Link to="/inventory" className="text-sm font-bold text-accent-ink underline-offset-4 hover:underline">
           See all groceries
         </Link>
       </div>
@@ -213,19 +213,19 @@ function OrdersBanner() {
   return (
     <section
       aria-labelledby="orders-heading"
-      className="flex flex-col items-start justify-between gap-4 rounded-2xl border border-[#e8e7dc] bg-[#fffefa] p-6 sm:flex-row sm:items-center"
+      className="flex flex-col items-start justify-between gap-4 rounded-2xl border border-border bg-surface p-6 sm:flex-row sm:items-center"
     >
       <div>
-        <h2 id="orders-heading" className="text-xl font-extrabold text-[#294332]">
+        <h2 id="orders-heading" className="text-xl font-extrabold text-ink">
           Waiting on a delivery?
         </h2>
-        <p className="mt-1 text-base text-[#5f6b61]">
+        <p className="mt-1 text-base text-muted">
           Check your orders and see where your robot is right now.
         </p>
       </div>
       <Link
         to="/orders"
-        className="rounded-full border-2 border-[#2e4935] px-5 py-2.5 text-sm font-bold text-[#2e4935] transition hover:bg-[#2e4935] hover:text-white"
+        className="rounded-full border-2 border-ink px-5 py-2.5 text-sm font-bold text-ink transition hover:bg-ink hover:text-white"
       >
         View my orders
       </Link>
@@ -241,12 +241,12 @@ function NoticeBanner() {
   if (!notice) return null;
 
   return (
-    <div role="status" className="flex items-center justify-between gap-4 rounded-2xl border border-[#cfe3c0] bg-[#eef6e8] px-5 py-4 font-semibold text-[#2e4935]">
+    <div role="status" className="flex items-center justify-between gap-4 rounded-2xl border border-border bg-accent-soft px-5 py-4 font-semibold text-ink">
       <span>{notice}</span>
       <button
         type="button"
         onClick={() => navigate(".", { replace: true, state: null })}
-        className="cursor-pointer rounded-full px-3 py-1 text-sm font-bold text-[#426149] hover:bg-[#dcebd2]"
+        className="cursor-pointer rounded-full px-3 py-1 text-sm font-bold text-ink hover:bg-accent-soft"
         aria-label="Dismiss"
       >
         ✕
@@ -262,14 +262,14 @@ export function HomePage() {
   useEffect(() => { void fetchDeliverySettings().then(setDeliverySettings).catch(() => {}); }, []);
 
   if (loading) {
-    return <main className="p-8 text-center text-[#5f6b61]" aria-live="polite">Loading your account...</main>;
+    return <main className="p-8 text-center text-muted" aria-live="polite">Loading your account...</main>;
   }
   if (user?.role === "manager" && location.pathname !== "/customer-storefront") {
     return <Navigate to="/manager-dashboard" replace />;
   }
 
   return (
-    <div className="min-h-screen bg-[#fbfaf5] text-[#253b2d]">
+    <div className="min-h-screen bg-canvas text-ink">
       <SiteHeader />
       <main className="mx-auto flex max-w-7xl flex-col gap-12 px-5 py-8 sm:px-8 sm:py-12">
         <NoticeBanner />
@@ -280,7 +280,7 @@ export function HomePage() {
         <DeliveryInfo settings={deliverySettings} />
         <OrdersBanner />
       </main>
-      <footer className="border-t border-[#ecebe2] py-6 text-center text-sm text-[#5f6b61]">
+      <footer className="border-t border-border py-6 text-center text-sm text-muted">
         OFS · Organic Food Store, San Jose
       </footer>
     </div>
