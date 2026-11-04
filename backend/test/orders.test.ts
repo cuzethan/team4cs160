@@ -54,6 +54,9 @@ describe("orders API", () => {
           if (!confirmedPayment || confirmedPayment.id !== id) return null;
           return confirmedPayment;
         },
+        async retrieveFailure() {
+          return null;
+        },
       },
       appUrl: "http://localhost:5173",
       secureCookies: false,

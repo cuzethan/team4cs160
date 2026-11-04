@@ -2,6 +2,7 @@ import express from "express";
 import { handle } from "./auth.js";
 import { createCustomerGuard } from "./cart.js";
 import { PaymentsNotConfiguredError, type PaymentIntentCreator } from "./payments.js";
+import type { ReportsStore } from "./reports.js";
 import { CheckoutError, type AuthStore, type DeliveryStore, type OrderStore } from "./store.js";
 
 export type OrderOptions = {
@@ -9,6 +10,7 @@ export type OrderOptions = {
   orderStore: OrderStore;
   deliveryStore?: DeliveryStore;
   payments: PaymentIntentCreator;
+  reportsStore?: ReportsStore;
 };
 
 const ZIP_PATTERN = /^\d{5}(-\d{4})?$/;
@@ -17,7 +19,7 @@ function text(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-export function createOrderRouter({ store, orderStore, deliveryStore, payments }: OrderOptions) {
+export function createOrderRouter({ store, orderStore, deliveryStore, payments, reportsStore }: OrderOptions) {
   const router = express.Router();
   const requireCustomer = createCustomerGuard(store, "Please log in to see your orders and check out.");
 
@@ -36,6 +38,38 @@ export function createOrderRouter({ store, orderStore, deliveryStore, payments }
       res.json({ clientSecret });
     } catch (error) {
       if (error instanceof CheckoutError) return res.status(409).json({ error: error.message });
+      if (error instanceof PaymentsNotConfiguredError) {
+        return res.status(500).json({ error: "Card payments are not configured." });
+      }
+      throw error;
+    }
+  }));
+
+  // Saves a declined card for the manager's failed-payments report. The details come from
+  // Stripe, not the request, so a customer can only report their own real declines.
+  router.post("/payment-failed", handle(async (req, res) => {
+    const user = await requireCustomer(req, res);
+    if (!user) return;
+
+    const paymentIntentId = text(req.body?.paymentIntentId);
+    if (!paymentIntentId) return res.status(400).json({ error: "Payment id is required." });
+
+    try {
+      const failure = await payments.retrieveFailure(paymentIntentId);
+      if (!failure || failure.userId !== user.userId) {
+        return res.status(404).json({ error: "No declined payment was found." });
+      }
+      await reportsStore?.recordFailedPayment({
+        userId: user.userId,
+        paymentIntentId: failure.id,
+        chargeId: failure.chargeId,
+        amountCents: failure.amountCents,
+        failureCode: failure.failureCode,
+        declineCode: failure.declineCode,
+        message: failure.message,
+      });
+      res.status(204).end();
+    } catch (error) {
       if (error instanceof PaymentsNotConfiguredError) {
         return res.status(500).json({ error: "Card payments are not configured." });
       }
