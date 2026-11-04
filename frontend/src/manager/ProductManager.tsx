@@ -4,10 +4,10 @@ import { parseStockAmount } from "../inventory/ProductCard";
 import { createProduct, updateProduct, type ManagedProduct, type ProductCategory, type ProductInput } from "./api";
 
 const inputClassName =
-  "mt-1 w-full rounded-xl border border-[#dedfd5] bg-white px-4 py-2.5 text-sm text-[#253b2d] outline-none focus:border-[#416449]";
-const labelClassName = "block text-sm font-semibold text-[#536459]";
-const hintClassName = "mt-1 block text-xs font-normal text-[#899188]";
-const groupHeadingClassName = "text-xs font-bold uppercase tracking-wide text-[#899188]";
+  "mt-1 w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-ink outline-none focus:border-accent-ink";
+const labelClassName = "block text-sm font-semibold text-ink";
+const hintClassName = "mt-1 block text-xs font-normal text-muted";
+const groupHeadingClassName = "text-xs font-bold uppercase tracking-wide text-muted";
 
 type ProductTableProps = {
   products: ManagedProduct[];
@@ -21,7 +21,7 @@ type ProductTableProps = {
 // or take it off the store.
 export function ProductTable({ products, busyIds, onEdit, onToggleActive, onSaved }: ProductTableProps) {
   if (products.length === 0) {
-    return <p className="px-5 py-8 text-center text-sm text-[#667269] sm:px-7">No products match your search.</p>;
+    return <p className="px-5 py-8 text-center text-sm text-muted sm:px-7">No products match your search.</p>;
   }
 
   return (
@@ -29,7 +29,7 @@ export function ProductTable({ products, busyIds, onEdit, onToggleActive, onSave
     // otherwise its absolute position widens the whole page on phones.
     <div className="relative overflow-x-auto">
       <table className="w-full min-w-[56rem] text-left">
-        <thead className="bg-[#f6f7f1] text-xs uppercase tracking-wide text-[#667269]">
+        <thead className="bg-canvas text-xs uppercase tracking-wide text-muted">
           <tr>
             <th scope="col" className="px-5 py-3 font-bold sm:px-7">Product</th>
             <th scope="col" className="px-4 py-3 font-bold">Category</th>
@@ -40,25 +40,25 @@ export function ProductTable({ products, busyIds, onEdit, onToggleActive, onSave
             <th scope="col" className="px-5 py-3 text-right font-bold sm:px-7"><span className="sr-only">Actions</span></th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-[#ecebe2]">
+        <tbody className="divide-y divide-border">
           {products.map((product) => (
-            <tr key={product.id} className={product.active ? undefined : "bg-[#fafaf6] text-[#899188]"}>
+            <tr key={product.id} className={product.active ? undefined : "bg-canvas text-muted"}>
               <th scope="row" className="px-5 py-4 font-semibold sm:px-7">
                 <span aria-hidden="true" className="mr-2">{emojiFor(product.name, product.category)}</span>
-                <span className={product.active ? "text-[#253b2d]" : undefined}>{product.name}</span>
+                <span className={product.active ? "text-ink" : undefined}>{product.name}</span>
                 {!product.active && (
-                  <span className="ml-2 rounded-full bg-[#ecebe2] px-2 py-0.5 text-xs font-bold text-[#667269]">Inactive</span>
+                  <span className="ml-2 rounded-full bg-canvas px-2 py-0.5 text-xs font-bold text-muted">Inactive</span>
                 )}
               </th>
               <td className="px-4 py-4 text-sm">{product.category}</td>
               <td className="px-4 py-4 text-right text-sm tabular-nums">
-                ${product.price.toFixed(2)} <span className="text-[#899188]">/ {product.unit}</span>
+                ${product.price.toFixed(2)} <span className="text-muted">/ {product.unit}</span>
               </td>
               <td className="px-4 py-4 text-right text-sm tabular-nums">
-                {product.unitCost === null ? <span className="text-[#899188]">Not set</span> : `$${product.unitCost.toFixed(2)}`}
+                {product.unitCost === null ? <span className="text-muted">Not set</span> : `$${product.unitCost.toFixed(2)}`}
               </td>
               <td className="px-4 py-4 text-right text-sm tabular-nums">
-                {product.weightLbs} lb <span className="text-[#899188]">/ {product.unit}</span>
+                {product.weightLbs} lb <span className="text-muted">/ {product.unit}</span>
               </td>
               <td className="px-4 py-4 text-right">
                 <StockCell product={product} onSaved={onSaved} />
@@ -68,7 +68,7 @@ export function ProductTable({ products, busyIds, onEdit, onToggleActive, onSave
                   <button
                     type="button"
                     onClick={() => onEdit(product)}
-                    className="rounded-full border border-[#d9e2d2] px-3 py-1.5 text-xs font-bold text-[#416449] hover:bg-[#f1f5eb]"
+                    className="rounded-full border border-border px-3 py-1.5 text-xs font-bold text-accent-ink hover:bg-accent-soft"
                     aria-label={`Edit ${product.name}`}
                   >
                     Edit
@@ -77,7 +77,7 @@ export function ProductTable({ products, busyIds, onEdit, onToggleActive, onSave
                     type="button"
                     onClick={() => onToggleActive(product)}
                     disabled={busyIds.has(product.id)}
-                    className="rounded-full border border-[#d9e2d2] px-3 py-1.5 text-xs font-bold text-[#667269] hover:bg-[#f6f7f1] disabled:cursor-wait disabled:opacity-50"
+                    className="rounded-full border border-border px-3 py-1.5 text-xs font-bold text-muted hover:bg-canvas disabled:cursor-wait disabled:opacity-50"
                     aria-label={`${product.active ? "Deactivate" : "Reactivate"} ${product.name}`}
                   >
                     {product.active ? "Deactivate" : "Reactivate"}
@@ -116,15 +116,15 @@ function StockCell({ product, onSaved }: { product: ManagedProduct; onSaved: (pr
   };
 
   const stepButtonClassName =
-    "flex h-7 w-7 items-center justify-center rounded-full border border-[#d9e2d2] text-sm font-bold text-[#416449] hover:bg-[#f1f5eb] disabled:cursor-not-allowed disabled:opacity-40";
+    "flex h-7 w-7 items-center justify-center rounded-full border border-border text-sm font-bold text-accent-ink hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-40";
 
   return (
     <div className="flex flex-col items-end gap-1.5">
       <span className="font-bold tabular-nums">
-        {product.quantityInStock === 0 ? <span className="text-[#8b5145]">Out of stock</span> : product.quantityInStock}
+        {product.quantityInStock === 0 ? <span className="text-warning">Out of stock</span> : product.quantityInStock}
       </span>
       <div className="flex items-center gap-1.5">
-        <span aria-hidden="true" className="mr-1 text-xs text-[#899188]">Change by</span>
+        <span aria-hidden="true" className="mr-1 text-xs text-muted">Change by</span>
         <button
           type="button"
           onClick={() => void adjust(-1)}
@@ -141,7 +141,7 @@ function StockCell({ product, onSaved }: { product: ManagedProduct; onSaved: (pr
           step={1}
           value={amountText}
           onChange={(event) => setAmountText(event.target.value)}
-          className="h-7 w-14 rounded-lg border border-[#d9e2d2] px-1 text-center text-sm text-[#253b2d] outline-none focus:border-[#416449]"
+          className="h-7 w-14 rounded-lg border border-border px-1 text-center text-sm text-ink outline-none focus:border-accent-ink"
           aria-label={`Amount to add or remove for ${product.name}`}
         />
         <button
@@ -218,7 +218,7 @@ export function ProductFormDialog({ product, categories, onClose, onSaved }: Pro
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-[#1c2c20]/55 p-4 backdrop-blur-sm sm:items-center"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink/55 p-4 backdrop-blur-sm sm:items-center"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
@@ -228,17 +228,17 @@ export function ProductFormDialog({ product, categories, onClose, onSaved }: Pro
         role="dialog"
         aria-modal="true"
         aria-labelledby="product-form-title"
-        className="relative w-full max-w-xl rounded-3xl bg-[#fffefa] p-6 shadow-2xl sm:p-8"
+        className="relative w-full max-w-xl rounded-3xl bg-surface p-6 shadow-2xl sm:p-8"
       >
         <button
           type="button"
           onClick={onClose}
-          className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full text-xl text-[#536459] hover:bg-[#f1f4e6]"
+          className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full text-xl text-ink hover:bg-accent-soft"
           aria-label="Close"
         >
           ×
         </button>
-        <h2 id="product-form-title" className="text-2xl font-extrabold text-[#294332]">
+        <h2 id="product-form-title" className="text-2xl font-extrabold text-ink">
           {isNew ? "Add product" : `Edit ${product.name}`}
         </h2>
 
@@ -249,7 +249,7 @@ export function ProductFormDialog({ product, categories, onClose, onSaved }: Pro
             <input required maxLength={100} placeholder="Gala Apples" value={fields.name} onChange={(event) => setField("name")(event.target.value)} className={inputClassName} />
           </label>
           <label className={`${labelClassName} sm:col-span-2`}>
-            Description <span className="font-normal text-[#899188]">(optional)</span>
+            Description <span className="font-normal text-muted">(optional)</span>
             <textarea rows={2} maxLength={1000} placeholder="Shown to customers on the product page." value={fields.description} onChange={(event) => setField("description")(event.target.value)} className={inputClassName} />
           </label>
           <label className={`${labelClassName} sm:col-span-2`}>
@@ -291,7 +291,7 @@ export function ProductFormDialog({ product, categories, onClose, onSaved }: Pro
           )}
 
           {price > 0 && (
-            <p className="rounded-xl bg-[#f1f5eb] px-4 py-3 text-sm text-[#416449] sm:col-span-2">
+            <p className="rounded-xl bg-accent-soft px-4 py-3 text-sm text-accent-ink sm:col-span-2">
               Customers will see <strong>${price.toFixed(2)} / {unit}</strong>
               {fields.unitCost !== "" && cost <= price && <>. The store makes <strong>${(price - cost).toFixed(2)}</strong> per {unit}.</>}
             </p>
@@ -301,10 +301,10 @@ export function ProductFormDialog({ product, categories, onClose, onSaved }: Pro
             <p role="alert" className="rounded-xl border border-red-200 px-4 py-3 text-sm text-red-800 sm:col-span-2">{error}</p>
           )}
           <div className="flex justify-end gap-3 sm:col-span-2">
-            <button type="button" onClick={onClose} className="rounded-xl px-5 py-2.5 font-bold text-[#536459] hover:bg-[#f1f4e6]">
+            <button type="button" onClick={onClose} className="rounded-xl px-5 py-2.5 font-bold text-ink hover:bg-accent-soft">
               Cancel
             </button>
-            <button type="submit" disabled={isSaving} className="rounded-xl bg-[#416449] px-5 py-2.5 font-bold text-white hover:bg-[#35563c] disabled:cursor-wait disabled:opacity-60">
+            <button type="submit" disabled={isSaving} className="rounded-xl bg-accent px-5 py-2.5 font-bold text-on-accent hover:bg-accent-hover disabled:cursor-wait disabled:opacity-60">
               {isSaving ? "Saving…" : isNew ? "Add product" : "Save changes"}
             </button>
           </div>
@@ -346,13 +346,13 @@ function StockAdjuster({ product, onSaved }: { product: ManagedProduct; onSaved:
   };
 
   return (
-    <section aria-labelledby="stock-adjust-heading" className="mt-6 border-t border-[#ecebe2] pt-5">
-      <h3 id="stock-adjust-heading" className="font-extrabold text-[#294332]">
+    <section aria-labelledby="stock-adjust-heading" className="mt-6 border-t border-border pt-5">
+      <h3 id="stock-adjust-heading" className="font-extrabold text-ink">
         Stock{" "}
         {quantityInStock === 0 ? (
-          <span className="font-semibold text-[#8b5145]">· Out of stock</span>
+          <span className="font-semibold text-warning">· Out of stock</span>
         ) : (
-          <span className="font-semibold text-[#667269]">· {quantityInStock} in stock</span>
+          <span className="font-semibold text-muted">· {quantityInStock} in stock</span>
         )}
       </h3>
       <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-[8rem_minmax(0,1fr)]">
@@ -361,18 +361,18 @@ function StockAdjuster({ product, onSaved }: { product: ManagedProduct; onSaved:
           <input type="number" inputMode="numeric" min="1" step="1" value={amountText} onChange={(event) => setAmountText(event.target.value)} className={inputClassName} />
         </label>
         <label className={labelClassName}>
-          Reason <span className="font-normal text-[#899188]">(optional)</span>
+          Reason <span className="font-normal text-muted">(optional)</span>
           <input maxLength={200} placeholder="Weekly delivery, spoiled, recount…" value={reason} onChange={(event) => setReason(event.target.value)} className={inputClassName} />
         </label>
       </div>
       {error && <p role="alert" className="mt-3 text-sm text-red-800">{error}</p>}
-      {notice && <p role="status" className="mt-3 text-sm text-[#416449]">{notice}</p>}
+      {notice && <p role="status" className="mt-3 text-sm text-accent-ink">{notice}</p>}
       <div className="mt-4 flex justify-end gap-3">
         <button
           type="button"
           onClick={() => void adjust(-1)}
           disabled={isSaving || !amount || amount > quantityInStock}
-          className="rounded-xl border border-[#d9e2d2] px-5 py-2.5 font-bold text-[#416449] hover:bg-[#f1f5eb] disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-xl border border-border px-5 py-2.5 font-bold text-accent-ink hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
         >
           Remove stock
         </button>
@@ -380,7 +380,7 @@ function StockAdjuster({ product, onSaved }: { product: ManagedProduct; onSaved:
           type="button"
           onClick={() => void adjust(1)}
           disabled={isSaving || !amount}
-          className="rounded-xl border border-[#d9e2d2] px-5 py-2.5 font-bold text-[#416449] hover:bg-[#f1f5eb] disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-xl border border-border px-5 py-2.5 font-bold text-accent-ink hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
         >
           Add stock
         </button>

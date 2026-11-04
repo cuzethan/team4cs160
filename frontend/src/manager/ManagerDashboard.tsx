@@ -51,25 +51,25 @@ export function ManagerDashboard() {
   const [dateRange, setDateRange] = useState<DateRange>("Last week");
 
   if (loading) {
-    return <main className="p-8 text-center text-[#5f6b61]" aria-live="polite">Loading your account...</main>;
+    return <main className="p-8 text-center text-muted" aria-live="polite">Loading your account...</main>;
   }
   if (!user || user.role !== "manager") {
     return <Navigate to={user ? "/" : "/manager-login"} replace />;
   }
 
   return (
-    <div className="min-h-screen bg-[#fbfaf5] text-[#253b2d]">
+    <div className="min-h-screen bg-canvas text-ink">
       <SiteHeader />
       <main className="flex min-h-[calc(100vh-4.75rem)] flex-col md:flex-row md:items-stretch">
         <aside
           aria-label="Manager dashboard sections"
-          className="w-full shrink-0 border-b border-[#e8e7dc] bg-white p-3 md:sticky md:top-0 md:h-[calc(100vh-4.75rem)] md:w-56 md:overflow-y-auto md:border-b-0 md:border-r md:px-4 md:py-5"
+          className="w-full shrink-0 border-b border-border bg-white p-3 md:sticky md:top-0 md:h-[calc(100vh-4.75rem)] md:w-56 md:overflow-y-auto md:border-b-0 md:border-r md:border-border md:px-4 md:py-5"
         >
           <nav aria-label="Dashboard tabs" className="flex gap-1 overflow-x-auto md:flex-col md:gap-4">
             {tabGroups.map((group) => (
               <div key={group.heading ?? group.tabs[0]} className="flex shrink-0 gap-1 md:flex-col">
                 {group.heading && (
-                  <p className="hidden px-3 pb-1 text-xs font-bold uppercase tracking-[0.14em] text-[#899188] md:block">
+                  <p className="hidden px-3 pb-1 text-xs font-bold uppercase tracking-[0.14em] text-muted md:block">
                     {group.heading}
                   </p>
                 )}
@@ -81,8 +81,8 @@ export function ManagerDashboard() {
                     onClick={() => setActiveTab(tab)}
                     className={`shrink-0 rounded-xl px-3 py-2.5 text-left text-sm font-bold transition md:w-full ${
                       activeTab === tab
-                        ? "bg-[#e9f1df] text-[#2e4935]"
-                        : "text-[#667269] hover:bg-[#f6f7f1] hover:text-[#2e4935]"
+                        ? "bg-accent-soft text-ink"
+                        : "text-muted hover:bg-canvas hover:text-ink"
                     }`}
                   >
                     {tab}
@@ -157,8 +157,8 @@ function OverviewPanel({ onOpenTab }: { onOpenTab: (tab: DashboardTab) => void }
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-2xl font-extrabold text-[#294332]">Overview</h2>
-        <p className="mt-1 text-sm text-[#667269]">The last 7 days, and what needs attention.</p>
+        <h2 className="text-2xl font-extrabold text-ink">Overview</h2>
+        <p className="mt-1 text-sm text-muted">The last 7 days, and what needs attention.</p>
       </div>
       {error && <p role="alert" className="rounded-xl border border-red-200 bg-white p-4 text-sm text-red-700">{error}</p>}
 
@@ -197,32 +197,32 @@ function OverviewPanel({ onOpenTab }: { onOpenTab: (tab: DashboardTab) => void }
             action={<OpenTabButton label="Manage inventory" onClick={() => onOpenTab("Inventory")} />}
           />
         ) : (
-          <p role="status" className="rounded-2xl border border-[#e8e7dc] bg-white p-6 text-sm text-[#667269]">Loading stock…</p>
+          <p role="status" className="rounded-2xl border border-border bg-white p-6 text-sm text-muted">Loading stock…</p>
         )}
         <section
           aria-labelledby="waiting-heading"
-          className="overflow-hidden rounded-2xl border border-[#e8e7dc] bg-white shadow-[0_3px_12px_rgba(42,65,48,0.04)]"
+          className="overflow-hidden rounded-2xl border border-border bg-white shadow-[0_3px_12px_rgba(0,0,0,0.06)]"
         >
-          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#ecebe2] px-5 py-5 sm:px-7">
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-5 py-5 sm:px-7">
             <div>
-              <h3 id="waiting-heading" className="text-xl font-extrabold text-[#294332]">Awaiting delivery</h3>
-              <p className="mt-1 text-sm text-[#667269]">Paid orders that haven't been delivered yet.</p>
+              <h3 id="waiting-heading" className="text-xl font-extrabold text-ink">Awaiting delivery</h3>
+              <p className="mt-1 text-sm text-muted">Paid orders that haven't been delivered yet.</p>
             </div>
             <OpenTabButton label="View deliveries" onClick={() => onOpenTab("Delivery")} />
           </div>
           {!waiting ? (
-            <p role="status" className="px-5 py-6 text-sm text-[#667269] sm:px-7">Loading orders…</p>
+            <p role="status" className="px-5 py-6 text-sm text-muted sm:px-7">Loading orders…</p>
           ) : waiting.length === 0 ? (
-            <p className="px-5 py-6 text-sm text-[#667269] sm:px-7">Nothing waiting. All orders are delivered.</p>
+            <p className="px-5 py-6 text-sm text-muted sm:px-7">Nothing waiting. All orders are delivered.</p>
           ) : (
-            <ul className="divide-y divide-[#ecebe2]">
+            <ul className="divide-y divide-border">
               {waiting.slice(0, 5).map((delivery) => (
                 <li key={delivery.orderId} className="flex items-center justify-between gap-4 px-5 py-3.5 sm:px-7">
                   <span className="min-w-0">
-                    <span className="block truncate font-semibold text-[#253b2d]">{delivery.customerName}</span>
-                    <span className="font-mono text-xs text-[#899188]">{shortOrderId(delivery.orderId)}</span>
+                    <span className="block truncate font-semibold text-ink">{delivery.customerName}</span>
+                    <span className="font-mono text-xs text-muted">{shortOrderId(delivery.orderId)}</span>
                   </span>
-                  <span className="shrink-0 text-sm capitalize text-[#667269]">{delivery.deliveryProgress}</span>
+                  <span className="shrink-0 text-sm capitalize text-muted">{delivery.deliveryProgress}</span>
                 </li>
               ))}
             </ul>
@@ -230,11 +230,11 @@ function OverviewPanel({ onOpenTab }: { onOpenTab: (tab: DashboardTab) => void }
         </section>
       </div>
 
-      <section aria-labelledby="robot-map-heading" className="rounded-2xl border border-[#e8e7dc] bg-white p-5 shadow-[0_3px_12px_rgba(42,65,48,0.04)] sm:p-6">
+      <section aria-labelledby="robot-map-heading" className="rounded-2xl border border-border bg-white p-5 shadow-[0_3px_12px_rgba(0,0,0,0.06)] sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h3 id="robot-map-heading" className="text-xl font-extrabold text-[#294332]">Robot fleet</h3>
-            <p className="mt-1 text-sm text-[#667269]">Open the live fleet view to inspect robot positions, delivery destinations, and stop ETAs.</p>
+            <h3 id="robot-map-heading" className="text-xl font-extrabold text-ink">Robot fleet</h3>
+            <p className="mt-1 text-sm text-muted">Open the live fleet view to inspect robot positions, delivery destinations, and stop ETAs.</p>
           </div>
           <OpenTabButton label="Open robot fleet" onClick={() => onOpenTab("Robot")} />
         </div>
@@ -269,23 +269,23 @@ function SummaryCard({
     <button
       type="button"
       onClick={onClick}
-      className="rounded-2xl border border-[#e8e7dc] bg-white p-4 text-left shadow-[0_3px_12px_rgba(42,65,48,0.04)] transition hover:border-[#c9d6bf] hover:shadow-[0_6px_18px_rgba(42,65,48,0.08)] sm:p-5"
+      className="rounded-2xl border border-border bg-white p-4 text-left shadow-[0_3px_12px_rgba(0,0,0,0.06)] transition hover:border-accent-ink hover:shadow-[0_6px_18px_rgba(0,0,0,0.08)] sm:p-5"
     >
-      <span className="block text-sm font-bold text-[#667269]">{label}</span>
-      <span className={`mt-2 block text-2xl font-extrabold tabular-nums sm:text-3xl ${tone === "warning" ? "text-[#8b5145]" : "text-[#294332]"}`}>
+      <span className="block text-sm font-bold text-muted">{label}</span>
+      <span className={`mt-2 block text-2xl font-extrabold tabular-nums sm:text-3xl ${tone === "warning" ? "text-warning" : "text-ink"}`}>
         {value ?? "—"}
       </span>
-      <span className="mt-1 block text-xs text-[#7d887b] sm:text-sm">{detail}</span>
+      <span className="mt-1 block text-xs text-muted sm:text-sm">{detail}</span>
     </button>
   );
 }
 
 function SalesMetricCard({ label, value, detail }: { label: string; value: string | null; detail: string }) {
   return (
-    <article className="rounded-2xl border border-[#e8e7dc] bg-white p-4 shadow-[0_3px_12px_rgba(42,65,48,0.04)] sm:p-5">
-      <h3 className="text-sm font-bold text-[#667269]">{label}</h3>
-      <p className="mt-2 text-2xl font-extrabold tabular-nums text-[#294332] sm:text-3xl">{value ?? "—"}</p>
-      <p className="mt-1 text-xs text-[#7d887b] sm:text-sm">{detail}</p>
+    <article className="rounded-2xl border border-border bg-white p-4 shadow-[0_3px_12px_rgba(0,0,0,0.06)] sm:p-5">
+      <h3 className="text-sm font-bold text-muted">{label}</h3>
+      <p className="mt-2 text-2xl font-extrabold tabular-nums text-ink sm:text-3xl">{value ?? "—"}</p>
+      <p className="mt-1 text-xs text-muted sm:text-sm">{detail}</p>
     </article>
   );
 }
@@ -295,7 +295,7 @@ function OpenTabButton({ label, onClick }: { label: string; onClick: () => void 
     <button
       type="button"
       onClick={onClick}
-      className="shrink-0 rounded-full border border-[#d9e2d2] px-4 py-1.5 text-sm font-bold text-[#416449] hover:bg-[#f1f5eb]"
+      className="shrink-0 rounded-full border border-border px-4 py-1.5 text-sm font-bold text-accent-ink hover:bg-accent-soft"
     >
       {label} →
     </button>
@@ -335,27 +335,27 @@ function SettingsPanel() {
   };
 
   return <div>
-    <div className="mb-5"><h2 className="text-2xl font-extrabold text-[#294332]">Settings</h2><p className="mt-1 text-sm text-[#667269]">Configure delivery pricing for every customer order.</p></div>
-    {loading ? <p role="status" className="rounded-xl border border-[#e8e7dc] bg-white p-5 text-sm text-[#667269]">Loading settings...</p> : (
+    <div className="mb-5"><h2 className="text-2xl font-extrabold text-ink">Settings</h2><p className="mt-1 text-sm text-muted">Configure delivery pricing for every customer order.</p></div>
+    {loading ? <p role="status" className="rounded-xl border border-border bg-white p-5 text-sm text-muted">Loading settings...</p> : (
       <>
-      <form onSubmit={submit} className="max-w-xl space-y-5 rounded-2xl border border-[#e8e7dc] bg-white p-6 shadow-[0_3px_12px_rgba(42,65,48,0.04)]">
-        <label className="block text-sm font-semibold text-[#536459]">Delivery fee ($)
-          <input aria-label="Delivery fee" type="number" min="0" step="0.01" required value={settings.deliveryFee} onChange={(e) => setSettings({ ...settings, deliveryFee: Number(e.target.value) })} className="mt-1 w-full rounded-xl border border-[#dedfd5] px-4 py-3" />
+      <form onSubmit={submit} className="max-w-xl space-y-5 rounded-2xl border border-border bg-white p-6 shadow-[0_3px_12px_rgba(0,0,0,0.06)]">
+        <label className="block text-sm font-semibold text-ink">Delivery fee ($)
+          <input aria-label="Delivery fee" type="number" min="0" step="0.01" required value={settings.deliveryFee} onChange={(e) => setSettings({ ...settings, deliveryFee: Number(e.target.value) })} className="mt-1 w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-accent-ink" />
         </label>
-        <label className="block text-sm font-semibold text-[#536459]">Free-delivery threshold (lb)
-          <input aria-label="Free-delivery weight threshold" type="number" min="0.01" step="0.01" required value={settings.freeDeliveryWeightThreshold} onChange={(e) => setSettings({ ...settings, freeDeliveryWeightThreshold: Number(e.target.value) })} className="mt-1 w-full rounded-xl border border-[#dedfd5] px-4 py-3" />
+        <label className="block text-sm font-semibold text-ink">Free-delivery threshold (lb)
+          <input aria-label="Free-delivery weight threshold" type="number" min="0.01" step="0.01" required value={settings.freeDeliveryWeightThreshold} onChange={(e) => setSettings({ ...settings, freeDeliveryWeightThreshold: Number(e.target.value) })} className="mt-1 w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-accent-ink" />
         </label>
         {error && <p role="alert" className="text-sm text-red-800">{error}</p>}
         {success && <p role="status" className="text-sm text-green-800">{success}</p>}
-        <button disabled={saving} className="rounded-xl bg-[#416449] px-5 py-3 font-bold text-white disabled:opacity-60">{saving ? "Saving..." : "Save settings"}</button>
+        <button disabled={saving} className="rounded-xl bg-accent px-5 py-3 font-bold text-on-accent hover:bg-accent-hover disabled:opacity-60">{saving ? "Saving..." : "Save settings"}</button>
       </form>
-      <form onSubmit={saveBase} className="mt-5 max-w-xl space-y-5 rounded-2xl border border-[#e8e7dc] bg-white p-6 shadow-[0_3px_12px_rgba(42,65,48,0.04)]">
-        <div><h3 className="text-lg font-extrabold text-[#294332]">Robot home base</h3><p className="mt-1 text-sm text-[#667269]">Coordinates use decimal degrees. This is where robots start and return.</p></div>
-        <label className="block text-sm font-semibold text-[#536459]">Latitude<input aria-label="Robot base latitude" type="number" min="-90" max="90" step="0.000001" required value={base.latitude} onChange={(e) => setBase({ ...base, latitude: Number(e.target.value) })} className="mt-1 w-full rounded-xl border border-[#dedfd5] px-4 py-3" /></label>
-        <label className="block text-sm font-semibold text-[#536459]">Longitude<input aria-label="Robot base longitude" type="number" min="-180" max="180" step="0.000001" required value={base.longitude} onChange={(e) => setBase({ ...base, longitude: Number(e.target.value) })} className="mt-1 w-full rounded-xl border border-[#dedfd5] px-4 py-3" /></label>
+      <form onSubmit={saveBase} className="mt-5 max-w-xl space-y-5 rounded-2xl border border-border bg-white p-6 shadow-[0_3px_12px_rgba(0,0,0,0.06)]">
+        <div><h3 className="text-lg font-extrabold text-ink">Robot home base</h3><p className="mt-1 text-sm text-muted">Coordinates use decimal degrees. This is where robots start and return.</p></div>
+        <label className="block text-sm font-semibold text-ink">Latitude<input aria-label="Robot base latitude" type="number" min="-90" max="90" step="0.000001" required value={base.latitude} onChange={(e) => setBase({ ...base, latitude: Number(e.target.value) })} className="mt-1 w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-accent-ink" /></label>
+        <label className="block text-sm font-semibold text-ink">Longitude<input aria-label="Robot base longitude" type="number" min="-180" max="180" step="0.000001" required value={base.longitude} onChange={(e) => setBase({ ...base, longitude: Number(e.target.value) })} className="mt-1 w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-accent-ink" /></label>
         {error && <p role="alert" className="text-sm text-red-800">{error}</p>}
         {success && <p role="status" className="text-sm text-green-800">{success}</p>}
-        <button disabled={saving} className="rounded-xl bg-[#416449] px-5 py-3 font-bold text-white disabled:opacity-60">{saving ? "Saving..." : "Save home base"}</button>
+        <button disabled={saving} className="rounded-xl bg-accent px-5 py-3 font-bold text-on-accent hover:bg-accent-hover disabled:opacity-60">{saving ? "Saving..." : "Save home base"}</button>
       </form>
       </>
     )}
@@ -477,31 +477,31 @@ function CustomersPanel() {
     <div>
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-extrabold text-[#294332]">Customers</h2>
-          <p className="mt-1 text-sm text-[#667269]">Search accounts, open order history, and suspend or restore access.</p>
+          <h2 className="text-2xl font-extrabold text-ink">Customers</h2>
+          <p className="mt-1 text-sm text-muted">Search accounts, open order history, and suspend or restore access.</p>
         </div>
-        <p className="text-sm font-semibold text-[#667269]">
+        <p className="text-sm font-semibold text-muted">
           {visibleCustomers.length} of {customers.length}
         </p>
       </div>
 
       <div className="mb-4 flex flex-wrap gap-3">
-        <label className="flex h-11 min-w-[14rem] flex-1 items-center gap-2 rounded-xl border border-[#e6e6dc] bg-white px-4 text-[#899188] shadow-sm">
+        <label className="flex h-11 min-w-[14rem] flex-1 items-center gap-2 rounded-xl border border-border bg-white px-4 text-muted shadow-sm">
           <span className="sr-only">Search customers</span>
           <input
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search name, email, or phone"
-            className="w-full bg-transparent text-sm text-[#304336] outline-none placeholder:text-[#a3aaa1]"
+            className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-muted"
           />
         </label>
-        <label className="flex items-center gap-2 text-sm font-semibold text-[#426149]">
+        <label className="flex items-center gap-2 text-sm font-semibold text-ink">
           Status
           <select
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value as CustomerStatusFilter)}
-            className="rounded-lg border border-[#dce2d5] bg-white px-3 py-2.5 text-[#253b2d] shadow-sm"
+            className="rounded-lg border border-border bg-white px-3 py-2.5 text-ink shadow-sm"
           >
             <option value="all">All</option>
             <option value="active">Active</option>
@@ -517,7 +517,7 @@ function CustomersPanel() {
       )}
 
       {loading ? (
-        <p className="rounded-xl border border-[#e8e7dc] bg-white p-5 text-sm text-[#667269]" role="status">
+        <p className="rounded-xl border border-border bg-white p-5 text-sm text-muted" role="status">
           Loading customers...
         </p>
       ) : error ? (
@@ -525,9 +525,9 @@ function CustomersPanel() {
           {error}
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-[#e8e7dc] bg-white shadow-[0_3px_12px_rgba(42,65,48,0.04)]">
+        <div className="overflow-x-auto rounded-2xl border border-border bg-white shadow-[0_3px_12px_rgba(0,0,0,0.06)]">
           <table className="w-full min-w-[48rem] text-left">
-            <thead className="bg-[#f6f7f1] text-xs uppercase tracking-wide text-[#667269]">
+            <thead className="bg-canvas text-xs uppercase tracking-wide text-muted">
               <tr>
                 <th scope="col" className="px-5 py-3 font-bold">Name</th>
                 <th scope="col" className="px-5 py-3 font-bold">Email</th>
@@ -537,24 +537,24 @@ function CustomersPanel() {
                 <th scope="col" className="px-5 py-3 font-bold"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#ecebe2]">
+            <tbody className="divide-y divide-border">
               {visibleCustomers.map((customer) => (
                 <tr key={customer.id}>
-                  <th scope="row" className="px-5 py-4 font-semibold text-[#253b2d]">
+                  <th scope="row" className="px-5 py-4 font-semibold text-ink">
                     <button
                       type="button"
                       onClick={() => setSelectedId(customer.id)}
-                      className="text-left hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#416449]"
+                      className="text-left hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink"
                     >
                       {customer.firstName} {customer.lastName}
                     </button>
                   </th>
-                  <td className="px-5 py-4 text-sm text-[#667269]">{customer.email}</td>
-                  <td className="px-5 py-4 text-sm text-[#667269]">{customer.phone}</td>
+                  <td className="px-5 py-4 text-sm text-muted">{customer.email}</td>
+                  <td className="px-5 py-4 text-sm text-muted">{customer.phone}</td>
                   <td className="px-5 py-4">
                     <CustomerStatusBadge status={customer.accountStatus} />
                   </td>
-                  <td className="px-5 py-4 text-sm text-[#667269]">
+                  <td className="px-5 py-4 text-sm text-muted">
                     {new Date(customer.createdAt).toLocaleDateString()}
                   </td>
                   <td className="px-5 py-4 text-right">
@@ -562,7 +562,7 @@ function CustomersPanel() {
                       <button
                         type="button"
                         onClick={() => setSelectedId(customer.id)}
-                        className="rounded-full border border-[#d9e2d2] px-3 py-1.5 text-xs font-bold text-[#416449] hover:bg-[#f1f5eb]"
+                        className="rounded-full border border-border px-3 py-1.5 text-xs font-bold text-accent-ink hover:bg-accent-soft"
                       >
                         Orders
                       </button>
@@ -570,7 +570,7 @@ function CustomersPanel() {
                         type="button"
                         disabled={busyId === customer.id}
                         onClick={() => void handleToggleStatus(customer)}
-                        className="rounded-full border border-[#d9e2d2] px-3 py-1.5 text-xs font-bold text-[#667269] hover:bg-[#f6f7f1] disabled:cursor-wait disabled:opacity-50"
+                        className="rounded-full border border-border px-3 py-1.5 text-xs font-bold text-muted hover:bg-canvas disabled:cursor-wait disabled:opacity-50"
                       >
                         {busyId === customer.id
                           ? "Saving..."
@@ -584,7 +584,7 @@ function CustomersPanel() {
               ))}
               {visibleCustomers.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-5 py-8 text-center text-sm text-[#667269]">
+                  <td colSpan={6} className="px-5 py-8 text-center text-sm text-muted">
                     {customers.length === 0 ? "No customer accounts found." : "No customers match this search."}
                   </td>
                 </tr>
@@ -602,7 +602,7 @@ function CustomerStatusBadge({ status }: { status: Customer["accountStatus"] }) 
   return (
     <span
       className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold capitalize ${
-        active ? "bg-[#e9f1df] text-[#416449]" : "bg-[#f3e6e3] text-[#8b5145]"
+        active ? "bg-accent-soft text-accent-ink" : "bg-warning-soft text-warning"
       }`}
     >
       {status}
@@ -634,20 +634,20 @@ function CustomerDetailPanel({
       <button
         type="button"
         onClick={onBack}
-        className="mb-4 text-sm font-bold text-[#416449] underline-offset-4 hover:underline"
+        className="mb-4 text-sm font-bold text-accent-ink underline-offset-4 hover:underline"
       >
         ← Back to customers
       </button>
 
       <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-extrabold text-[#294332]">
+          <h2 className="text-2xl font-extrabold text-ink">
             {customer.firstName} {customer.lastName}
           </h2>
-          <p className="mt-1 text-sm text-[#667269]">{customer.email} · {customer.phone}</p>
+          <p className="mt-1 text-sm text-muted">{customer.email} · {customer.phone}</p>
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <CustomerStatusBadge status={customer.accountStatus} />
-            <span className="text-sm text-[#7d887b]">
+            <span className="text-sm text-muted">
               Joined {new Date(customer.createdAt).toLocaleDateString()}
             </span>
           </div>
@@ -656,7 +656,7 @@ function CustomerDetailPanel({
           type="button"
           disabled={busy}
           onClick={onToggleStatus}
-          className="rounded-xl border border-[#d9e2d2] bg-white px-4 py-2.5 text-sm font-bold text-[#416449] hover:bg-[#f1f5eb] disabled:cursor-wait disabled:opacity-50"
+          className="rounded-xl border border-border bg-white px-4 py-2.5 text-sm font-bold text-accent-ink hover:bg-accent-soft disabled:cursor-wait disabled:opacity-50"
         >
           {busy ? "Saving..." : customer.accountStatus === "active" ? "Suspend account" : "Restore account"}
         </button>
@@ -669,11 +669,11 @@ function CustomerDetailPanel({
       )}
 
       <section aria-labelledby="customer-orders-heading">
-        <h3 id="customer-orders-heading" className="mb-3 text-lg font-extrabold text-[#294332]">
+        <h3 id="customer-orders-heading" className="mb-3 text-lg font-extrabold text-ink">
           Order history
         </h3>
         {ordersLoading ? (
-          <p className="rounded-xl border border-[#e8e7dc] bg-white p-5 text-sm text-[#667269]" role="status">
+          <p className="rounded-xl border border-border bg-white p-5 text-sm text-muted" role="status">
             Loading orders...
           </p>
         ) : ordersError ? (
@@ -681,7 +681,7 @@ function CustomerDetailPanel({
             {ordersError}
           </p>
         ) : !orders || orders.length === 0 ? (
-          <p className="rounded-xl border border-[#e8e7dc] bg-white p-5 text-sm text-[#667269]">
+          <p className="rounded-xl border border-border bg-white p-5 text-sm text-muted">
             This customer has not placed any orders yet.
           </p>
         ) : (
@@ -689,32 +689,32 @@ function CustomerDetailPanel({
             {orders.map((order) => (
               <li
                 key={order.orderId}
-                className="rounded-2xl border border-[#e8e7dc] bg-white p-5 shadow-[0_3px_12px_rgba(42,65,48,0.04)]"
+                className="rounded-2xl border border-border bg-white p-5 shadow-[0_3px_12px_rgba(0,0,0,0.06)]"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className="font-mono text-sm font-bold text-[#253b2d]">
+                    <p className="font-mono text-sm font-bold text-ink">
                       #{order.orderId.slice(0, 8).toUpperCase()}
                     </p>
-                    <p className="mt-1 text-sm text-[#667269]">
+                    <p className="mt-1 text-sm text-muted">
                       {new Date(order.createdAt).toLocaleString()}
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-lg font-extrabold tabular-nums text-[#294332]">
+                    <p className="text-lg font-extrabold tabular-nums text-ink">
                       ${order.grandTotal.toFixed(2)}
                     </p>
-                    <p className="mt-1 text-xs font-bold uppercase tracking-wide text-[#7d887b]">
+                    <p className="mt-1 text-xs font-bold uppercase tracking-wide text-muted">
                       {order.orderStatus.replaceAll("_", " ")} · {order.paymentStatus}
                     </p>
                   </div>
                 </div>
-                <ul className="mt-4 space-y-1 border-t border-[#ecebe2] pt-3 text-sm text-[#5f6b61]">
+                <ul className="mt-4 space-y-1 border-t border-border pt-3 text-sm text-muted">
                   {order.items.map((item) => (
                     <li key={item.orderItemId} className="flex justify-between gap-4">
                       <span>
                         {item.productName}{" "}
-                        <span className="text-[#899188]">× {item.quantity}</span>
+                        <span className="text-muted">× {item.quantity}</span>
                       </span>
                       <span className="shrink-0 tabular-nums">
                         ${(item.priceAtPurchase * item.quantity).toFixed(2)}
@@ -804,28 +804,28 @@ function DeliveriesPanel() {
     <div>
       <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-extrabold text-[#294332]">Delivery</h2>
-          <p className="mt-1 text-sm text-[#667269]">Orders and delivery progress. Refund only before dispatch.</p>
+          <h2 className="text-2xl font-extrabold text-ink">Delivery</h2>
+          <p className="mt-1 text-sm text-muted">Orders and delivery progress. Refund only before dispatch.</p>
         </div>
         <button
           type="button"
           onClick={() => void runDispatch()}
           disabled={loading || dispatching || refundingOrderId !== null}
-          className="rounded-full bg-[#416449] px-5 py-2.5 text-sm font-bold text-white transition hover:bg-[#35563c] disabled:cursor-wait disabled:opacity-60"
+          className="rounded-full bg-accent px-5 py-2.5 text-sm font-bold text-on-accent transition hover:bg-accent-hover disabled:cursor-wait disabled:opacity-60"
         >
           {dispatching ? "Dispatching…" : "Dispatch paid orders"}
         </button>
       </div>
-      {dispatchSummary && <p role="status" className="mb-4 rounded-xl bg-[#e9f1df] px-4 py-3 text-sm text-[#416449]">{dispatchSummary}</p>}
+      {dispatchSummary && <p role="status" className="mb-4 rounded-xl bg-accent-soft px-4 py-3 text-sm text-accent-ink">{dispatchSummary}</p>}
       {error && <p className="mb-4 rounded-xl border border-red-200 bg-white p-4 text-sm text-red-700" role="alert">{error}</p>}
       {loading ? (
-        <p className="rounded-xl border border-[#e8e7dc] bg-white p-5 text-sm text-[#667269]" role="status">
+        <p className="rounded-xl border border-border bg-white p-5 text-sm text-muted" role="status">
           Loading deliveries...
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-[#e8e7dc] bg-white shadow-[0_3px_12px_rgba(42,65,48,0.04)]">
+        <div className="overflow-x-auto rounded-2xl border border-border bg-white shadow-[0_3px_12px_rgba(0,0,0,0.06)]">
           <table className="w-full min-w-[36rem] text-left">
-            <thead className="bg-[#f6f7f1] text-xs uppercase tracking-wide text-[#667269]">
+            <thead className="bg-canvas text-xs uppercase tracking-wide text-muted">
               <tr>
                 <th scope="col" className="px-5 py-3 font-bold">Order</th>
                 <th scope="col" className="px-5 py-3 font-bold">Customer</th>
@@ -834,15 +834,15 @@ function DeliveriesPanel() {
                 <th scope="col" className="px-5 py-3 font-bold">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#ecebe2]">
+            <tbody className="divide-y divide-border">
               {deliveries.map((delivery) => (
                 <tr key={delivery.orderId}>
-                  <th scope="row" className="px-5 py-4 font-mono text-sm text-[#253b2d]" title={delivery.orderId}>
+                  <th scope="row" className="px-5 py-4 font-mono text-sm text-ink" title={delivery.orderId}>
                     {shortOrderId(delivery.orderId)}
                   </th>
-                  <td className="px-5 py-4 font-semibold text-[#253b2d]">{delivery.customerName}</td>
-                  <td className="px-5 py-4 text-sm capitalize text-[#667269]">{delivery.deliveryProgress}</td>
-                  <td className="px-5 py-4 text-sm text-[#667269]">
+                  <td className="px-5 py-4 font-semibold text-ink">{delivery.customerName}</td>
+                  <td className="px-5 py-4 text-sm capitalize text-muted">{delivery.deliveryProgress}</td>
+                  <td className="px-5 py-4 text-sm text-muted">
                     {delivery.eta ? new Date(delivery.eta).toLocaleString() : "Not scheduled"}
                   </td>
                   <td className="px-5 py-4">
@@ -851,19 +851,19 @@ function DeliveriesPanel() {
                         type="button"
                         onClick={() => void refundOrder(delivery.orderId)}
                         disabled={dispatching || refundingOrderId !== null}
-                        className="rounded-full border border-[#d7d9c8] px-3 py-1.5 text-sm font-semibold text-[#416449] transition hover:bg-[#f6f7f1] disabled:cursor-wait disabled:opacity-60"
+                        className="rounded-full border border-border px-3 py-1.5 text-sm font-semibold text-accent-ink transition hover:bg-canvas disabled:cursor-wait disabled:opacity-60"
                       >
                         {refundingOrderId === delivery.orderId ? "Refunding…" : "Refund"}
                       </button>
                     ) : (
-                      <span className="text-sm text-[#899188]">Cancel run to refund</span>
+                      <span className="text-sm text-muted">Cancel run to refund</span>
                     )}
                   </td>
                 </tr>
               ))}
               {deliveries.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-5 py-8 text-center text-sm text-[#667269]">
+                  <td colSpan={5} className="px-5 py-8 text-center text-sm text-muted">
                     No orders to deliver yet.
                   </td>
                 </tr>
@@ -933,22 +933,22 @@ function SalesOverview({
     <>
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-extrabold text-[#294332]">Sales Report</h2>
-          <p className="mt-1 text-sm text-[#667269]">Revenue breakdown and item performance over time.</p>
+          <h2 className="text-2xl font-extrabold text-ink">Sales Report</h2>
+          <p className="mt-1 text-sm text-muted">Revenue breakdown and item performance over time.</p>
         </div>
-        <label className="flex items-center gap-2 text-sm font-semibold text-[#426149]">
+        <label className="flex items-center gap-2 text-sm font-semibold text-ink">
           Date range
           <select
             value={dateRange}
             onChange={(event) => onDateRangeChange(event.target.value as DateRange)}
-            className="rounded-lg border border-[#dce2d5] bg-white px-3 py-2 text-[#253b2d] shadow-sm"
+            className="rounded-lg border border-border bg-white px-3 py-2 text-ink shadow-sm"
           >
             {dateRanges.map((range) => <option key={range}>{range}</option>)}
           </select>
         </label>
       </div>
       {salesLoading ? (
-        <p role="status" className="rounded-xl border border-[#e8e7dc] bg-white p-5 text-sm text-[#667269]">Loading sales data...</p>
+        <p role="status" className="rounded-xl border border-border bg-white p-5 text-sm text-muted">Loading sales data...</p>
       ) : salesError ? (
         <p role="alert" className="rounded-xl border border-red-200 bg-white p-5 text-sm text-red-700">{salesError}</p>
       ) : analytics && (
@@ -1006,7 +1006,7 @@ function topSlices(values: PieSlice[], limit: number): PieSlice[] {
   return shown;
 }
 
-const chartColors = ["#438254", "#91a95b", "#d4a449", "#cf7658", "#6e8da7", "#9c7bb4", "#4f9b91", "#b67b91", "#a8ad9b"];
+const chartColors = ["#B6EAF5", "#A7E0D4", "#F9D9A8", "#F8C4B0", "#C7C5F4", "#F5C2D8", "#B3DFF2", "#D4E8A8", "#C5CCD4"];
 
 function SalesPieChart({ title, values, className = "" }: { title: string; values: PieSlice[]; className?: string }) {
   const total = values.reduce((sum, item) => sum + item.value, 0);
@@ -1014,10 +1014,10 @@ function SalesPieChart({ title, values, className = "" }: { title: string; value
   let labelAngle = -90;
 
   return (
-    <section className={`flex min-w-0 flex-col rounded-2xl border border-[#e8e7dc] bg-white p-4 shadow-[0_3px_12px_rgba(42,65,48,0.04)] sm:p-5 ${className}`} aria-label={title}>
-      <h3 className="text-lg font-extrabold text-[#294332]">{title}</h3>
+    <section className={`flex min-w-0 flex-col rounded-2xl border border-border bg-white p-4 shadow-[0_3px_12px_rgba(0,0,0,0.06)] sm:p-5 ${className}`} aria-label={title}>
+      <h3 className="text-lg font-extrabold text-ink">{title}</h3>
       {total <= 0 ? (
-        <p className="py-12 text-center text-sm text-[#7d887b]">No item sales in this range.</p>
+        <p className="py-12 text-center text-sm text-muted">No item sales in this range.</p>
       ) : (
         <div className="mt-4 flex flex-col items-center gap-5 sm:flex-row">
           <svg viewBox="0 0 200 200" role="img" aria-label={`${title}, total $${total.toFixed(2)}`} className="h-44 w-44 shrink-0">
@@ -1058,7 +1058,7 @@ function SalesPieChart({ title, values, className = "" }: { title: string; value
                   y={labelPoint.y}
                   textAnchor="middle"
                   dominantBaseline="middle"
-                  className="fill-white text-[10px] font-bold [paint-order:stroke] [stroke:#294332] [stroke-width:2px]"
+                  className="fill-white text-[10px] font-bold [paint-order:stroke] stroke-ink [stroke-width:2px]"
                 >
                   {((item.value / total) * 100).toFixed(1)}%
                 </text>
@@ -1068,11 +1068,11 @@ function SalesPieChart({ title, values, className = "" }: { title: string; value
           <ul className="grid w-full min-w-0 flex-1 gap-2 text-sm">
             {values.map((item, index) => (
               <li key={item.name} className="flex items-center justify-between gap-3">
-                <span className="flex min-w-0 items-center gap-2 text-[#536459]">
+                <span className="flex min-w-0 items-center gap-2 text-ink">
                   <span aria-hidden="true" className="h-3 w-3 shrink-0 rounded-sm" style={{ backgroundColor: chartColors[index % chartColors.length] }} />
                   <span className="truncate">{item.name}</span>
                 </span>
-                <span className="shrink-0 tabular-nums font-semibold text-[#294332]">
+                <span className="shrink-0 tabular-nums font-semibold text-ink">
                   ${item.value.toFixed(2)}
                 </span>
               </li>
@@ -1114,11 +1114,11 @@ function SalesBarChart({
   return (
     <section
       aria-label={`${title} chart`}
-      className="flex h-full min-w-0 flex-col rounded-2xl border border-[#e8e7dc] bg-white p-4 shadow-[0_3px_12px_rgba(42,65,48,0.04)] sm:p-5"
+      className="flex h-full min-w-0 flex-col rounded-2xl border border-border bg-white p-4 shadow-[0_3px_12px_rgba(0,0,0,0.06)] sm:p-5"
     >
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-lg font-extrabold text-[#294332]">{title}</h2>
-        <span className="text-sm font-bold tabular-nums text-[#426149]">{formatValue(values.reduce((sum, value) => sum + value, 0))}</span>
+        <h2 className="text-lg font-extrabold text-ink">{title}</h2>
+        <span className="text-sm font-bold tabular-nums text-ink">{formatValue(values.reduce((sum, value) => sum + value, 0))}</span>
       </div>
       <svg
         viewBox="0 0 640 430"
@@ -1131,12 +1131,12 @@ function SalesBarChart({
           const value = maximum - (tick / 3) * span;
           return (
             <g key={tick}>
-              <line x1="56" x2="612" y1={y} y2={y} stroke="#ecebe2" strokeDasharray="4 5" />
-              <text x="50" y={y + 4} textAnchor="end" fill="#7d887b" fontSize="11">{formatValue(value)}</text>
+              <line x1="56" x2="612" y1={y} y2={y} stroke="#e5e7eb" strokeDasharray="4 5" />
+              <text x="50" y={y + 4} textAnchor="end" fill="#6b7280" fontSize="11">{formatValue(value)}</text>
             </g>
           );
         })}
-        <line x1="56" x2="612" y1={baseline} y2={baseline} stroke="#9ba797" />
+        <line x1="56" x2="612" y1={baseline} y2={baseline} stroke="#64748B" />
         {buckets.map((bucket, index) => {
           const centerX = 58 + ((index + 0.5) / Math.max(buckets.length, 1)) * 550;
           const barHeight = Math.abs(bucket.value) * ((chartBottom - chartTop) / span);
@@ -1148,12 +1148,12 @@ function SalesBarChart({
                 width={barWidth}
                 height={barHeight}
                 rx="3"
-                fill="#438254"
+                fill="#B6EAF5"
               >
                 <title>{`${formatBucketLabel(bucket.bucketStart, range)}: ${formatValue(bucket.value)}`}</title>
               </rect>
               {(index % labelInterval === 0 || index === buckets.length - 1) && (
-                <text x={centerX} y="408" textAnchor="middle" fill="#7d887b" fontSize="11">
+                <text x={centerX} y="408" textAnchor="middle" fill="#6b7280" fontSize="11">
                   {formatBucketLabel(bucket.bucketStart, range)}
                 </text>
               )}
@@ -1161,7 +1161,7 @@ function SalesBarChart({
           );
         })}
         {!hasValues && (
-          <text x="332" y="210" textAnchor="middle" fill="#7d887b" fontSize="13">
+          <text x="332" y="210" textAnchor="middle" fill="#6b7280" fontSize="13">
             No paid sales in this range
           </text>
         )}
@@ -1174,14 +1174,14 @@ function SalesItemsTable({ items }: { items: SalesAnalytics["items"] }) {
   const soldItems = items.filter((item) => item.quantity > 0);
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-[#e8e7dc] bg-white shadow-[0_3px_12px_rgba(42,65,48,0.04)]">
-      <div className="border-b border-[#ecebe2] px-5 py-4 sm:px-7">
-        <h3 className="text-lg font-extrabold text-[#294332]">Item sales and inventory</h3>
-        <p className="mt-1 text-sm text-[#667269]">Units sold, revenue, and stock for items sold in this date range.</p>
+    <section className="overflow-hidden rounded-2xl border border-border bg-white shadow-[0_3px_12px_rgba(0,0,0,0.06)]">
+      <div className="border-b border-border px-5 py-4 sm:px-7">
+        <h3 className="text-lg font-extrabold text-ink">Item sales and inventory</h3>
+        <p className="mt-1 text-sm text-muted">Units sold, revenue, and stock for items sold in this date range.</p>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[52rem] text-left">
-          <thead className="bg-[#f6f7f1] text-xs uppercase tracking-wide text-[#667269]">
+          <thead className="bg-canvas text-xs uppercase tracking-wide text-muted">
             <tr>
               <th scope="col" className="px-5 py-3 font-bold">Item</th>
               <th scope="col" className="px-4 py-3 font-bold">Category</th>
@@ -1191,11 +1191,11 @@ function SalesItemsTable({ items }: { items: SalesAnalytics["items"] }) {
               <th scope="col" className="px-5 py-3 text-right font-bold">On hand</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#ecebe2]">
+          <tbody className="divide-y divide-border">
             {soldItems.map((item) => (
               <tr key={item.productId}>
-                <th scope="row" className="px-5 py-4 font-semibold text-[#253b2d]">{item.name}</th>
-                <td className="px-4 py-4 text-sm text-[#667269]">{item.category}</td>
+                <th scope="row" className="px-5 py-4 font-semibold text-ink">{item.name}</th>
+                <td className="px-4 py-4 text-sm text-muted">{item.category}</td>
                 <td className="px-4 py-4 text-right text-sm tabular-nums">{item.quantity}</td>
                 <td className="px-4 py-4 text-right text-sm tabular-nums">${item.revenue.toFixed(2)}</td>
                 <td className="px-4 py-4 text-right text-sm tabular-nums">${item.currentPrice.toFixed(2)} / {item.unit}</td>
@@ -1203,7 +1203,7 @@ function SalesItemsTable({ items }: { items: SalesAnalytics["items"] }) {
               </tr>
             ))}
             {soldItems.length === 0 && (
-              <tr><td colSpan={6} className="px-5 py-8 text-center text-sm text-[#667269]">No items sold in this date range.</td></tr>
+              <tr><td colSpan={6} className="px-5 py-8 text-center text-sm text-muted">No items sold in this date range.</td></tr>
             )}
           </tbody>
         </table>
@@ -1311,31 +1311,31 @@ function AuditLogPanel() {
     <div>
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-extrabold text-[#294332]">Audit log</h2>
-          <p className="mt-1 text-sm text-[#667269]">Inventory edits, price changes, and stock movements.</p>
+          <h2 className="text-2xl font-extrabold text-ink">Audit log</h2>
+          <p className="mt-1 text-sm text-muted">Inventory edits, price changes, and stock movements.</p>
         </div>
-        <p className="text-sm font-semibold text-[#667269]">
+        <p className="text-sm font-semibold text-muted">
           {visibleEntries.length} of {entries.length}
         </p>
       </div>
 
       <div className="mb-4 flex flex-wrap gap-3">
-        <label className="flex h-11 min-w-[14rem] flex-1 items-center gap-2 rounded-xl border border-[#e6e6dc] bg-white px-4 text-[#899188] shadow-sm">
+        <label className="flex h-11 min-w-[14rem] flex-1 items-center gap-2 rounded-xl border border-border bg-white px-4 text-muted shadow-sm">
           <span className="sr-only">Search audit log</span>
           <input
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search summary, person, or type"
-            className="w-full bg-transparent text-sm text-[#304336] outline-none placeholder:text-[#a3aaa1]"
+            className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-muted"
           />
         </label>
-        <label className="flex items-center gap-2 text-sm font-semibold text-[#426149]">
+        <label className="flex items-center gap-2 text-sm font-semibold text-ink">
           Type
           <select
             value={typeFilter}
             onChange={(event) => setTypeFilter(event.target.value as AuditTypeFilter)}
-            className="rounded-lg border border-[#dce2d5] bg-white px-3 py-2.5 text-[#253b2d] shadow-sm"
+            className="rounded-lg border border-border bg-white px-3 py-2.5 text-ink shadow-sm"
           >
             <option value="all">All</option>
             <option value="audit">Change</option>
@@ -1343,12 +1343,12 @@ function AuditLogPanel() {
             <option value="stock">Stock</option>
           </select>
         </label>
-        <label className="flex items-center gap-2 text-sm font-semibold text-[#426149]">
+        <label className="flex items-center gap-2 text-sm font-semibold text-ink">
           Who
           <select
             value={actorFilter}
             onChange={(event) => setActorFilter(event.target.value)}
-            className="rounded-lg border border-[#dce2d5] bg-white px-3 py-2.5 text-[#253b2d] shadow-sm"
+            className="rounded-lg border border-border bg-white px-3 py-2.5 text-ink shadow-sm"
           >
             <option value="all">Anyone</option>
             {actors.map((actor) => (
@@ -1356,29 +1356,29 @@ function AuditLogPanel() {
             ))}
           </select>
         </label>
-        <label className="flex items-center gap-2 text-sm font-semibold text-[#426149]">
+        <label className="flex items-center gap-2 text-sm font-semibold text-ink">
           From
           <input
             type="date"
             value={fromDate}
             onChange={(event) => setFromDate(event.target.value)}
-            className="rounded-lg border border-[#dce2d5] bg-white px-3 py-2.5 text-[#253b2d] shadow-sm"
+            className="rounded-lg border border-border bg-white px-3 py-2.5 text-ink shadow-sm"
           />
         </label>
-        <label className="flex items-center gap-2 text-sm font-semibold text-[#426149]">
+        <label className="flex items-center gap-2 text-sm font-semibold text-ink">
           To
           <input
             type="date"
             value={toDate}
             onChange={(event) => setToDate(event.target.value)}
-            className="rounded-lg border border-[#dce2d5] bg-white px-3 py-2.5 text-[#253b2d] shadow-sm"
+            className="rounded-lg border border-border bg-white px-3 py-2.5 text-ink shadow-sm"
           />
         </label>
         {filtersActive && (
           <button
             type="button"
             onClick={clearFilters}
-            className="rounded-lg border border-[#dce2d5] bg-white px-3 py-2.5 text-sm font-semibold text-[#416449] shadow-sm transition hover:bg-[#f6f7f1]"
+            className="rounded-lg border border-border bg-white px-3 py-2.5 text-sm font-semibold text-accent-ink shadow-sm transition hover:bg-canvas"
           >
             Clear filters
           </button>
@@ -1387,13 +1387,13 @@ function AuditLogPanel() {
 
       {error && <p className="mb-4 rounded-xl border border-red-200 bg-white p-4 text-sm text-red-700" role="alert">{error}</p>}
       {loading ? (
-        <p className="rounded-xl border border-[#e8e7dc] bg-white p-5 text-sm text-[#667269]" role="status">
+        <p className="rounded-xl border border-border bg-white p-5 text-sm text-muted" role="status">
           Loading audit history...
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-[#e8e7dc] bg-white shadow-[0_3px_12px_rgba(42,65,48,0.04)]">
+        <div className="overflow-x-auto rounded-2xl border border-border bg-white shadow-[0_3px_12px_rgba(0,0,0,0.06)]">
           <table className="w-full min-w-[40rem] text-left">
-            <thead className="bg-[#f6f7f1] text-xs uppercase tracking-wide text-[#667269]">
+            <thead className="bg-canvas text-xs uppercase tracking-wide text-muted">
               <tr>
                 <th scope="col" className="px-5 py-3 font-bold">When</th>
                 <th scope="col" className="px-5 py-3 font-bold">Type</th>
@@ -1401,20 +1401,20 @@ function AuditLogPanel() {
                 <th scope="col" className="px-5 py-3 font-bold">What changed</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#ecebe2]">
+            <tbody className="divide-y divide-border">
               {visibleEntries.map((entry) => (
                 <tr key={`${entry.source}-${entry.id}`}>
-                  <td className="whitespace-nowrap px-5 py-4 text-sm text-[#667269]">
+                  <td className="whitespace-nowrap px-5 py-4 text-sm text-muted">
                     {new Date(entry.createdAt).toLocaleString()}
                   </td>
-                  <td className="px-5 py-4 text-sm font-semibold text-[#416449]">{auditSourceLabel(entry.source)}</td>
-                  <td className="px-5 py-4 text-sm text-[#253b2d]">{entry.actorName ?? "System"}</td>
-                  <td className="px-5 py-4 text-sm text-[#253b2d]">{entry.summary}</td>
+                  <td className="px-5 py-4 text-sm font-semibold text-accent-ink">{auditSourceLabel(entry.source)}</td>
+                  <td className="px-5 py-4 text-sm text-ink">{entry.actorName ?? "System"}</td>
+                  <td className="px-5 py-4 text-sm text-ink">{entry.summary}</td>
                 </tr>
               ))}
               {visibleEntries.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-5 py-8 text-center text-sm text-[#667269]">
+                  <td colSpan={4} className="px-5 py-8 text-center text-sm text-muted">
                     {entries.length === 0
                       ? "No inventory or price changes recorded yet."
                       : "No audit entries match these filters."}
@@ -1487,13 +1487,13 @@ function ManageInventoryPanel() {
   };
 
   if (isLoading) {
-    return <p role="status" className="rounded-2xl bg-white p-6 text-[#5f6b61]">Loading inventory…</p>;
+    return <p role="status" className="rounded-2xl bg-white p-6 text-muted">Loading inventory…</p>;
   }
   if (loadError) {
     return (
       <div role="alert" className="rounded-2xl border border-red-200 bg-white p-6">
         <p className="text-red-800">{loadError}</p>
-        <button type="button" onClick={() => void load()} className="mt-4 font-bold text-[#416449] underline">Try again</button>
+        <button type="button" onClick={() => void load()} className="mt-4 font-bold text-accent-ink underline">Try again</button>
       </div>
     );
   }
@@ -1510,12 +1510,12 @@ function ManageInventoryPanel() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-extrabold text-[#294332]">Inventory</h2>
-          <p className="mt-1 text-sm text-[#667269]">Add, edit, and restock products.</p>
+          <h2 className="text-2xl font-extrabold text-ink">Inventory</h2>
+          <p className="mt-1 text-sm text-muted">Add, edit, and restock products.</p>
         </div>
         <Link
           to="/inventory"
-          className="rounded-full border-2 border-[#2e4935] px-5 py-2 text-sm font-bold text-[#2e4935] hover:bg-[#2e4935] hover:text-white"
+          className="rounded-full border-2 border-accent-ink px-5 py-2 text-sm font-bold text-accent-ink transition hover:bg-accent hover:text-on-accent"
         >
           View in store
         </Link>
@@ -1524,12 +1524,12 @@ function ManageInventoryPanel() {
 
       <section
         aria-labelledby="manage-products-heading"
-        className="overflow-hidden rounded-2xl border border-[#e8e7dc] bg-white shadow-[0_3px_12px_rgba(42,65,48,0.04)]"
+        className="overflow-hidden rounded-2xl border border-border bg-white shadow-[0_3px_12px_rgba(0,0,0,0.06)]"
       >
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#ecebe2] px-5 py-5 sm:px-7">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-5 sm:px-7">
           <div>
-            <h3 id="manage-products-heading" className="text-xl font-extrabold text-[#294332]">All products</h3>
-            <p className="mt-1 text-sm text-[#667269]">
+            <h3 id="manage-products-heading" className="text-xl font-extrabold text-ink">All products</h3>
+            <p className="mt-1 text-sm text-muted">
               Deactivated products are hidden from shoppers but kept for past orders.
             </p>
           </div>
@@ -1540,12 +1540,12 @@ function ManageInventoryPanel() {
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search products"
               aria-label="Search products"
-              className="min-w-0 flex-1 rounded-full border border-[#dedfd5] px-4 py-2 text-sm outline-none focus:border-[#416449] sm:w-56 sm:flex-none"
+              className="min-w-0 flex-1 rounded-full border border-border px-4 py-2 text-sm outline-none focus:border-accent-ink sm:w-56 sm:flex-none"
             />
             <button
               type="button"
               onClick={() => setEditing("new")}
-              className="rounded-full bg-[#2e4935] px-5 py-2 text-sm font-bold text-white hover:bg-[#253b2d]"
+              className="rounded-full bg-accent px-5 py-2 text-sm font-bold text-on-accent hover:bg-accent-hover"
             >
               Add product
             </button>
@@ -1598,32 +1598,32 @@ function LowStockTable({ products, action }: { products: InventoryProduct[]; act
   return (
     <section
       aria-labelledby="stock-heading"
-      className="overflow-hidden rounded-2xl border border-[#e8e7dc] bg-white shadow-[0_3px_12px_rgba(42,65,48,0.04)]"
+      className="overflow-hidden rounded-2xl border border-border bg-white shadow-[0_3px_12px_rgba(0,0,0,0.06)]"
     >
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#ecebe2] px-5 py-5 sm:px-7">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-5 py-5 sm:px-7">
         <div>
-          <h3 id="stock-heading" className="text-xl font-extrabold text-[#294332]">Lowest stock</h3>
-          <p className="mt-1 text-sm text-[#667269]">Products shoppers can buy that are closest to running out.</p>
+          <h3 id="stock-heading" className="text-xl font-extrabold text-ink">Lowest stock</h3>
+          <p className="mt-1 text-sm text-muted">Products shoppers can buy that are closest to running out.</p>
         </div>
         {action}
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[22rem] text-left">
-          <thead className="bg-[#f6f7f1] text-xs uppercase tracking-wide text-[#667269]">
+          <thead className="bg-canvas text-xs uppercase tracking-wide text-muted">
             <tr>
               <th scope="col" className="px-5 py-3 font-bold sm:px-7">Product</th>
               <th scope="col" className="px-5 py-3 text-right font-bold sm:px-7">In stock</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#ecebe2]">
+          <tbody className="divide-y divide-border">
             {lowestStockProducts.map((product) => (
               <tr key={product.id}>
-                <th scope="row" className="px-5 py-3.5 font-semibold text-[#253b2d] sm:px-7">
+                <th scope="row" className="px-5 py-3.5 font-semibold text-ink sm:px-7">
                   <span aria-hidden="true" className="mr-2">{product.emoji}</span>
                   {product.name}
                 </th>
-                <td className="px-5 py-3.5 text-right font-bold tabular-nums text-[#253b2d] sm:px-7">
-                  {product.quantityInStock === 0 ? <span className="text-[#8b5145]">Out of stock</span> : product.quantityInStock}
+                <td className="px-5 py-3.5 text-right font-bold tabular-nums text-ink sm:px-7">
+                  {product.quantityInStock === 0 ? <span className="text-warning">Out of stock</span> : product.quantityInStock}
                 </td>
               </tr>
             ))}
@@ -1745,78 +1745,78 @@ function RobotPanel() {
   return (
     <div>
       <div className="mb-5">
-        <h2 className="text-2xl font-extrabold text-[#294332]">Robot fleet</h2>
-        <p className="mt-1 text-sm text-[#667269]">Live robot locations, planned routes, destinations, and stop ETAs.</p>
+        <h2 className="text-2xl font-extrabold text-ink">Robot fleet</h2>
+        <p className="mt-1 text-sm text-muted">Live robot locations, planned routes, destinations, and stop ETAs.</p>
       </div>
-      {notice && <p role="status" className="mb-4 rounded-xl bg-[#e9f1df] px-4 py-3 text-sm text-[#416449]">{notice}</p>}
+      {notice && <p role="status" className="mb-4 rounded-xl bg-accent-soft px-4 py-3 text-sm text-accent-ink">{notice}</p>}
       {error && <p role="alert" className="mb-4 rounded-xl border border-red-200 bg-white p-4 text-sm text-red-700">{error}</p>}
       {loading ? (
-        <p role="status" className="rounded-xl border border-[#e8e7dc] bg-white p-5 text-sm text-[#667269]">Loading robot fleet…</p>
+        <p role="status" className="rounded-xl border border-border bg-white p-5 text-sm text-muted">Loading robot fleet…</p>
       ) : (
         <>
           <section aria-label="Robots" className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {robots.map((robot) => (
-              <article key={robot.robotId} className="rounded-2xl border border-[#e8e7dc] bg-white p-4">
+              <article key={robot.robotId} className="rounded-2xl border border-border bg-white p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <h3 className="font-extrabold text-[#294332]">{robot.robotName}</h3>
-                  <span className="rounded-full bg-[#e9f1df] px-2.5 py-1 text-xs font-bold capitalize text-[#416449]">{robot.status.replaceAll("_", " ")}</span>
+                  <h3 className="font-extrabold text-ink">{robot.robotName}</h3>
+                  <span className="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-bold capitalize text-accent-ink">{robot.status.replaceAll("_", " ")}</span>
                 </div>
-                <p className="mt-2 text-xs text-[#7d887b]">
+                <p className="mt-2 text-xs text-muted">
                   {robot.currentLatitude != null && robot.currentLongitude != null
                     ? `${robot.currentLatitude.toFixed(5)}, ${robot.currentLongitude.toFixed(5)}`
                     : "Position unavailable"}
                 </p>
-                <p className="mt-1 text-xs text-[#899188]">Updated {new Date(robot.lastUpdated).toLocaleTimeString()}</p>
+                <p className="mt-1 text-xs text-muted">Updated {new Date(robot.lastUpdated).toLocaleTimeString()}</p>
                 <button
                   type="button"
                   disabled={busy || runs.some((run) => run.robotId === robot.robotId && run.status === "returning")}
                   onClick={() => void recallRobot(robot)}
-                  className="mt-3 w-full rounded-full border border-[#d9e2d2] px-3 py-2 text-sm font-bold text-[#416449] hover:bg-[#f1f5eb] disabled:cursor-wait disabled:opacity-50"
+                  className="mt-3 w-full rounded-full border border-border px-3 py-2 text-sm font-bold text-accent-ink hover:bg-accent-soft disabled:cursor-wait disabled:opacity-50"
                 >
                   {runs.some((run) => run.robotId === robot.robotId && run.status === "returning") ? "Returning to store…" : busy ? "Recalling…" : "Recall to store"}
                 </button>
               </article>
             ))}
-            {robots.length === 0 && <p className="rounded-2xl border border-[#e8e7dc] bg-white p-5 text-sm text-[#667269]">No robots have been registered.</p>}
+            {robots.length === 0 && <p className="rounded-2xl border border-border bg-white p-5 text-sm text-muted">No robots have been registered.</p>}
           </section>
 
           <div className="grid items-start gap-5 xl:grid-cols-[minmax(15rem,0.8fr)_minmax(0,2fr)]">
-            <section aria-label="Delivery runs" className="overflow-hidden rounded-2xl border border-[#e8e7dc] bg-white">
-              <div className="border-b border-[#ecebe2] px-4 py-3">
+            <section aria-label="Delivery runs" className="overflow-hidden rounded-2xl border border-border bg-white">
+              <div className="border-b border-border px-4 py-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="font-extrabold text-[#294332]">Runs</h3>
+                  <h3 className="font-extrabold text-ink">Runs</h3>
                   <label className="sr-only" htmlFor="robot-run-filter">Filter robot runs</label>
                   <select
                     id="robot-run-filter"
                     value={runFilter}
                     onChange={(event) => setRunFilter(event.target.value as typeof runFilter)}
-                    className="rounded-lg border border-[#d9e2d2] bg-white px-2 py-1 text-xs font-bold text-[#416449]"
+                    className="rounded-lg border border-border bg-white px-2 py-1 text-xs font-bold text-accent-ink"
                   >
                     <option value="all">All runs</option>
                     <option value="delivery">Delivery runs</option>
                     <option value="recall">Recall runs</option>
                   </select>
                 </div>
-                <p className="mt-1 text-xs text-[#7d887b]">Refreshes every few seconds · {filteredRuns.length} shown</p>
+                <p className="mt-1 text-xs text-muted">Refreshes every few seconds · {filteredRuns.length} shown</p>
               </div>
-              <ul className="max-h-[32rem] divide-y divide-[#ecebe2] overflow-y-auto">
+              <ul className="max-h-[32rem] divide-y divide-border overflow-y-auto">
                 {filteredRuns.map((run) => (
                   <li key={run.runId}>
-                    <button type="button" aria-pressed={selectedRunId === run.runId} onClick={() => setSelectedRunId(run.runId)} className={`w-full px-4 py-3 text-left ${selectedRunId === run.runId ? "bg-[#e9f1df]" : "hover:bg-[#f8f8f3]"}`}>
+                    <button type="button" aria-pressed={selectedRunId === run.runId} onClick={() => setSelectedRunId(run.runId)} className={`w-full px-4 py-3 text-left ${selectedRunId === run.runId ? "bg-accent-soft" : "hover:bg-canvas"}`}>
                       <span className="flex items-center justify-between gap-2">
-                        <span className="font-mono text-xs font-bold text-[#294332]">{shortOrderId(run.runId)}</span>
-                        <span className="text-xs capitalize text-[#667269]">{run.status}</span>
+                        <span className="font-mono text-xs font-bold text-ink">{shortOrderId(run.runId)}</span>
+                        <span className="text-xs capitalize text-muted">{run.status}</span>
                       </span>
-                      <span className="mt-1 block text-xs text-[#667269]">{run.runType === "recall" ? "Recall" : "Delivery"} · {run.robotName} · {run.stops.length} stops</span>
+                      <span className="mt-1 block text-xs text-muted">{run.runType === "recall" ? "Recall" : "Delivery"} · {run.robotName} · {run.stops.length} stops</span>
                     </button>
                   </li>
                 ))}
-                {filteredRuns.length === 0 && <li className="px-4 py-5 text-sm text-[#667269]">No {runFilter === "all" ? "robot" : runFilter} runs found.</li>}
+                {filteredRuns.length === 0 && <li className="px-4 py-5 text-sm text-muted">No {runFilter === "all" ? "robot" : runFilter} runs found.</li>}
               </ul>
             </section>
 
             <div>
-              <section aria-label="Selected route map" className="h-[55vh] min-h-[350px] overflow-hidden rounded-2xl border border-[#e8e7dc] bg-white">
+              <section aria-label="Selected route map" className="h-[55vh] min-h-[350px] overflow-hidden rounded-2xl border border-border bg-white">
                 <Map
                   key={selectedRun?.runId ?? "fleet-map"}
                   initialViewState={mapBounds
@@ -1827,27 +1827,27 @@ function RobotPanel() {
                 >
                   <NavigationControl position="top-right" />
                   {route && <Source id="manager-delivery-route" type="geojson" data={route}>
-                    <Layer id="manager-delivery-route-line" type="line" paint={{ "line-color": "#416449", "line-width": 5, "line-opacity": 0.8 }} />
+                    <Layer id="manager-delivery-route-line" type="line" paint={{ "line-color": "#B6EAF5", "line-width": 5, "line-opacity": 0.8 }} />
                   </Source>}
                   {selectedRun?.stops.map((stop) => stop.latitude != null && stop.longitude != null && (
                     <Marker key={`${stop.orderId}-${stop.stopNumber}`} latitude={stop.latitude} longitude={stop.longitude} anchor="center">
-                      <span title={`Stop ${stop.stopNumber}: order ${shortOrderId(stop.orderId)}`} className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-[#d68b37] text-xs font-extrabold text-white shadow">{stop.stopNumber}</span>
+                      <span title={`Stop ${stop.stopNumber}: order ${shortOrderId(stop.orderId)}`} className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-[#F8C4B0] text-xs font-extrabold text-ink shadow">{stop.stopNumber}</span>
                     </Marker>
                   ))}
                   {selectedRobot?.currentLatitude != null && selectedRobot.currentLongitude != null && (
                     <Marker latitude={selectedRobot.currentLatitude} longitude={selectedRobot.currentLongitude} anchor="center">
-                      <span title={`${selectedRobot.robotName} current position`} className="flex h-9 w-9 items-center justify-center rounded-full border-[3px] border-white bg-[#416449] text-lg shadow-lg">🤖</span>
+                      <span title={`${selectedRobot.robotName} current position`} className="flex h-9 w-9 items-center justify-center rounded-full border-[3px] border-white bg-accent text-lg shadow-lg">🤖</span>
                     </Marker>
                   )}
                 </Map>
               </section>
 
               {selectedRun ? (
-                <section aria-label="Run details" className="mt-4 overflow-hidden rounded-2xl border border-[#e8e7dc] bg-white">
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#ecebe2] px-4 py-4">
+                <section aria-label="Run details" className="mt-4 overflow-hidden rounded-2xl border border-border bg-white">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-4">
                     <div>
-                      <h3 className="font-extrabold text-[#294332]">{selectedRun.robotName} · run {shortOrderId(selectedRun.runId)}</h3>
-                      <p className="mt-1 text-xs capitalize text-[#667269]">
+                      <h3 className="font-extrabold text-ink">{selectedRun.robotName} · run {shortOrderId(selectedRun.runId)}</h3>
+                      <p className="mt-1 text-xs capitalize text-muted">
                         {selectedRun.status} · {selectedRun.routeSource === "approximate" ? "approximate route" : selectedRun.routeSource ?? "route unavailable"}
                         {selectedRun.routeDistanceMeters != null && ` · ${(selectedRun.routeDistanceMeters / 1000).toFixed(1)} km`}
                       </p>
@@ -1860,20 +1860,20 @@ function RobotPanel() {
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-[34rem] text-left text-sm">
-                      <thead className="bg-[#f6f7f1] text-xs uppercase tracking-wide text-[#667269]">
+                      <thead className="bg-canvas text-xs uppercase tracking-wide text-muted">
                         <tr><th className="px-4 py-3">Stop</th><th className="px-4 py-3">Order / destination</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">ETA</th></tr>
                       </thead>
-                      <tbody className="divide-y divide-[#ecebe2]">
+                      <tbody className="divide-y divide-border">
                         {selectedRun.stops.map((stop) => (
                           <tr key={`${stop.orderId}-${stop.stopNumber}`}>
                             <td className="px-4 py-3">{stop.stopNumber}</td>
                             <td className="px-4 py-3">
                               <span className="block font-mono text-xs font-bold">{shortOrderId(stop.orderId)}</span>
-                              <span className="block text-xs text-[#294332]">{stop.street}, {stop.city}, {stop.state} {stop.zipCode}</span>
-                              <span className="text-xs text-[#7d887b]">{stop.latitude != null && stop.longitude != null ? `${stop.latitude.toFixed(5)}, ${stop.longitude.toFixed(5)}` : "Address coordinates unavailable"}</span>
+                              <span className="block text-xs text-ink">{stop.street}, {stop.city}, {stop.state} {stop.zipCode}</span>
+                              <span className="text-xs text-muted">{stop.latitude != null && stop.longitude != null ? `${stop.latitude.toFixed(5)}, ${stop.longitude.toFixed(5)}` : "Address coordinates unavailable"}</span>
                             </td>
-                            <td className="px-4 py-3 capitalize text-[#667269]">{stop.status.replaceAll("_", " ")}</td>
-                            <td className="px-4 py-3 text-[#667269]">{stop.eta ? new Date(stop.eta).toLocaleString() : "Not scheduled"}</td>
+                            <td className="px-4 py-3 capitalize text-muted">{stop.status.replaceAll("_", " ")}</td>
+                            <td className="px-4 py-3 text-muted">{stop.eta ? new Date(stop.eta).toLocaleString() : "Not scheduled"}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -1881,7 +1881,7 @@ function RobotPanel() {
                   </div>
                 </section>
               ) : (
-                <p className="mt-4 rounded-2xl border border-[#e8e7dc] bg-white p-5 text-sm text-[#667269]">Select a run to see its route and delivery destinations.</p>
+                <p className="mt-4 rounded-2xl border border-border bg-white p-5 text-sm text-muted">Select a run to see its route and delivery destinations.</p>
               )}
             </div>
           </div>
@@ -1893,10 +1893,10 @@ function RobotPanel() {
 
 function OverviewCard({ label, value, detail }: { label: string; value: number; detail: string }) {
   return (
-    <article className="rounded-2xl border border-[#e8e7dc] bg-white p-5 shadow-[0_3px_12px_rgba(42,65,48,0.04)]">
-      <p className="text-sm font-bold text-[#667269]">{label}</p>
-      <p className="mt-2 text-3xl font-extrabold tabular-nums text-[#294332]">{value}</p>
-      <p className="mt-1 text-sm text-[#7d887b]">{detail}</p>
+    <article className="rounded-2xl border border-border bg-white p-5 shadow-[0_3px_12px_rgba(0,0,0,0.06)]">
+      <p className="text-sm font-bold text-muted">{label}</p>
+      <p className="mt-2 text-3xl font-extrabold tabular-nums text-ink">{value}</p>
+      <p className="mt-1 text-sm text-muted">{detail}</p>
     </article>
   );
 }
