@@ -7,7 +7,7 @@ import { fetchCart, type CartLine } from "../cart/api";
 import { deliveryFeeFor } from "../cart/delivery";
 import { fetchDeliverySettings, type DeliverySettings } from "../manager/api";
 import { SiteHeader } from "../components/SiteHeader";
-import { createPaymentIntent, fetchLatestCheckoutAddress, placeOrder, type CheckoutAddress } from "../orders/api";
+import { createPaymentIntent, fetchLatestCheckoutAddress, placeOrder, reportFailedPayment, type CheckoutAddress } from "../orders/api";
 
 const publishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
 const stripePromise = publishableKey ? loadStripe(publishableKey) : null;
@@ -141,6 +141,9 @@ function PayableCheckout(props: Omit<CheckoutFormProps, "payment" | "submitError
       // Validation errors are already shown under the card field.
       if (result.error.type !== "validation_error") {
         setSubmitError(result.error.message ?? "Your card could not be charged.");
+      }
+      if (result.error.type === "card_error" && result.error.payment_intent?.id) {
+        void reportFailedPayment(result.error.payment_intent.id).catch(() => {});
       }
       setIsSubmitting(false);
       return;

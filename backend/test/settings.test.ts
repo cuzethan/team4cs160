@@ -23,6 +23,7 @@ describe("global delivery settings", () => {
       payments: {
         async create({ amountCents }) { paidAmount = amountCents; return { clientSecret: "secret" }; },
         async retrieveSucceeded(id) { return { id, amountCents: paidAmount, userId: customerId }; },
+        async retrieveFailure() { return null; },
       },
       appUrl: "http://localhost:5173", secureCookies: false, checkDatabase: async () => {},
     });
