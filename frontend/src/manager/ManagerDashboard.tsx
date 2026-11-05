@@ -11,7 +11,7 @@ import {
 import { SiteHeader } from "../components/SiteHeader";
 import { emojiFor } from "../inventory/api";
 import type { InventoryProduct } from "../inventory/types";
-import { cancelDeliveryRun, dispatchDeliveries, fetchDeliveries, fetchDeliveryRobots, fetchDeliveryRuns, fetchDeliverySettings, fetchRobotBaseLocation, fetchManagedInventory, fetchManagerAudit, fetchSales, fetchSalesAnalytics, recallDeliveryRobot, refundDeliveryOrder, saveDeliverySettings, saveRobotBaseLocation, updateProduct, type DeliveryRobot, type DeliveryRun, type DeliverySettings, type ManagedProduct, type ManagerAuditEntry, type ManagerDelivery, type ProductCategory, type RobotBaseLocation, type SalesAnalytics, type SalesBucket, type SalesRange } from "./api";
+import { cancelDeliveryRun, createDeliveryRobot, deleteDeliveryRobot, dispatchDeliveries, fetchDeliveries, fetchDeliveryRobots, fetchDeliveryRuns, fetchDeliverySettings, fetchRobotBaseLocation, fetchManagedInventory, fetchManagerAudit, fetchSales, fetchSalesAnalytics, recallDeliveryRobot, refundDeliveryOrder, restoreDeliveryRobot, retireDeliveryRobot, saveDeliverySettings, saveRobotBaseLocation, updateProduct, type DeliveryRobot, type DeliveryRun, type DeliverySettings, type ManagedProduct, type ManagerAuditEntry, type ManagerDelivery, type ProductCategory, type RobotBaseLocation, type SalesAnalytics, type SalesBucket, type SalesRange } from "./api";
 import { ProductFormDialog, ProductTable } from "./ProductManager";
 import { FailedPaymentsPanel, InventoryReportPanel } from "./ReportsPanel";
 
@@ -1648,13 +1648,18 @@ function RobotPanel() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [newRobotDraft, setNewRobotDraft] = useState<{ robotId: string; robotName: string } | null>(null);
+  const [fleetFilter, setFleetFilter] = useState<"active" | "disabled" | "all">("active");
+  const [robotSearch, setRobotSearch] = useState("");
+  const [selectedRobotId, setSelectedRobotId] = useState<string | null>(null);
+  const [deletePendingRobotId, setDeletePendingRobotId] = useState<string | null>(null);
 
   const refresh = useCallback(async (initial = false) => {
     try {
       const [nextRobots, nextRuns] = await Promise.all([fetchDeliveryRobots(), fetchDeliveryRuns()]);
       setRobots(nextRobots);
       setRuns(nextRuns);
-      setError("");
+      if (!newRobotDraft) setError("");
       setSelectedRunId((selected) => selected && nextRuns.some((run) => run.runId === selected)
         ? selected
         : nextRuns.find((run) => run.status === "active" || run.status === "assigned")?.runId ?? nextRuns[0]?.runId ?? null);
@@ -1663,7 +1668,7 @@ function RobotPanel() {
     } finally {
       if (initial) setLoading(false);
     }
-  }, []);
+  }, [newRobotDraft]);
 
   useEffect(() => {
     void refresh(true);
@@ -1675,8 +1680,24 @@ function RobotPanel() {
     () => runFilter === "all" ? runs : runs.filter((run) => run.runType === runFilter),
     [runFilter, runs],
   );
+  const robotCounts = useMemo(() => ({
+    active: robots.filter((robot) => robot.status !== "disabled").length,
+    disabled: robots.filter((robot) => robot.status === "disabled").length,
+  }), [robots]);
+  const visibleRobots = useMemo(() => {
+    const search = robotSearch.trim().toLowerCase();
+    return robots.filter((robot) => {
+      const matchesFilter = fleetFilter === "all" || (fleetFilter === "disabled" ? robot.status === "disabled" : robot.status !== "disabled");
+      const matchesSearch = !search || robot.robotName.toLowerCase().includes(search) || robot.robotId.toLowerCase().includes(search);
+      return matchesFilter && matchesSearch;
+    });
+  }, [fleetFilter, robotSearch, robots]);
   const selectedRun = filteredRuns.find((run) => run.runId === selectedRunId) ?? null;
   const selectedRobot = robots.find((robot) => robot.robotId === selectedRun?.robotId) ?? null;
+  const selectedFleetRobot = robots.find((robot) => robot.robotId === selectedRobotId) ?? null;
+  const selectedFleetRun = selectedFleetRobot
+    ? runs.find((run) => run.robotId === selectedFleetRobot.robotId && ["assigned", "active", "returning"].includes(run.status)) ?? null
+    : null;
   const route = useMemo(() => selectedRun?.routeGeometry && selectedRun.routeGeometry.length > 0
     ? {
         type: "Feature" as const,
@@ -1747,43 +1768,234 @@ function RobotPanel() {
     }
   };
 
+  const openAddRobotDialog = () => {
+    const nextNumber = robots.reduce((highest, robot) => {
+      const match = /^Demo Robot (\d+)$/.exec(robot.robotName);
+      return match ? Math.max(highest, Number(match[1])) : highest;
+    }, 0) + 1;
+    setError("");
+    setNotice("");
+    setNewRobotDraft({ robotId: crypto.randomUUID(), robotName: `Demo Robot ${nextNumber}` });
+  };
+
+  const addRobot = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!newRobotDraft || !newRobotDraft.robotName.trim()) return;
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const robot = await createDeliveryRobot({ ...newRobotDraft, robotName: newRobotDraft.robotName.trim() });
+      setNewRobotDraft(null);
+      setNotice(`${robot.robotName} was added to the fleet and is ready for dispatch.`);
+      await refresh();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Unable to add the robot.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const changeRobotStatus = async (robot: DeliveryRobot) => {
+    const isDisabled = robot.status === "disabled";
+    if (!isDisabled) {
+      const activeRun = runs.find((run) => run.robotId === robot.robotId && ["assigned", "active", "returning"].includes(run.status));
+      if (activeRun) {
+        setError("Stop or recall this robot before retiring it.");
+        return;
+      }
+      if (!window.confirm(`Retire ${robot.robotName}? It will stay in the system but will no longer receive deliveries.`)) return;
+    }
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      if (isDisabled) {
+        await restoreDeliveryRobot(robot.robotId);
+        setNotice(`${robot.robotName} was restored and is available for dispatch.`);
+      } else {
+        await retireDeliveryRobot(robot.robotId);
+        setNotice(`${robot.robotName} was retired and disabled.`);
+      }
+      await refresh();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : `Unable to ${isDisabled ? "restore" : "retire"} the robot.`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const deleteRobot = async (robot: DeliveryRobot) => {
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      await deleteDeliveryRobot(robot.robotId);
+      setDeletePendingRobotId(null);
+      setSelectedRobotId(null);
+      setNotice(`${robot.robotName} was deleted from the fleet.`);
+      await refresh();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Unable to delete the robot.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div>
       <div className="mb-5">
-        <h2 className="text-2xl font-extrabold text-ink">Robot fleet</h2>
-        <p className="mt-1 text-sm text-muted">Live robot locations, planned routes, destinations, and stop ETAs.</p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-2xl font-extrabold text-ink">Robot fleet</h2>
+            <p className="mt-1 text-sm text-muted">Live robot locations, planned routes, destinations, and stop ETAs.</p>
+          </div>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={openAddRobotDialog}
+            className="rounded-full bg-accent px-5 py-2.5 text-sm font-bold text-on-accent transition hover:bg-accent-hover disabled:cursor-wait disabled:opacity-60"
+          >
+            {busy ? "Updating fleet…" : "Add robot"}
+          </button>
+        </div>
       </div>
+      {newRobotDraft && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 px-4" role="dialog" aria-modal="true" aria-labelledby="add-robot-title">
+          <form onSubmit={(event) => void addRobot(event)} className="w-full max-w-lg rounded-2xl border border-border bg-white p-6 shadow-xl">
+            <h3 id="add-robot-title" className="text-xl font-extrabold text-ink">Add robot</h3>
+            <p className="mt-1 text-sm text-muted">Review the generated ID and name before registering this robot.</p>
+            <label className="mt-5 block text-sm font-bold text-ink" htmlFor="new-robot-id">Robot ID</label>
+            <input id="new-robot-id" value={newRobotDraft.robotId} disabled className="mt-1 w-full rounded-xl border border-border bg-canvas px-3 py-2.5 font-mono text-sm text-muted" />
+            <label className="mt-4 block text-sm font-bold text-ink" htmlFor="new-robot-name">Robot name</label>
+            <input
+              id="new-robot-name"
+              value={newRobotDraft.robotName}
+              onChange={(event) => setNewRobotDraft((draft) => draft ? { ...draft, robotName: event.target.value } : draft)}
+              maxLength={100}
+              autoFocus
+              required
+              className="mt-1 w-full rounded-xl border border-border bg-white px-3 py-2.5 text-ink focus:border-accent-ink focus:outline-none focus:ring-2 focus:ring-accent-ink/20"
+            />
+            {error && <p role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" disabled={busy} onClick={() => setNewRobotDraft(null)} className="rounded-full border border-border px-4 py-2.5 text-sm font-bold text-accent-ink hover:bg-accent-soft disabled:opacity-50">Cancel</button>
+              <button type="submit" disabled={busy || !newRobotDraft.robotName.trim()} className="rounded-full bg-accent px-5 py-2.5 text-sm font-bold text-on-accent transition hover:bg-accent-hover disabled:cursor-wait disabled:opacity-60">{busy ? "Creating…" : "Confirm creation"}</button>
+            </div>
+          </form>
+        </div>
+      )}
       {notice && <p role="status" className="mb-4 rounded-xl bg-accent-soft px-4 py-3 text-sm text-accent-ink">{notice}</p>}
       {error && <p role="alert" className="mb-4 rounded-xl border border-red-200 bg-white p-4 text-sm text-red-700">{error}</p>}
       {loading ? (
         <p role="status" className="rounded-xl border border-border bg-white p-5 text-sm text-muted">Loading robot fleet…</p>
       ) : (
         <>
-          <section aria-label="Robots" className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {robots.map((robot) => (
-              <article key={robot.robotId} className="rounded-2xl border border-border bg-white p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <h3 className="font-extrabold text-ink">{robot.robotName}</h3>
-                  <span className="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-bold capitalize text-accent-ink">{robot.status.replaceAll("_", " ")}</span>
+          <section aria-label="Robots" className="mb-5 overflow-hidden rounded-2xl border border-border bg-white">
+            <div className="border-b border-border p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-extrabold text-ink">Fleet</h3>
+                  <p className="mt-1 text-xs text-muted">{visibleRobots.length} of {robots.length} robots shown · select a robot for details</p>
                 </div>
-                <p className="mt-2 text-xs text-muted">
-                  {robot.currentLatitude != null && robot.currentLongitude != null
-                    ? `${robot.currentLatitude.toFixed(5)}, ${robot.currentLongitude.toFixed(5)}`
-                    : "Position unavailable"}
-                </p>
-                <p className="mt-1 text-xs text-muted">Updated {new Date(robot.lastUpdated).toLocaleTimeString()}</p>
-                <button
-                  type="button"
-                  disabled={busy || runs.some((run) => run.robotId === robot.robotId && run.status === "returning")}
-                  onClick={() => void recallRobot(robot)}
-                  className="mt-3 w-full rounded-full border border-border px-3 py-2 text-sm font-bold text-accent-ink hover:bg-accent-soft disabled:cursor-wait disabled:opacity-50"
+                <input
+                  aria-label="Search robots"
+                  value={robotSearch}
+                  onChange={(event) => setRobotSearch(event.target.value)}
+                  placeholder="Search name or ID"
+                  className="w-full rounded-xl border border-border bg-white px-3 py-2 text-sm text-ink focus:border-accent-ink focus:outline-none focus:ring-2 focus:ring-accent-ink/20 sm:w-56"
+                />
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2" role="tablist" aria-label="Robot status filter">
+                {(["active", "disabled", "all"] as const).map((filter) => (
+                  <button
+                    key={filter}
+                    type="button"
+                    role="tab"
+                    aria-selected={fleetFilter === filter}
+                    onClick={() => setFleetFilter(filter)}
+                    className={`rounded-full px-3 py-1.5 text-xs font-bold capitalize ${fleetFilter === filter ? "bg-accent text-on-accent" : "bg-canvas text-muted hover:bg-accent-soft hover:text-accent-ink"}`}
+                  >
+                    {filter === "active" ? `Active (${robotCounts.active})` : filter === "disabled" ? `Disabled (${robotCounts.disabled})` : `All (${robots.length})`}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="divide-y divide-border">
+              {visibleRobots.map((robot) => (
+                <article
+                  key={robot.robotId}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setSelectedRobotId(robot.robotId)}
+                  onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setSelectedRobotId(robot.robotId); }}
+                  className="flex cursor-pointer flex-wrap items-center gap-3 px-4 py-3 text-left hover:bg-canvas focus:outline-none focus:ring-2 focus:ring-inset focus:ring-accent-ink sm:flex-nowrap"
                 >
-                  {runs.some((run) => run.robotId === robot.robotId && run.status === "returning") ? "Returning to store…" : busy ? "Recalling…" : "Recall to store"}
-                </button>
-              </article>
-            ))}
-            {robots.length === 0 && <p className="rounded-2xl border border-border bg-white p-5 text-sm text-muted">No robots have been registered.</p>}
+                  <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${robot.status === "disabled" ? "bg-muted" : robot.status === "available" ? "bg-accent" : "bg-warning"}`} aria-hidden="true" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h4 className="font-extrabold text-ink">{robot.robotName}</h4>
+                      <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-bold capitalize text-accent-ink">{robot.status.replaceAll("_", " ")}</span>
+                    </div>
+                    <p className="mt-1 truncate font-mono text-xs text-muted">{robot.robotId}</p>
+                  </div>
+                  <div className="hidden text-right text-xs text-muted sm:block">
+                    <p>{robot.currentLatitude != null && robot.currentLongitude != null ? `${robot.currentLatitude.toFixed(5)}, ${robot.currentLongitude.toFixed(5)}` : "Position unavailable"}</p>
+                    <p className="mt-1">Updated {new Date(robot.lastUpdated).toLocaleTimeString()}</p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={busy || robot.status === "disabled" || runs.some((run) => run.robotId === robot.robotId && run.status === "returning")}
+                    onClick={(event) => { event.stopPropagation(); void recallRobot(robot); }}
+                    className="shrink-0 rounded-full border border-border px-3 py-1.5 text-xs font-bold text-accent-ink hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {robot.status === "disabled" ? "Retired" : runs.some((run) => run.robotId === robot.robotId && run.status === "returning") ? "Returning…" : "Recall"}
+                  </button>
+                </article>
+              ))}
+              {visibleRobots.length === 0 && <p className="px-4 py-6 text-sm text-muted">No robots match this filter.</p>}
+            </div>
           </section>
+
+          {selectedFleetRobot && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 px-4" role="dialog" aria-modal="true" aria-labelledby="robot-detail-title">
+              <section className="w-full max-w-lg rounded-2xl border border-border bg-white p-6 shadow-xl">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 id="robot-detail-title" className="text-xl font-extrabold text-ink">{selectedFleetRobot.robotName}</h3>
+                    <p className="mt-1 break-all font-mono text-xs text-muted">{selectedFleetRobot.robotId}</p>
+                  </div>
+                  <button type="button" onClick={() => setSelectedRobotId(null)} className="rounded-full border border-border px-3 py-1 text-sm font-bold text-muted hover:bg-canvas">Close</button>
+                </div>
+                <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
+                  <div className="rounded-xl bg-canvas p-3"><p className="text-xs text-muted">Status</p><p className="mt-1 font-bold capitalize text-ink">{selectedFleetRobot.status.replaceAll("_", " ")}</p></div>
+                  <div className="rounded-xl bg-canvas p-3"><p className="text-xs text-muted">Capacity</p><p className="mt-1 font-bold text-ink">{selectedFleetRobot.maximumOrders} orders · {selectedFleetRobot.maximumWeight} lbs</p></div>
+                  <div className="col-span-2 rounded-xl bg-canvas p-3"><p className="text-xs text-muted">Current location</p><p className="mt-1 font-mono text-sm text-ink">{selectedFleetRobot.currentLatitude != null && selectedFleetRobot.currentLongitude != null ? `${selectedFleetRobot.currentLatitude.toFixed(5)}, ${selectedFleetRobot.currentLongitude.toFixed(5)}` : "Position unavailable"}</p><p className="mt-1 text-xs text-muted">Updated {new Date(selectedFleetRobot.lastUpdated).toLocaleTimeString()}</p></div>
+                </div>
+                {selectedFleetRun && <p className="mt-4 rounded-xl bg-accent-soft px-4 py-3 text-sm font-semibold text-accent-ink">Current {selectedFleetRun.runType === "recall" ? "return" : "delivery"} run: {selectedFleetRun.stops.length} stops · {selectedFleetRun.status}</p>}
+                <div className="mt-5 flex flex-wrap justify-end gap-2">
+                  {selectedFleetRobot.status !== "disabled" && <button type="button" disabled={busy || Boolean(selectedFleetRun)} onClick={() => void recallRobot(selectedFleetRobot)} className="rounded-full border border-border px-4 py-2 text-sm font-bold text-accent-ink hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50">Recall to store</button>}
+                  <button type="button" disabled={busy || Boolean(selectedFleetRun)} onClick={() => void changeRobotStatus(selectedFleetRobot)} className="rounded-full border border-border px-4 py-2 text-sm font-bold text-muted hover:bg-canvas disabled:cursor-not-allowed disabled:opacity-50">{selectedFleetRobot.status === "disabled" ? "Restore robot" : "Retire robot"}</button>
+                  <button type="button" disabled={busy || Boolean(selectedFleetRun)} onClick={() => setDeletePendingRobotId(selectedFleetRobot.robotId)} className="rounded-full border border-red-200 px-4 py-2 text-sm font-bold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50">Delete robot</button>
+                </div>
+              </section>
+            </div>
+          )}
+
+          {deletePendingRobotId && selectedFleetRobot && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/50 px-4" role="dialog" aria-modal="true" aria-labelledby="delete-robot-title">
+              <section className="w-full max-w-md rounded-2xl border border-border bg-white p-6 shadow-xl">
+                <h3 id="delete-robot-title" className="text-xl font-extrabold text-ink">Delete robot?</h3>
+                <p className="mt-2 text-sm text-muted">This permanently removes <strong>{selectedFleetRobot.robotName}</strong> and its ID from the fleet. Robots with delivery history cannot be deleted and should be retired instead.</p>
+                <p className="mt-3 break-all rounded-xl bg-canvas px-3 py-2 font-mono text-xs text-muted">{selectedFleetRobot.robotId}</p>
+                {error && <p role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+                <div className="mt-6 flex justify-end gap-3">
+                  <button type="button" disabled={busy} onClick={() => setDeletePendingRobotId(null)} className="rounded-full border border-border px-4 py-2.5 text-sm font-bold text-accent-ink hover:bg-accent-soft disabled:opacity-50">Cancel</button>
+                  <button type="button" disabled={busy} onClick={() => void deleteRobot(selectedFleetRobot)} className="rounded-full bg-red-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-800 disabled:cursor-wait disabled:opacity-60">{busy ? "Deleting…" : "Confirm delete"}</button>
+                </div>
+              </section>
+            </div>
+          )}
 
           <div className="grid items-start gap-5 xl:grid-cols-[minmax(15rem,0.8fr)_minmax(0,2fr)]">
             <section aria-label="Delivery runs" className="overflow-hidden rounded-2xl border border-border bg-white">

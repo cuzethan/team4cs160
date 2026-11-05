@@ -33,6 +33,73 @@ async function managerAgent(app: ReturnType<typeof createApp>, memory: ReturnTyp
 }
 
 describe("manager deliveries API", () => {
+  it("lets managers add, retire, and restore a robot", async () => {
+    const memory = createMemoryStore();
+    const cart = createMemoryCartStore([]);
+    const robot = {
+      robotId: "00000000-0000-4000-8000-000000000010",
+      robotName: "Demo Robot 2",
+      status: "available",
+      maximumOrders: 10,
+      maximumWeight: 200,
+      currentLatitude: 37.3382,
+      currentLongitude: -121.8863,
+      lastUpdated: new Date(),
+    };
+    const createRobot = vi.fn(async () => robot);
+    const retireRobot = vi.fn(async () => "updated" as const);
+    const restoreRobot = vi.fn(async () => "updated" as const);
+    const app = createApp({
+      store: memory.store,
+      cartStore: cart.cartStore,
+      orderStore: createMemoryOrderStore(cart).orderStore,
+      productStore: createMemoryProductStore(cart).productStore,
+      salesStore: { listSales: async () => [], listSalesAnalytics: async () => ({ profitBuckets: [], items: [], categories: [] }) },
+      deliveryStore: { listDeliveries: async () => [], createRobot, retireRobot, restoreRobot },
+      appUrl: "http://localhost:5173",
+      secureCookies: false,
+      checkDatabase: async () => {},
+    });
+
+    const manager = await managerAgent(app, memory);
+    await expect(manager.post("/api/manager/deliveries/robots")).resolves.toMatchObject({ status: 201 });
+    expect(createRobot).toHaveBeenCalledOnce();
+
+    const retired = await manager.post(`/api/manager/deliveries/robots/${robot.robotId}/retire`);
+    expect(retired.status).toBe(200);
+    expect(retired.body).toEqual({ robotId: robot.robotId, status: "disabled" });
+    expect(retireRobot).toHaveBeenCalledWith(robot.robotId);
+
+    const restored = await manager.post(`/api/manager/deliveries/robots/${robot.robotId}/restore`);
+    expect(restored.status).toBe(200);
+    expect(restored.body).toEqual({ robotId: robot.robotId, status: "available" });
+    expect(restoreRobot).toHaveBeenCalledWith(robot.robotId);
+  });
+
+  it("explains duplicate robot names", async () => {
+    const memory = createMemoryStore();
+    const cart = createMemoryCartStore([]);
+    const createRobot = vi.fn(async () => { throw { code: "23505" }; });
+    const app = createApp({
+      store: memory.store,
+      cartStore: cart.cartStore,
+      orderStore: createMemoryOrderStore(cart).orderStore,
+      productStore: createMemoryProductStore(cart).productStore,
+      salesStore: { listSales: async () => [], listSalesAnalytics: async () => ({ profitBuckets: [], items: [], categories: [] }) },
+      deliveryStore: { listDeliveries: async () => [], createRobot },
+      appUrl: "http://localhost:5173",
+      secureCookies: false,
+      checkDatabase: async () => {},
+    });
+    const manager = await managerAgent(app, memory);
+    const response = await manager.post("/api/manager/deliveries/robots").send({
+      robotId: "00000000-0000-4000-8000-000000000011",
+      robotName: "Demo Robot 1",
+    });
+    expect(response.status).toBe(409);
+    expect(response.body.error).toBe('A robot named "Demo Robot 1" already exists.');
+  });
+
   it("restricts delivery data to managers and returns order progress", async () => {
     const memory = createMemoryStore();
     const cart = createMemoryCartStore([]);

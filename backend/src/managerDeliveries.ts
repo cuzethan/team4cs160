@@ -27,6 +27,64 @@ export function createManagerDeliveriesRouter({ store, deliveryStore }: ManagerD
     res.json({ robots: await deliveryStore.listRobots() });
   }));
 
+  router.post("/robots", handle(async (req, res) => {
+    const user = await findCurrentUser(store, req);
+    if (!user) return res.status(401).json({ error: "Not logged in." });
+    if (user.role !== "admin") return res.status(403).json({ error: "Manager access is required." });
+    if (!deliveryStore.createRobot) return res.status(501).json({ error: "Robot registration is not available." });
+    const robotId = typeof req.body?.robotId === "string" ? req.body.robotId.trim() : undefined;
+    const robotName = typeof req.body?.robotName === "string" ? req.body.robotName.trim() : undefined;
+    if (robotId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(robotId)) {
+      return res.status(400).json({ error: "Robot ID must be a valid UUID." });
+    }
+    if (robotName !== undefined && (robotName.length < 1 || robotName.length > 100)) {
+      return res.status(400).json({ error: "Robot name must be between 1 and 100 characters." });
+    }
+    try {
+      res.status(201).json({ robot: await deliveryStore.createRobot({ robotId, robotName }) });
+    } catch (error) {
+      const databaseError = error as { code?: string };
+      if (databaseError.code === "23505") {
+        if (robotName) return res.status(409).json({ error: `A robot named "${robotName}" already exists.` });
+        if (robotId) return res.status(409).json({ error: "A robot with that ID already exists." });
+      }
+      throw error;
+    }
+  }));
+
+  router.post("/robots/:robotId/retire", handle(async (req, res) => {
+    const user = await findCurrentUser(store, req);
+    if (!user) return res.status(401).json({ error: "Not logged in." });
+    if (user.role !== "admin") return res.status(403).json({ error: "Manager access is required." });
+    if (!deliveryStore.retireRobot) return res.status(501).json({ error: "Robot retirement is not available." });
+    const result = await deliveryStore.retireRobot(req.params.robotId);
+    if (result === "not-found") return res.status(404).json({ error: "Robot not found." });
+    if (result === "invalid-state") return res.status(409).json({ error: "Only an idle robot can be retired or it is already disabled." });
+    res.json({ robotId: req.params.robotId, status: "disabled" });
+  }));
+
+  router.post("/robots/:robotId/restore", handle(async (req, res) => {
+    const user = await findCurrentUser(store, req);
+    if (!user) return res.status(401).json({ error: "Not logged in." });
+    if (user.role !== "admin") return res.status(403).json({ error: "Manager access is required." });
+    if (!deliveryStore.restoreRobot) return res.status(501).json({ error: "Robot restoration is not available." });
+    const result = await deliveryStore.restoreRobot(req.params.robotId);
+    if (result === "not-found") return res.status(404).json({ error: "Robot not found." });
+    if (result === "invalid-state") return res.status(409).json({ error: "Only a disabled robot can be restored." });
+    res.json({ robotId: req.params.robotId, status: "available" });
+  }));
+
+  router.delete("/robots/:robotId", handle(async (req, res) => {
+    const user = await findCurrentUser(store, req);
+    if (!user) return res.status(401).json({ error: "Not logged in." });
+    if (user.role !== "admin") return res.status(403).json({ error: "Manager access is required." });
+    if (!deliveryStore.deleteRobot) return res.status(501).json({ error: "Robot deletion is not available." });
+    const result = await deliveryStore.deleteRobot(req.params.robotId);
+    if (result === "not-found") return res.status(404).json({ error: "Robot not found." });
+    if (result === "invalid-state") return res.status(409).json({ error: "This robot has delivery history and cannot be deleted. Retire it instead." });
+    res.json({ robotId: req.params.robotId, status: "deleted" });
+  }));
+
   router.get("/runs", handle(async (req, res) => {
     const user = await findCurrentUser(store, req);
     if (!user) return res.status(401).json({ error: "Not logged in." });

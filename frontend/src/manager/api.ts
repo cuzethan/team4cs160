@@ -125,6 +125,35 @@ export async function fetchDeliveryRobots() {
   return (await deliveryRequest<{ robots: DeliveryRobot[] }>("/robots")).robots;
 }
 
+export async function createDeliveryRobot(input: { robotId: string; robotName: string }) {
+  return (await deliveryRequest<{ robot: DeliveryRobot }>("/robots", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  })).robot;
+}
+
+export function retireDeliveryRobot(robotId: string) {
+  return deliveryRequest<{ robotId: string; status: string }>(
+    `/robots/${encodeURIComponent(robotId)}/retire`,
+    { method: "POST" },
+  );
+}
+
+export function restoreDeliveryRobot(robotId: string) {
+  return deliveryRequest<{ robotId: string; status: string }>(
+    `/robots/${encodeURIComponent(robotId)}/restore`,
+    { method: "POST" },
+  );
+}
+
+export function deleteDeliveryRobot(robotId: string) {
+  return deliveryRequest<{ robotId: string; status: string }>(
+    `/robots/${encodeURIComponent(robotId)}`,
+    { method: "DELETE" },
+  );
+}
+
 export async function fetchDeliveryRuns() {
   return (await deliveryRequest<{ runs: DeliveryRun[] }>("/runs")).runs;
 }
