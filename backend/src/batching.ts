@@ -1,5 +1,8 @@
 import { calculateDeliveryRoute, type RoutePoint } from "./routeService.js";
 import { geocodeAddress, type GeocodedLocation } from "./geocoder.js";
+import { distanceInMiles } from "./deliveryArea.js";
+import { getRobotBaseLocation, type RobotBaseLocation } from "./robotBase.js";
+import { DEFAULT_DELIVERY_SETTINGS } from "./pricing.js";
 import type { DeliveryStore, DeliveryRobot, UnassignedPaidOrder } from "./store.js";
 
 const MAX_ORDERS_PER_RUN = 10;
@@ -9,6 +12,7 @@ export type DispatchResult = {
   runs: { runId: string; robotId: string; orderIds: string[]; routeSource: "valhalla" | "approximate" }[];
   pendingOrderIds: string[];
   unresolvedAddressOrderIds: string[];
+  outOfRangeOrderIds: string[];
   overCapacityOrderIds: string[];
   unavailableRobotIds: string[];
 };
@@ -32,6 +36,8 @@ export async function dispatchPendingOrders(
   deliveryStore: DeliveryStore,
   options: {
     photonUrl?: string;
+    deliveryRadiusMiles?: number;
+    robotBase?: RobotBaseLocation;
     geocode?: typeof geocodeAddress;
     route?: typeof calculateDeliveryRoute;
     now?: () => Date;
@@ -48,9 +54,12 @@ export async function dispatchPendingOrders(
   ]);
   const availableRobots = robots.filter((robot) => robot.status === "available");
   const unresolvedAddressOrderIds: string[] = [];
+  const outOfRangeOrderIds: string[] = [];
   const overCapacityOrderIds: string[] = [];
   const unavailableRobotIds: string[] = [];
   const routable: (UnassignedPaidOrder & GeocodedLocation)[] = [];
+  const robotBase = options.robotBase ?? getRobotBaseLocation();
+  const deliveryRadiusMiles = options.deliveryRadiusMiles ?? DEFAULT_DELIVERY_SETTINGS.deliveryRadiusMiles;
 
   for (const order of orders) {
     if (order.totalWeight > MAX_WEIGHT_PER_RUN_LBS) {
@@ -58,6 +67,10 @@ export async function dispatchPendingOrders(
       continue;
     }
     if (hasCoordinates(order)) {
+      if (distanceInMiles(order, robotBase) > deliveryRadiusMiles) {
+        outOfRangeOrderIds.push(order.orderId);
+        continue;
+      }
       routable.push(order);
       continue;
     }
@@ -71,6 +84,10 @@ export async function dispatchPendingOrders(
       const saved = await deliveryStore.saveAddressCoordinates(order.addressId, location.latitude, location.longitude);
       if (!saved) {
         unresolvedAddressOrderIds.push(order.orderId);
+        continue;
+      }
+      if (distanceInMiles(location, robotBase) > deliveryRadiusMiles) {
+        outOfRangeOrderIds.push(order.orderId);
         continue;
       }
       routable.push({ ...order, ...location });
@@ -152,6 +169,7 @@ export async function dispatchPendingOrders(
     runs,
     pendingOrderIds: pending.map(({ orderId }) => orderId),
     unresolvedAddressOrderIds,
+    outOfRangeOrderIds,
     overCapacityOrderIds,
     unavailableRobotIds,
   };

@@ -37,7 +37,7 @@ export async function fetchSalesAnalytics(range: SalesRange): Promise<SalesAnaly
   return data.analytics as SalesAnalytics;
 }
 
-export type DeliverySettings = { deliveryFee: number; freeDeliveryWeightThreshold: number };
+export type DeliverySettings = { deliveryFee: number; freeDeliveryWeightThreshold: number; deliveryRadiusMiles: number };
 
 async function settingsRequest(method: "GET" | "PUT", settings?: DeliverySettings): Promise<DeliverySettings> {
   let response: Response;
@@ -79,6 +79,7 @@ export type DispatchResult = {
   runs: { runId: string; robotId: string; orderIds: string[]; routeSource: "valhalla" | "approximate" }[];
   pendingOrderIds: string[];
   unresolvedAddressOrderIds: string[];
+  outOfRangeOrderIds: string[];
   overCapacityOrderIds: string[];
   unavailableRobotIds: string[];
 };

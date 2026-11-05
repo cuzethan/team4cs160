@@ -308,7 +308,7 @@ function OpenTabButton({ label, onClick }: { label: string; onClick: () => void 
 }
 
 function SettingsPanel() {
-  const [settings, setSettings] = useState<DeliverySettings>({ deliveryFee: 10, freeDeliveryWeightThreshold: 20 });
+  const [settings, setSettings] = useState<DeliverySettings>({ deliveryFee: 10, freeDeliveryWeightThreshold: 20, deliveryRadiusMiles: 50 });
   const [base, setBase] = useState<RobotBaseLocation>({ latitude: 37.3382, longitude: -121.8863 });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -340,7 +340,7 @@ function SettingsPanel() {
   };
 
   return <div>
-    <div className="mb-5"><h2 className="text-2xl font-extrabold text-ink">Settings</h2><p className="mt-1 text-sm text-muted">Configure delivery pricing for every customer order.</p></div>
+    <div className="mb-5"><h2 className="text-2xl font-extrabold text-ink">Settings</h2><p className="mt-1 text-sm text-muted">Configure delivery pricing and service area for every customer order.</p></div>
     {loading ? <p role="status" className="rounded-xl border border-border bg-white p-5 text-sm text-muted">Loading settings...</p> : (
       <>
       <form onSubmit={submit} className="max-w-xl space-y-5 rounded-2xl border border-border bg-white p-6 shadow-[0_3px_12px_rgba(0,0,0,0.06)]">
@@ -349,6 +349,9 @@ function SettingsPanel() {
         </label>
         <label className="block text-sm font-semibold text-ink">Free-delivery threshold (lb)
           <input aria-label="Free-delivery weight threshold" type="number" min="0.01" step="0.01" required value={settings.freeDeliveryWeightThreshold} onChange={(e) => setSettings({ ...settings, freeDeliveryWeightThreshold: Number(e.target.value) })} className="mt-1 w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-accent-ink" />
+        </label>
+        <label className="block text-sm font-semibold text-ink">Maximum delivery distance (miles) <span className="font-normal text-muted">straight-line from the distribution center</span>
+          <input aria-label="Maximum delivery distance" type="number" min="0.01" max="10000" step="any" required value={settings.deliveryRadiusMiles} onChange={(e) => setSettings({ ...settings, deliveryRadiusMiles: Number(e.target.value) })} className="mt-1 w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-accent-ink" />
         </label>
         {error && <p role="alert" className="text-sm text-red-800">{error}</p>}
         {success && <p role="status" className="text-sm text-green-800">{success}</p>}
@@ -777,6 +780,7 @@ function DeliveriesPanel() {
         `${result.runs.length} run${result.runs.length === 1 ? "" : "s"} created. ` +
         `${result.pendingOrderIds.length} order${result.pendingOrderIds.length === 1 ? " remains" : "s remain"} queued; ` +
         `${result.unresolvedAddressOrderIds.length} address${result.unresolvedAddressOrderIds.length === 1 ? " needs" : "es need"} geocoding, ` +
+        `${result.outOfRangeOrderIds.length} order${result.outOfRangeOrderIds.length === 1 ? " is" : "s are"} outside the delivery radius, ` +
         `${result.overCapacityOrderIds.length} order${result.overCapacityOrderIds.length === 1 ? " exceeds" : "s exceed"} the 200 lb limit.`,
       );
       setDeliveries(await fetchDeliveries());

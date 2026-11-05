@@ -7,7 +7,7 @@ import { fetchCart, type CartLine } from "../cart/api";
 import { deliveryFeeFor } from "../cart/delivery";
 import { fetchDeliverySettings, type DeliverySettings } from "../manager/api";
 import { SiteHeader } from "../components/SiteHeader";
-import { createPaymentIntent, fetchLatestCheckoutAddress, placeOrder, reportFailedPayment, type CheckoutAddress } from "../orders/api";
+import { createPaymentIntent, fetchLatestCheckoutAddress, placeOrder, reportFailedPayment, validateDeliveryAddress, type CheckoutAddress } from "../orders/api";
 
 const publishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
 const stripePromise = publishableKey ? loadStripe(publishableKey) : null;
@@ -30,6 +30,7 @@ type CheckoutFormProps = {
   subtotal: number;
   totalWeight: number;
   deliveryFee: number;
+  deliveryRadiusMiles: number;
   payment: ReactNode;
   submitError: string | null;
   isSubmitting: boolean;
@@ -38,7 +39,7 @@ type CheckoutFormProps = {
 };
 
 function CheckoutForm({
-  lines, address, updateField, subtotal, totalWeight, deliveryFee,
+  lines, address, updateField, subtotal, totalWeight, deliveryFee, deliveryRadiusMiles,
   payment, submitError, isSubmitting, canSubmit, onSubmit,
 }: CheckoutFormProps) {
   return (
@@ -46,6 +47,7 @@ function CheckoutForm({
       <div className="space-y-6">
         <section aria-labelledby="address-heading" className="rounded-2xl border border-border bg-white p-6">
           <h2 id="address-heading" className="text-xl font-extrabold">Delivery address</h2>
+          <p className="mt-1 text-sm text-muted">We deliver within {deliveryRadiusMiles} miles of the distribution center (straight-line distance).</p>
           <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-6">
             <label className="text-sm font-semibold text-muted sm:col-span-6">
               Street address
@@ -132,6 +134,14 @@ function PayableCheckout(props: Omit<CheckoutFormProps, "payment" | "submitError
 
     setSubmitError(null);
     setIsSubmitting(true);
+    try {
+      await validateDeliveryAddress(props.address);
+    } catch (error) {
+      setSubmitError((error as Error).message);
+      setIsSubmitting(false);
+      return;
+    }
+
     const result = await stripe.confirmPayment({
       elements,
       redirect: "if_required",
@@ -184,7 +194,7 @@ export function CheckoutPage() {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
-  const [deliverySettings, setDeliverySettings] = useState<DeliverySettings>({ deliveryFee: 10, freeDeliveryWeightThreshold: 20 });
+  const [deliverySettings, setDeliverySettings] = useState<DeliverySettings>({ deliveryFee: 10, freeDeliveryWeightThreshold: 20, deliveryRadiusMiles: 50 });
 
   const loadPaymentIntent = async () => {
     setPaymentLoading(true);
@@ -273,6 +283,7 @@ export function CheckoutPage() {
               subtotal={subtotal}
               totalWeight={totalWeight}
               deliveryFee={deliveryFee}
+              deliveryRadiusMiles={deliverySettings.deliveryRadiusMiles}
             />
           </Elements>
         ) : (
@@ -283,6 +294,7 @@ export function CheckoutPage() {
             subtotal={subtotal}
             totalWeight={totalWeight}
             deliveryFee={deliveryFee}
+            deliveryRadiusMiles={deliverySettings.deliveryRadiusMiles}
             payment={
               !publishableKey ? (
                 <p role="alert" className="mt-4 text-sm text-red-800">Card payments are not configured.</p>

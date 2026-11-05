@@ -90,6 +90,10 @@ export async function placeOrder(address: CheckoutAddress, paymentIntentId: stri
   return toCustomerOrder((await request<{ order: OrderRecord }>("POST", "", { address, paymentIntentId })).order);
 }
 
+export async function validateDeliveryAddress(address: CheckoutAddress) {
+  await request<{ eligible: true }>("POST", "/validate-address", { address });
+}
+
 export async function fetchLatestCheckoutAddress() {
   return (await request<{ address: CheckoutAddress | null }>("GET", "/latest-address")).address;
 }

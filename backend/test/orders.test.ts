@@ -58,6 +58,7 @@ describe("orders API", () => {
           return null;
         },
       },
+      geocodeDeliveryAddress: async () => ({ latitude: 37.3382, longitude: -121.8863 }),
       appUrl: "http://localhost:5173",
       secureCookies: false,
       checkDatabase: async () => {},
@@ -87,6 +88,39 @@ describe("orders API", () => {
     const response = await agent.get("/api/orders/latest-address");
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ address: null });
+  });
+
+  it("checks delivery range before card confirmation and rejects out-of-range checkout server-side", async () => {
+    const farAway = createApp({
+      store: createMemoryStore().store,
+      cartStore: cart.cartStore,
+      orderStore: createMemoryOrderStore(cart).orderStore,
+      productStore: createMemoryProductStore(cart).productStore,
+      salesStore: { listSales: async () => [], listSalesAnalytics: async () => ({ profitBuckets: [], items: [], categories: [] }) },
+      deliveryStore: { listDeliveries: async () => [] },
+      payments: {
+        async create() { return { clientSecret: "pi_test_secret" }; },
+        async retrieveSucceeded(id) { return { id, amountCents: 149, userId: customerId }; },
+        async retrieveFailure() { return null; },
+      },
+      geocodeDeliveryAddress: async () => ({ latitude: 38.5, longitude: -121.8863 }),
+      appUrl: "http://localhost:5173",
+      secureCookies: false,
+      checkDatabase: async () => {},
+    });
+    const separateAgent = request.agent(farAway);
+    const registration = await separateAgent.post("/api/auth/register").send({ ...customer, email: "far@ofs.com" });
+    customerId = registration.body.user.id;
+    const checkoutCheck = await separateAgent.post("/api/orders/validate-address").send({ address });
+    expect(checkoutCheck.status).toBe(400);
+    expect(checkoutCheck.body.error).toMatch(/limited to 50 miles/i);
+
+    await separateAgent.post("/api/cart/items").send({ productId: APPLES, quantity: 1 });
+    confirmedPayment = { id: "pi_test", amountCents: 149, userId: customerId };
+    const placed = await separateAgent.post("/api/orders").send({ address, paymentIntentId: "pi_test" });
+    expect(placed.status).toBe(400);
+    expect(placed.body.error).toMatch(/limited to 50 miles/i);
+    expect((await separateAgent.get("/api/cart")).body.items).toHaveLength(1);
   });
 
   it("creates a payment intent for the server-side cart total", async () => {

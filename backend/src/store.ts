@@ -21,12 +21,13 @@ export async function ensureGlobalSettingsSchema(pool: pg.Pool) {
       settings_id SMALLINT PRIMARY KEY CHECK (settings_id = 1),
       delivery_fee DECIMAL(10,2) NOT NULL CHECK (delivery_fee >= 0),
       free_delivery_weight_threshold DECIMAL(10,2) NOT NULL CHECK (free_delivery_weight_threshold > 0),
+      delivery_radius_miles DECIMAL(10,2) NOT NULL DEFAULT 50 CHECK (delivery_radius_miles > 0),
       robot_base_latitude DECIMAL(9,6) NOT NULL DEFAULT 37.3382 CHECK (robot_base_latitude BETWEEN -90 AND 90),
       robot_base_longitude DECIMAL(9,6) NOT NULL DEFAULT -121.8863 CHECK (robot_base_longitude BETWEEN -180 AND 180),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
   `);
-  await pool.query(`ALTER TABLE GlobalSettings ADD COLUMN IF NOT EXISTS robot_base_latitude DECIMAL(9,6) NOT NULL DEFAULT 37.3382, ADD COLUMN IF NOT EXISTS robot_base_longitude DECIMAL(9,6) NOT NULL DEFAULT -121.8863`);
+  await pool.query(`ALTER TABLE GlobalSettings ADD COLUMN IF NOT EXISTS delivery_radius_miles DECIMAL(10,2) NOT NULL DEFAULT 50 CHECK (delivery_radius_miles > 0), ADD COLUMN IF NOT EXISTS robot_base_latitude DECIMAL(9,6) NOT NULL DEFAULT 37.3382, ADD COLUMN IF NOT EXISTS robot_base_longitude DECIMAL(9,6) NOT NULL DEFAULT -121.8863`);
   await pool.query(`
     INSERT INTO GlobalSettings (settings_id, delivery_fee, free_delivery_weight_threshold)
     VALUES (1, 10, 20)
@@ -112,22 +113,25 @@ export function createPgSettingsStore(pool: pg.Pool): SettingsStore {
     async get() {
       const { rows } = await pool.query<DeliverySettings>(
         `SELECT delivery_fee::float8 AS "deliveryFee",
-                free_delivery_weight_threshold::float8 AS "freeDeliveryWeightThreshold"
+                free_delivery_weight_threshold::float8 AS "freeDeliveryWeightThreshold",
+                delivery_radius_miles::float8 AS "deliveryRadiusMiles"
          FROM GlobalSettings WHERE settings_id = 1`,
       );
       return rows[0] ?? DEFAULT_DELIVERY_SETTINGS;
     },
     async update(settings) {
       const { rows } = await pool.query<DeliverySettings>(
-        `INSERT INTO GlobalSettings (settings_id, delivery_fee, free_delivery_weight_threshold)
-         VALUES (1, $1, $2)
+        `INSERT INTO GlobalSettings (settings_id, delivery_fee, free_delivery_weight_threshold, delivery_radius_miles)
+         VALUES (1, $1, $2, $3)
          ON CONFLICT (settings_id) DO UPDATE
            SET delivery_fee = EXCLUDED.delivery_fee,
                free_delivery_weight_threshold = EXCLUDED.free_delivery_weight_threshold,
+               delivery_radius_miles = EXCLUDED.delivery_radius_miles,
                updated_at = now()
          RETURNING delivery_fee::float8 AS "deliveryFee",
-                   free_delivery_weight_threshold::float8 AS "freeDeliveryWeightThreshold"`,
-        [settings.deliveryFee, settings.freeDeliveryWeightThreshold],
+                   free_delivery_weight_threshold::float8 AS "freeDeliveryWeightThreshold",
+                   delivery_radius_miles::float8 AS "deliveryRadiusMiles"`,
+        [settings.deliveryFee, settings.freeDeliveryWeightThreshold, settings.deliveryRadiusMiles],
       );
       return rows[0];
     },

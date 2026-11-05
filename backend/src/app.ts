@@ -14,6 +14,7 @@ import { createSalesRouter } from "./sales.js";
 import { DEFAULT_DELIVERY_SETTINGS, type CartStore, type DeliverySettings, type OrderStore, type ProductStore, type SalesStore, type SettingsStore } from "./store.js";
 import { createSettingsRouter } from "./settings.js";
 import type { DeliveryStore } from "./store.js";
+import type { GeocodedLocation } from "./geocoder.js";
 
 export type AppOptions = AuthOptions & {
   cartStore: CartStore;
@@ -24,10 +25,11 @@ export type AppOptions = AuthOptions & {
   settingsStore?: SettingsStore;
   deliveryStore: DeliveryStore;
   payments?: PaymentIntentCreator;
+  geocodeDeliveryAddress?: (address: { street: string; city: string; state: string; zipCode: string }) => Promise<GeocodedLocation | null>;
   checkDatabase: () => Promise<void>;
 };
 
-export function createApp({ checkDatabase, cartStore, orderStore, productStore, salesStore, reportsStore = emptyReportsStore, settingsStore, deliveryStore, payments, ...authOptions }: AppOptions) {
+export function createApp({ checkDatabase, cartStore, orderStore, productStore, salesStore, reportsStore = emptyReportsStore, settingsStore, deliveryStore, payments, geocodeDeliveryAddress, ...authOptions }: AppOptions) {
   const app = express();
 
   app.use(cors({ origin: authOptions.appUrl, credentials: true }));
@@ -64,12 +66,12 @@ export function createApp({ checkDatabase, cartStore, orderStore, productStore, 
       throw new PaymentsNotConfiguredError("STRIPE_SECRET_KEY is not set.");
     },
   };
-  app.use("/api/orders", createOrderRouter({ store: authOptions.store, orderStore, deliveryStore, payments: paymentIntents, reportsStore }));
+  app.use("/api/orders", createOrderRouter({ store: authOptions.store, orderStore, deliveryStore, settingsStore: settings, payments: paymentIntents, reportsStore, geocode: geocodeDeliveryAddress }));
   app.use("/api/notifications", createNotificationsRouter(authOptions.store, deliveryStore));
   app.use("/api/manager/sales", createSalesRouter({ store: authOptions.store, salesStore }));
   app.use("/api/manager/reports", createReportsRouter({ store: authOptions.store, reportsStore }));
   app.use("/api/manager/inventory", createManagerInventoryRouter({ store: authOptions.store, productStore }));
-  app.use("/api/manager/deliveries", createManagerDeliveriesRouter({ store: authOptions.store, deliveryStore }));
+  app.use("/api/manager/deliveries", createManagerDeliveriesRouter({ store: authOptions.store, deliveryStore, settingsStore: settings }));
 
   return app;
 }

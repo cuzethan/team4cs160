@@ -25,28 +25,30 @@ describe("global delivery settings", () => {
         async retrieveSucceeded(id) { return { id, amountCents: paidAmount, userId: customerId }; },
         async retrieveFailure() { return null; },
       },
+      geocodeDeliveryAddress: async () => ({ latitude: 37.3382, longitude: -121.8863 }),
       appUrl: "http://localhost:5173", secureCookies: false, checkDatabase: async () => {},
     });
 
-    expect((await request(app).get("/api/settings")).body).toEqual({ deliveryFee: 10, freeDeliveryWeightThreshold: 20 });
-    expect((await request(app).put("/api/settings").send({ deliveryFee: 3.5, freeDeliveryWeightThreshold: 15 })).status).toBe(401);
+    expect((await request(app).get("/api/settings")).body).toEqual({ deliveryFee: 10, freeDeliveryWeightThreshold: 20, deliveryRadiusMiles: 50 });
+    expect((await request(app).put("/api/settings").send({ deliveryFee: 3.5, freeDeliveryWeightThreshold: 15, deliveryRadiusMiles: 25 })).status).toBe(401);
     const customer = request.agent(app);
     const registration = await customer.post("/api/auth/register").send({ firstName: "Lee", lastName: "Nguyen", phone: "4085550100", email: "lee@example.com", password: "carrots123", securityQuestion: "What was the name of your last pet?", securityAnswer: "Cat" });
     customerId = registration.body.user.id;
-    expect((await customer.put("/api/settings").send({ deliveryFee: 3.5, freeDeliveryWeightThreshold: 15 })).status).toBe(403);
+    expect((await customer.put("/api/settings").send({ deliveryFee: 3.5, freeDeliveryWeightThreshold: 15, deliveryRadiusMiles: 25 })).status).toBe(403);
 
     await memory.store.createUser({ firstName: "Max", lastName: "Boss", phone: "000", email: "manager@example.com", passwordHash: await bcrypt.hash("manager123", 4), role: "admin", questionChoice: "What was the name of your last pet?", answerHash: "unused" });
     const manager = request.agent(app);
     await manager.post("/api/auth/login").send({ email: "manager@example.com", password: "manager123", role: "manager" });
-    expect((await manager.put("/api/settings").send({ deliveryFee: -1, freeDeliveryWeightThreshold: 15 })).status).toBe(400);
-    expect((await manager.put("/api/settings").send({ deliveryFee: 3.5, freeDeliveryWeightThreshold: 0 })).status).toBe(400);
-    expect((await manager.put("/api/settings").send({ deliveryFee: 3.5, freeDeliveryWeightThreshold: 15 })).body).toEqual({ deliveryFee: 3.5, freeDeliveryWeightThreshold: 15 });
+    expect((await manager.put("/api/settings").send({ deliveryFee: -1, freeDeliveryWeightThreshold: 15, deliveryRadiusMiles: 25 })).status).toBe(400);
+    expect((await manager.put("/api/settings").send({ deliveryFee: 3.5, freeDeliveryWeightThreshold: 0, deliveryRadiusMiles: 25 })).status).toBe(400);
+    expect((await manager.put("/api/settings").send({ deliveryFee: 3.5, freeDeliveryWeightThreshold: 15, deliveryRadiusMiles: 0 })).status).toBe(400);
+    expect((await manager.put("/api/settings").send({ deliveryFee: 3.5, freeDeliveryWeightThreshold: 15, deliveryRadiusMiles: 25 })).body).toEqual({ deliveryFee: 3.5, freeDeliveryWeightThreshold: 15, deliveryRadiusMiles: 25 });
 
     await customer.post("/api/cart/items").send({ productId: "00000000-0000-4000-8000-000000000001" });
     const intent = await customer.post("/api/orders/payment-intent");
     expect(intent.status).toBe(200);
     expect(paidAmount).toBe(850);
-    await manager.put("/api/settings").send({ deliveryFee: 4, freeDeliveryWeightThreshold: 15 });
+    await manager.put("/api/settings").send({ deliveryFee: 4, freeDeliveryWeightThreshold: 15, deliveryRadiusMiles: 25 });
     const staleCheckout = await customer.post("/api/orders").send({
       address: { street: "1 Main St", city: "San Jose", state: "CA", zipCode: "95112" },
       paymentIntentId: "intent",
