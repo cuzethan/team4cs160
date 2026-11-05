@@ -5,6 +5,7 @@ export type InventoryProduct = {
   // Temporary placeholder; replace with an image URL or image asset.
   emoji: string;
   price: number;
+  discount: number;
   weightLbs: number;
   unit: string;
   quantityInStock: number;

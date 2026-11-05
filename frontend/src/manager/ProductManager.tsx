@@ -36,6 +36,7 @@ export function ProductTable({ products, busyIds, onEdit, onToggleActive, onSave
             <th scope="col" className="px-4 py-3 text-right font-bold">Price</th>
             <th scope="col" className="px-4 py-3 text-right font-bold">Unit cost</th>
             <th scope="col" className="px-4 py-3 text-right font-bold">Weight</th>
+            <th scope="col" className="px-4 py-3 text-right font-bold">Discount</th>
             <th scope="col" className="px-4 py-3 text-right font-bold">Stock</th>
             <th scope="col" className="px-5 py-3 text-right font-bold sm:px-7"><span className="sr-only">Actions</span></th>
           </tr>
@@ -59,6 +60,9 @@ export function ProductTable({ products, busyIds, onEdit, onToggleActive, onSave
               </td>
               <td className="px-4 py-4 text-right text-sm tabular-nums">
                 {product.weightLbs} lb <span className="text-muted">/ {product.unit}</span>
+              </td>
+              <td className="px-4 py-4 text-right text-sm tabular-nums">
+                {product.discount} % <span className="text-muted"></span>
               </td>
               <td className="px-4 py-4 text-right">
                 <StockCell product={product} onSaved={onSaved} />
@@ -174,6 +178,7 @@ export function ProductFormDialog({ product, categories, onClose, onSaved }: Pro
     name: product?.name ?? "",
     description: product?.description ?? "",
     price: product ? String(product.price) : "",
+    discount: product ? String(product.discount) : "",
     unitCost: product?.unitCost === null || product?.unitCost === undefined ? "" : String(product.unitCost),
     weightLbs: product ? String(product.weightLbs) : "",
     unit: product?.unit ?? "each",
@@ -199,6 +204,7 @@ export function ProductFormDialog({ product, categories, onClose, onSaved }: Pro
       name: fields.name,
       description: fields.description,
       price: Number(fields.price),
+      discount: Number(fields.discount),
       unitCost: Number(fields.unitCost),
       weightLbs: Number(fields.weightLbs),
       unit: fields.unit,
@@ -271,6 +277,11 @@ export function ProductFormDialog({ product, categories, onClose, onSaved }: Pro
             Price per {unit} ($)
             <input required type="number" min="0" max="99999.99" step="0.01" placeholder="1.49" value={fields.price} onChange={(event) => setField("price")(event.target.value)} className={inputClassName} />
             <span className={hintClassName}>What the customer pays.</span>
+          </label>
+          <label className={labelClassName}>
+            discount of {unit} ($) %
+            <input required type="number" min="0" max="100" step="0.01" placeholder="0.00" value={fields.discount} onChange={(event) => setField("discount")(event.target.value)} className={inputClassName} />
+            <span className={hintClassName}>Discounts What the customer pays.</span>
           </label>
           <label className={labelClassName}>
             Cost per {unit} ($)

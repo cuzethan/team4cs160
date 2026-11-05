@@ -191,6 +191,7 @@ export type ManagedProduct = {
   categoryId: string | null;
   description: string;
   price: number;
+  discount: number;
   unitCost: number | null;
   weightLbs: number;
   unit: string;
@@ -205,6 +206,7 @@ export type ProductInput = {
   name: string;
   description: string;
   price: number;
+  discount: number;
   unitCost: number;
   weightLbs: number;
   unit: string;
@@ -279,6 +281,7 @@ export type InventoryReport = {
     active: boolean;
     quantityInStock: number;
     price: number;
+    discount: number;
     unitCost: number | null;
     stockValue: number | null;
     unitsSold: number;
