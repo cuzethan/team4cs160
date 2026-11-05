@@ -422,6 +422,10 @@ export type DeliveryRobot = {
   lastUpdated: Date;
 };
 
+export type RobotLifecycleResult = "updated" | "not-found" | "invalid-state";
+export type CreateRobotInput = { robotId?: string; robotName?: string };
+export type RobotDeleteResult = "deleted" | "not-found" | "invalid-state";
+
 export type UnassignedPaidOrder = {
   orderId: string;
   customerId: string;
@@ -615,6 +619,10 @@ export type SalesAnalytics = {
 export interface DeliveryStore {
   listDeliveries(): Promise<ManagerDelivery[]>;
   listRobots?(): Promise<DeliveryRobot[]>;
+  createRobot?(input?: CreateRobotInput): Promise<DeliveryRobot>;
+  retireRobot?(robotId: string): Promise<RobotLifecycleResult>;
+  restoreRobot?(robotId: string): Promise<RobotLifecycleResult>;
+  deleteRobot?(robotId: string): Promise<RobotDeleteResult>;
   listRuns?(): Promise<DeliveryRun[]>;
   cancelDeliveryRun?(runId: string): Promise<CancelRunResult>;
   recallRobot?(robotId: string): Promise<RecallRobotResult>;
@@ -1030,6 +1038,91 @@ export function createPgDeliveryStore(pool: pg.Pool): DeliveryStore {
          FROM Robot ORDER BY robot_name`,
       );
       return rows;
+    },
+
+    async createRobot(input = {}) {
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        // Serialize generated demo names so concurrent manager clicks cannot
+        // produce duplicate names. Robot IDs remain database-generated UUIDs.
+        await client.query("SELECT pg_advisory_xact_lock(481603)");
+        const { rows: baseRows } = await client.query<{ latitude: number; longitude: number }>(
+          `SELECT robot_base_latitude::float8 AS latitude,
+                  robot_base_longitude::float8 AS longitude
+           FROM GlobalSettings WHERE settings_id = 1`,
+        );
+        const base = baseRows[0] ?? getRobotBaseLocation();
+        const { rows } = await client.query<DeliveryRobot>(
+          `WITH next_name AS (
+             SELECT 'Demo Robot ' || (COALESCE(MAX(NULLIF((regexp_match(robot_name, '^Demo Robot ([0-9]+)$'))[1], '')::integer), 0) + 1)::text AS robot_name
+             FROM Robot
+           )
+           INSERT INTO Robot (robot_id, robot_name, robot_status, current_latitude, current_longitude)
+           SELECT COALESCE($1::uuid, gen_random_uuid()), COALESCE($2, robot_name), 'available', $3, $4 FROM next_name
+           RETURNING robot_id AS "robotId", robot_name AS "robotName", robot_status AS status,
+                     maximum_orders AS "maximumOrders", maximum_weight::float8 AS "maximumWeight",
+                     current_latitude::float8 AS "currentLatitude", current_longitude::float8 AS "currentLongitude",
+                     last_updated AS "lastUpdated"`,
+          [input.robotId ?? null, input.robotName ?? null, base.latitude, base.longitude],
+        );
+        await client.query("COMMIT");
+        return rows[0];
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+
+    async retireRobot(robotId) {
+      if (!UUID_PATTERN.test(robotId)) return "not-found";
+      const { rows } = await pool.query<{ status: string }>(
+        `UPDATE Robot r
+         SET robot_status = 'disabled', last_updated = now()
+         WHERE r.robot_id = $1
+           AND r.robot_status <> 'disabled'
+           AND NOT EXISTS (
+             SELECT 1 FROM DeliveryRun dr
+             WHERE dr.robot_id = r.robot_id AND dr.run_status IN ('assigned', 'active', 'returning')
+           )
+         RETURNING robot_status AS status`,
+        [robotId],
+      );
+      if (rows[0]) return "updated";
+      const { rows: existing } = await pool.query<{ status: string }>(`SELECT robot_status AS status FROM Robot WHERE robot_id = $1`, [robotId]);
+      if (!existing[0]) return "not-found";
+      return "invalid-state";
+    },
+
+    async restoreRobot(robotId) {
+      if (!UUID_PATTERN.test(robotId)) return "not-found";
+      const { rows } = await pool.query<{ status: string }>(
+        `UPDATE Robot SET robot_status = 'available', last_updated = now()
+         WHERE robot_id = $1 AND robot_status = 'disabled'
+         RETURNING robot_status AS status`,
+        [robotId],
+      );
+      if (rows[0]) return "updated";
+      const { rows: existing } = await pool.query<{ status: string }>(`SELECT robot_status AS status FROM Robot WHERE robot_id = $1`, [robotId]);
+      if (!existing[0]) return "not-found";
+      return "invalid-state";
+    },
+
+    async deleteRobot(robotId) {
+      if (!UUID_PATTERN.test(robotId)) return "not-found";
+      const { rows } = await pool.query<{ robotId: string }>(
+        `DELETE FROM Robot r
+         WHERE r.robot_id = $1
+           AND NOT EXISTS (SELECT 1 FROM DeliveryRun dr WHERE dr.robot_id = r.robot_id)
+         RETURNING r.robot_id AS "robotId"`,
+        [robotId],
+      );
+      if (rows[0]) return "deleted";
+      const { rows: existing } = await pool.query<{ robotId: string }>(`SELECT robot_id AS "robotId" FROM Robot WHERE robot_id = $1`, [robotId]);
+      if (!existing[0]) return "not-found";
+      return "invalid-state";
     },
 
     async listUnassignedPaidOrders() {
