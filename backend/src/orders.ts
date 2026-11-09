@@ -44,7 +44,7 @@ export function createOrderRouter({ store, orderStore, deliveryStore, settingsSt
     if (distance > settings.deliveryRadiusMiles) {
       return {
         status: 400 as const,
-        error: `Delivery is limited to ${settings.deliveryRadiusMiles} miles from the distribution center. This address is approximately ${distance.toFixed(1)} miles away in a straight line.`,
+        error: `Delivery is limited to ${settings.deliveryRadiusMiles} miles from the distribution center. This address is approximately ${distance.toFixed(1)} miles away.`,
       };
     }
     return null;

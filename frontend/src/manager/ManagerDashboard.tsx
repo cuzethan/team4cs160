@@ -308,7 +308,7 @@ function OpenTabButton({ label, onClick }: { label: string; onClick: () => void 
 }
 
 function SettingsPanel() {
-  const [settings, setSettings] = useState<DeliverySettings>({ deliveryFee: 10, freeDeliveryWeightThreshold: 20, deliveryRadiusMiles: 50 });
+  const [settings, setSettings] = useState<Omit<DeliverySettings, "deliveryRadiusMiles"> & { deliveryRadiusMiles: number | "" }>({ deliveryFee: 10, freeDeliveryWeightThreshold: 20, deliveryRadiusMiles: 50 });
   const [base, setBase] = useState<RobotBaseLocation>({ latitude: 37.3382, longitude: -121.8863 });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -326,7 +326,8 @@ function SettingsPanel() {
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setSaving(true); setError(""); setSuccess("");
     try {
-      setSettings(await saveDeliverySettings(settings));
+      const deliveryRadiusMiles = settings.deliveryRadiusMiles === "" ? 5 : settings.deliveryRadiusMiles;
+      setSettings(await saveDeliverySettings({ ...settings, deliveryRadiusMiles }));
       setSuccess("Delivery settings saved.");
     } catch (e) { setError(e instanceof Error ? e.message : "Unable to save settings."); }
     finally { setSaving(false); }
@@ -350,8 +351,8 @@ function SettingsPanel() {
         <label className="block text-sm font-semibold text-ink">Free-delivery threshold (lb)
           <input aria-label="Free-delivery weight threshold" type="number" min="0.01" step="0.01" required value={settings.freeDeliveryWeightThreshold} onChange={(e) => setSettings({ ...settings, freeDeliveryWeightThreshold: Number(e.target.value) })} className="mt-1 w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-accent-ink" />
         </label>
-        <label className="block text-sm font-semibold text-ink">Maximum delivery distance (miles) <span className="font-normal text-muted">straight-line from the distribution center</span>
-          <input aria-label="Maximum delivery distance" type="number" min="0.01" max="10000" step="any" required value={settings.deliveryRadiusMiles} onChange={(e) => setSettings({ ...settings, deliveryRadiusMiles: Number(e.target.value) })} className="mt-1 w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-accent-ink" />
+        <label className="block text-sm font-semibold text-ink">Maximum delivery distance (miles) <span className="font-normal text-muted">radius from the distribution center</span>
+          <input aria-label="Maximum delivery distance" type="number" min="0.01" max="10000" step="any" value={settings.deliveryRadiusMiles} onChange={(e) => setSettings({ ...settings, deliveryRadiusMiles: e.target.value === "" ? "" : Number(e.target.value) })} className="mt-1 w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-accent-ink" />
         </label>
         {error && <p role="alert" className="text-sm text-red-800">{error}</p>}
         {success && <p role="status" className="text-sm text-green-800">{success}</p>}
