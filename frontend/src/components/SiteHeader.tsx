@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import { DeliveryUpdatesMenu } from "../notifications/DeliveryUpdatesMenu";
 import { OfsLogo } from "./OfsLogo";
 
 function LogoutConfirm({ onCancel, onConfirm }: { onCancel: () => void; onConfirm: () => void }) {
@@ -95,6 +96,7 @@ export function SiteHeader() {
               View store
             </Link>
           )}
+          {user?.role === "customer" && <DeliveryUpdatesMenu />}
           {user ? (
             <>
               {/* Hidden on phones to leave room for the links. */}
