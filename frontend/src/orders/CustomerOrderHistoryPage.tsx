@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { SiteHeader } from "../components/SiteHeader";
 import { confirmOrderReceived, fetchMyOrders as fetchMyOrdersRequest, fetchOrderTracking } from "./api";
 import { fetchNotifications, markNotificationRead, type CustomerNotification } from "../notifications/api";
+import { addToCart, fetchCart } from "../cart/api";
+import { fetchProducts } from "../inventory/api";
 import { OrderCard } from "./OrderCard";
+import { planReorder } from "./reorder";
 import type { CustomerOrder } from "./types";
 
 export function CustomerOrderHistoryPage() {
@@ -17,6 +20,8 @@ export function CustomerOrderHistoryPage() {
   const [notifications, setNotifications] = useState<CustomerNotification[]>([]);
   const [receiptPending, setReceiptPending] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [buyAgainPending, setBuyAgainPending] = useState<string | null>(null);
+  const [reorderNotice, setReorderNotice] = useState<{ text: string; addedAny: boolean } | null>(null);
 
   const refreshOrders = useCallback(async (showLoading = false) => {
     if (showLoading) setIsLoading(true);
@@ -75,6 +80,36 @@ export function CustomerOrderHistoryPage() {
     }
   };
 
+  const handleBuyAgain = async (order: CustomerOrder) => {
+    setBuyAgainPending(order.id);
+    setActionError(null);
+    setReorderNotice(null);
+    try {
+      const [products, cart] = await Promise.all([fetchProducts(), fetchCart()]);
+      const plan = planReorder(order.items, products, cart);
+      const added: string[] = [];
+      const failed: string[] = [...plan.skipped];
+      for (const line of plan.toAdd) {
+        try {
+          await addToCart(line.productId, line.quantity);
+          added.push(line.name);
+        } catch {
+          failed.push(line.name);
+        }
+      }
+      const parts: string[] = [];
+      if (added.length > 0) parts.push(`Added ${added.length} item${added.length === 1 ? "" : "s"} to your cart.`);
+      const reduced = plan.reduced.filter((name) => added.includes(name));
+      if (reduced.length > 0) parts.push(`Fewer than before because of low stock: ${reduced.join(", ")}.`);
+      if (failed.length > 0) parts.push(`Not available right now: ${failed.join(", ")}.`);
+      setReorderNotice({ text: parts.join(" "), addedAny: added.length > 0 });
+    } catch (reorderError) {
+      setActionError((reorderError as Error).message);
+    } finally {
+      setBuyAgainPending(null);
+    }
+  };
+
   const handleTrackingClick = (orderId: string) => {
     navigate(`/orders/${encodeURIComponent(orderId)}/tracking`);
   };
@@ -128,6 +163,13 @@ export function CustomerOrderHistoryPage() {
           </section>
         )}
 
+        {reorderNotice && (
+          <p role="status" className="mb-5 rounded-xl border border-border bg-accent-soft px-4 py-3 text-sm font-semibold text-ink">
+            {reorderNotice.text}{" "}
+            {reorderNotice.addedAny && <Link to="/cart" className="underline">View cart</Link>}
+          </p>
+        )}
+
         {actionError && <p role="alert" className="mb-5 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-800">{actionError}</p>}
 
         {isLoading ? (
@@ -145,7 +187,7 @@ export function CustomerOrderHistoryPage() {
         ) : (
           <section aria-label="Your orders" className="space-y-4">
             {orders.map((order) => (
-              <OrderCard key={order.id} order={order} onTrackClick={handleTrackingClick} onConfirmReceived={(id) => void handleConfirmReceived(id)} receiptPending={receiptPending === order.id} />
+              <OrderCard key={order.id} order={order} onTrackClick={handleTrackingClick} onConfirmReceived={(id) => void handleConfirmReceived(id)} receiptPending={receiptPending === order.id} onBuyAgain={(target) => void handleBuyAgain(target)} buyAgainPending={buyAgainPending === order.id} />
             ))}
           </section>
         )}
