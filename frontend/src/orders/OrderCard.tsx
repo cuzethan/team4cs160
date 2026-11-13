@@ -7,9 +7,18 @@ type OrderCardProps = {
   onTrackClick?: (orderId: string) => void;
   onConfirmReceived?: (orderId: string) => void;
   receiptPending?: boolean;
+  onBuyAgain?: (order: CustomerOrder) => void;
+  buyAgainPending?: boolean;
 };
 
-export function OrderCard({ order, onTrackClick, onConfirmReceived, receiptPending = false }: OrderCardProps) {
+export function OrderCard({
+  order,
+  onTrackClick,
+  onConfirmReceived,
+  receiptPending = false,
+  onBuyAgain,
+  buyAgainPending = false,
+}: OrderCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const handleTrackClick = () => onTrackClick?.(order.id);
@@ -61,8 +70,18 @@ export function OrderCard({ order, onTrackClick, onConfirmReceived, receiptPendi
         </div>
       </div>
 
-      {(order.status === "out_for_delivery" || order.deliveryStatus === "delivered") && (
+      {(order.status === "out_for_delivery" || order.deliveryStatus === "delivered" || onBuyAgain) && (
         <div className="flex flex-wrap justify-end gap-3 border-t border-border px-5 py-4 sm:px-6">
+          {onBuyAgain && order.items.length > 0 && (
+            <button
+              type="button"
+              onClick={() => onBuyAgain(order)}
+              disabled={buyAgainPending}
+              className="rounded-full border border-border px-5 py-2 text-sm font-bold text-ink transition hover:bg-accent-soft disabled:cursor-wait disabled:opacity-60"
+            >
+              {buyAgainPending ? "Adding…" : "Buy again"}
+            </button>
+          )}
           {order.status === "out_for_delivery" && (
             <button
               type="button"

@@ -5,7 +5,6 @@ import { SiteHeader } from "../components/SiteHeader";
 import { fetchCart, removeCartItem, updateCartItem, type CartLine } from "./api";
 import { CartItemCard } from "./CartItemCard";
 import { CartSummary } from "./CartSummary";
-import { deliveryFeeFor } from "./delivery";
 import { fetchDeliverySettings, type DeliverySettings } from "../manager/api";
 import { toCartItem, type CartItem } from "./types";
 
@@ -17,7 +16,7 @@ export function CartPage() {
   const [error, setError] = useState<string | null>(null);
   // Problems with a single change (e.g. not enough stock). The cart itself still shows.
   const [updateError, setUpdateError] = useState<string | null>(null);
-  const [deliverySettings, setDeliverySettings] = useState<DeliverySettings>({ deliveryFee: 10, freeDeliveryWeightThreshold: 20 });
+  const [deliverySettings, setDeliverySettings] = useState<DeliverySettings>({ deliveryFee: 10, freeDeliveryWeightThreshold: 20, deliveryRadiusMiles: 50 });
 
   const showCart = (lines: CartLine[]) => {
     setCartItems(lines.map(toCartItem));
@@ -82,8 +81,6 @@ export function CartPage() {
   const calculateTotalWeight = () =>
     cartItems.reduce((total, item) => total + item.weightLbs * item.quantity, 0);
 
-  const deliveryFee = deliveryFeeFor(calculateTotalWeight(), deliverySettings);
-
   return (
     <div className="min-h-screen bg-canvas text-ink">
       <SiteHeader />
@@ -133,7 +130,7 @@ export function CartPage() {
               <CartSummary
                 totalPrice={calculateTotalPrice()}
                 totalWeight={calculateTotalWeight()}
-                deliveryStatus={deliveryFee === 0 ? "Free" : `$${deliveryFee.toFixed(2)}`}
+                deliverySettings={deliverySettings}
               />
               {hasUnavailableItems && (
                 <p role="alert" className="mt-5 text-sm text-red-700">
