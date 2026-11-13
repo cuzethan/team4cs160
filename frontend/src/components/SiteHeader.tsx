@@ -4,7 +4,7 @@ import { useAuth } from "../auth/AuthContext";
 import { DeliveryUpdatesMenu } from "../notifications/DeliveryUpdatesMenu";
 import { OfsLogo } from "./OfsLogo";
 
-function LogoutConfirm({ onCancel, onConfirm }: { onCancel: () => void; onConfirm: () => void }) {
+function LogoutConfirm({ signedInAs, onCancel, onConfirm }: { signedInAs: string; onCancel: () => void; onConfirm: () => void }) {
   const cancelButton = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -28,6 +28,7 @@ function LogoutConfirm({ onCancel, onConfirm }: { onCancel: () => void; onConfir
         <h2 id="logout-title" className="text-xl font-extrabold text-ink">
           Are you sure you want to log out?
         </h2>
+        <p className="mt-2 text-sm text-muted">You're signed in as {signedInAs}.</p>
         <div className="mt-6 flex justify-end gap-3">
           <button
             ref={cancelButton}
@@ -64,13 +65,21 @@ export function SiteHeader() {
   return (
     <header className="border-b border-border bg-surface">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4 sm:px-8">
-        <Link
-          to="/"
-          className="inline-flex items-center rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink"
-          aria-label="OFS home"
-        >
-          <OfsLogo className="h-8 w-auto sm:h-9" />
-        </Link>
+        <div className="flex min-w-0 items-center gap-4">
+          <Link
+            to="/"
+            className="inline-flex shrink-0 items-center rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink"
+            aria-label="OFS home"
+          >
+            <OfsLogo className="h-8 w-auto sm:h-9" />
+          </Link>
+          {/* A friendly greeting; hidden on small screens to leave room for the links. */}
+          {user && (
+            <span className="hidden truncate text-base font-bold text-accent-ink lg:inline">
+              Hi, {user.firstName}!
+            </span>
+          )}
+        </div>
         <nav aria-label="Main" className="flex items-center gap-1 sm:gap-3">
           <Link
             to={user?.role === "manager" ? "/manager-dashboard" : "/inventory"}
@@ -99,16 +108,6 @@ export function SiteHeader() {
           {user?.role === "customer" && <DeliveryUpdatesMenu />}
           {user ? (
             <>
-              {/* Hidden on phones to leave room for the links. */}
-              <span className="hidden items-center gap-2 rounded-full bg-accent-soft px-3 py-2 text-sm font-bold text-ink sm:flex">
-                <span aria-hidden="true" className="flex h-6 w-6 items-center justify-center rounded-full bg-ink text-xs text-white">
-                  {user.firstName.charAt(0).toUpperCase()}
-                </span>
-                <span className="hidden sm:inline">
-                  {user.firstName}
-                  {user.role === "manager" ? " (Manager)" : ""}
-                </span>
-              </span>
               <button
                 type="button"
                 onClick={() => setConfirmingLogout(true)}
@@ -129,7 +128,7 @@ export function SiteHeader() {
           {user?.role !== "manager" && (
             <Link
               to="/cart"
-              className="flex h-11 items-center gap-2 rounded-full border border-border bg-white px-4 text-sm font-bold text-ink shadow-sm transition hover:border-accent-ink hover:bg-accent-soft"
+              className="flex h-11 items-center gap-2 whitespace-nowrap rounded-full border border-border bg-white px-4 text-sm font-bold text-ink shadow-sm transition hover:border-accent-ink hover:bg-accent-soft"
             >
               <span aria-hidden="true">🛒</span>
               <span className="hidden sm:inline">Your cart</span>
@@ -137,8 +136,8 @@ export function SiteHeader() {
           )}
         </nav>
       </div>
-      {confirmingLogout && (
-        <LogoutConfirm onCancel={() => setConfirmingLogout(false)} onConfirm={handleLogout} />
+      {confirmingLogout && user && (
+        <LogoutConfirm signedInAs={`${user.firstName} ${user.lastName}${user.role === "manager" ? " (manager)" : ""}`} onCancel={() => setConfirmingLogout(false)} onConfirm={handleLogout} />
       )}
     </header>
   );
