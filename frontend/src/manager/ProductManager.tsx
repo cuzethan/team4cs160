@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { adjustProductStock, emojiFor } from "../inventory/api";
+import { adjustProductStock, adjustProductDiscount, emojiFor } from "../inventory/api";
 import { parseStockAmount } from "../inventory/ProductCard";
 import { createProduct, updateProduct, type ManagedProduct, type ProductCategory, type ProductInput } from "./api";
 
