@@ -46,6 +46,7 @@ export function parseProductFields(
       return { error: "Enter a discount from 0% to 100%." };
     }
     changes.discount = Math.round(discount * 100) / 100;
+  }
   if (has("unitCost")) {
     const unitCost = body.unitCost;
     if (typeof unitCost !== "number" || !Number.isFinite(unitCost) || unitCost < 0 || unitCost > 99999.99) {
@@ -132,6 +133,7 @@ export function createManagerInventoryRouter({ store, productStore }: ManagerInv
       name: changes.name!,
       description: changes.description ?? "",
       price: changes.price!,
+      discount: changes.discount!,
       unitCost: changes.unitCost!,
       weightLbs: changes.weightLbs!,
       unit: changes.unit!,

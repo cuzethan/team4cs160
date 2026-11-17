@@ -346,6 +346,7 @@ export type NewProduct = {
   name: string;
   description: string;
   price: number;
+  discount: number;
   weightLbs: number;
   unit: string;
   categoryId: string;
@@ -703,10 +704,10 @@ export function createPgProductStore(pool: pg.Pool): ProductStore {
       try {
         await client.query("BEGIN");
         const { rows: [{ productId }] } = await client.query<{ productId: string }>(
-          `INSERT INTO Product (product_name, description, price, weight, unit, category_id, quantity_in_stock, unit_cost)
-           VALUES ($1, NULLIF($2, ''), $3, $4, $5, $6, $7, $8)
+          `INSERT INTO Product (product_name, description, price, discount, weight, unit, category_id, quantity_in_stock, unit_cost)
+           VALUES ($1, NULLIF($2, ''), $3, $4, $5, $6, $7, $8, $9)
            RETURNING product_id AS "productId"`,
-          [product.name, product.description, product.price, product.weightLbs, product.unit,
+          [product.name, product.description, product.price, product.discount, product.weightLbs, product.unit,
             product.categoryId, product.quantityInStock, product.unitCost],
         );
         if (product.quantityInStock > 0) {
@@ -751,10 +752,10 @@ export function createPgProductStore(pool: pg.Pool): ProductStore {
         const next = { ...current, ...changes };
         await client.query(
           `UPDATE Product
-           SET product_name = $2, description = NULLIF($3, ''), price = $4, weight = $5, unit = $6,
-               category_id = $7, active = $8, unit_cost = $9, updated_at = now()
+           SET product_name = $2, description = NULLIF($3, ''), price = $4, discount = $5, weight = $6, unit = $7,
+               category_id = $8, active = $9, unit_cost = $10, updated_at = now()
            WHERE product_id = $1`,
-          [productId, next.name, next.description, next.price, next.weightLbs, next.unit, next.categoryId, next.active, next.unitCost],
+          [productId, next.name, next.description, next.price, next.discount, next.weightLbs, next.unit, next.categoryId, next.active, next.unitCost],
         );
         if (next.price !== current.price) {
           await client.query(
