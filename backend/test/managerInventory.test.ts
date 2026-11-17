@@ -118,6 +118,7 @@ describe("manager product management API", () => {
     name: "Red Lentils",
     description: "Split red lentils",
     price: 3.25,
+    discount: 0,
     unitCost: 1.75,
     weightLbs: 1,
     unit: "bag",
@@ -146,7 +147,7 @@ describe("manager product management API", () => {
     const { manager, managerUser, products } = await setup();
     const res = await manager.post("/api/manager/inventory").send(newProduct);
     expect(res.status).toBe(201);
-    expect(res.body.product).toMatchObject({ name: "Red Lentils", category: "Grains", price: 3.25, discount: 3.25, unitCost: 1.75, quantityInStock: 200, active: true });
+    expect(res.body.product).toMatchObject({ name: "Red Lentils", category: "Grains", price: 3.25, discount: 0, unitCost: 1.75, quantityInStock: 200, active: true });
 
     const catalog = (await manager.get("/api/products")).body.products;
     expect(catalog.map((product: { name: string }) => product.name)).toContain("Red Lentils");
