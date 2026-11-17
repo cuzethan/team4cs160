@@ -135,6 +135,9 @@ export function InventoryPage() {
     }
   };
 
+  
+
+
   const search = searchText.trim().toLowerCase();
   const visibleProducts = products.filter(
     (product) =>
