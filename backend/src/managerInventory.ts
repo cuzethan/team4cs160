@@ -40,6 +40,12 @@ export function parseProductFields(
     }
     changes.price = Math.round(price * 100) / 100;
   }
+  if (has("discount")) {
+    const discount = body.discount;
+    if (typeof discount !== "number" || !Number.isFinite(discount) || discount < 0 || discount > 100.00) {
+      return { error: "Enter a discount from 0% to 100%." };
+    }
+    changes.discount = Math.round(discount * 100) / 100;
   if (has("unitCost")) {
     const unitCost = body.unitCost;
     if (typeof unitCost !== "number" || !Number.isFinite(unitCost) || unitCost < 0 || unitCost > 99999.99) {
