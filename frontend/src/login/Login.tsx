@@ -64,7 +64,7 @@ export function DedicatedLogin({ role }: { role: "customer" | "manager" }) {
 
       <div className={`flex ${role === "manager" ? "justify-end" : "justify-start"}`}>
         <Link
-          to={role === "customer" ? "/home" : "/customer-login"}
+          to={"/home"}
           className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-bold text-ink no-underline shadow-sm transition hover:bg-accent-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink"
         >
           Back to Homepage
