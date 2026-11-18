@@ -90,8 +90,18 @@ export async function placeOrder(address: CheckoutAddress, paymentIntentId: stri
   return toCustomerOrder((await request<{ order: OrderRecord }>("POST", "", { address, paymentIntentId })).order);
 }
 
+// Checks the address is in the delivery area and returns a rough delivery time in minutes.
 export async function validateDeliveryAddress(address: CheckoutAddress) {
-  await request<{ eligible: true }>("POST", "/validate-address", { address });
+  return (await request<{ eligible: true; estimatedMinutes: number }>("POST", "/validate-address", { address })).estimatedMinutes;
+}
+
+// { duration: "About 1 hr 30 min", arrival: "4:35 PM" } for an estimate made at `from`.
+export function formatDeliveryEstimate(minutes: number, from: Date = new Date()) {
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  const length = hours === 0 ? `${rest} min` : rest === 0 ? `${hours} hr` : `${hours} hr ${rest} min`;
+  const arrival = new Date(from.getTime() + minutes * 60_000).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  return { duration: `About ${length}`, arrival };
 }
 
 export async function fetchLatestCheckoutAddress() {

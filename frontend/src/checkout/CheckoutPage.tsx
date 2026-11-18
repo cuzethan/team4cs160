@@ -7,7 +7,7 @@ import { fetchCart, type CartLine } from "../cart/api";
 import { deliveryFeeFor } from "../cart/delivery";
 import { fetchDeliverySettings, type DeliverySettings } from "../manager/api";
 import { SiteHeader } from "../components/SiteHeader";
-import { createPaymentIntent, fetchLatestCheckoutAddress, placeOrder, reportFailedPayment, validateDeliveryAddress, type CheckoutAddress } from "../orders/api";
+import { createPaymentIntent, fetchLatestCheckoutAddress, formatDeliveryEstimate, placeOrder, reportFailedPayment, validateDeliveryAddress, type CheckoutAddress } from "../orders/api";
 
 const publishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
 const stripePromise = publishableKey ? loadStripe(publishableKey) : null;
@@ -20,6 +20,15 @@ const emptyAddress: CheckoutAddress = {
   deliveryInstructions: "",
 };
 
+const ZIP_PATTERN = /^\d{5}(-\d{4})?$/;
+
+// The delivery time shown in the order summary, worked out once the address is filled in.
+type DeliveryEstimate =
+  | { status: "waiting" }
+  | { status: "checking" }
+  | { status: "ready"; minutes: number; checkedAt: Date }
+  | { status: "error"; message: string };
+
 const inputClassName =
   "mt-1 w-full rounded-xl border border-border bg-white px-4 py-3 text-sm text-ink outline-none focus:border-accent-ink";
 
@@ -31,6 +40,7 @@ type CheckoutFormProps = {
   totalWeight: number;
   deliveryFee: number;
   deliveryRadiusMiles: number;
+  deliveryEstimate: DeliveryEstimate;
   payment: ReactNode;
   submitError: string | null;
   isSubmitting: boolean;
@@ -38,8 +48,18 @@ type CheckoutFormProps = {
   onSubmit: (event: FormEvent) => void;
 };
 
+function DeliveryEstimateText({ minutes, checkedAt }: { minutes: number; checkedAt: Date }) {
+  const { duration, arrival } = formatDeliveryEstimate(minutes, checkedAt);
+  return (
+    <>
+      <span className="block whitespace-nowrap">{duration}</span>
+      <span className="block whitespace-nowrap text-xs font-normal text-muted">Arrives by {arrival}</span>
+    </>
+  );
+}
+
 function CheckoutForm({
-  lines, address, updateField, subtotal, totalWeight, deliveryFee, deliveryRadiusMiles,
+  lines, address, updateField, subtotal, totalWeight, deliveryFee, deliveryRadiusMiles, deliveryEstimate,
   payment, submitError, isSubmitting, canSubmit, onSubmit,
 }: CheckoutFormProps) {
   return (
@@ -101,6 +121,19 @@ function CheckoutForm({
             <dt className="text-muted">Delivery fee</dt>
             <dd className="font-bold">{deliveryFee === 0 ? "Free" : `$${deliveryFee.toFixed(2)}`}</dd>
           </div>
+          <div className="flex justify-between gap-4">
+            <dt className="text-muted">Estimated delivery</dt>
+            <dd className="text-right font-bold">
+              {deliveryEstimate.status === "ready"
+                ? <DeliveryEstimateText minutes={deliveryEstimate.minutes} checkedAt={deliveryEstimate.checkedAt} />
+                : deliveryEstimate.status === "checking"
+                  ? <span className="font-normal text-muted">Checking…</span>
+                  : <span className="font-normal text-muted">{deliveryEstimate.status === "error" ? "Not available" : "Enter your address"}</span>}
+            </dd>
+          </div>
+          {deliveryEstimate.status === "error" && (
+            <p className="text-xs text-red-800">{deliveryEstimate.message}</p>
+          )}
           <div className="flex justify-between gap-4 border-t border-border pt-3 text-base">
             <dt className="font-bold">Total</dt>
             <dd className="font-extrabold">${(subtotal + deliveryFee).toFixed(2)}</dd>
@@ -235,6 +268,32 @@ export function CheckoutPage() {
 
   useEffect(() => { void fetchDeliverySettings().then(setDeliverySettings).catch(() => {}); }, []);
 
+  const [deliveryEstimate, setDeliveryEstimate] = useState<DeliveryEstimate>({ status: "waiting" });
+  const { street, city, state, zipCode } = address;
+  // Once the address is complete, check it and estimate the delivery time. Waits for the
+  // customer to stop typing so the address isn't looked up on every keystroke.
+  useEffect(() => {
+    if (!user || !street.trim() || !city.trim() || !state.trim() || !ZIP_PATTERN.test(zipCode.trim())) {
+      setDeliveryEstimate({ status: "waiting" });
+      return;
+    }
+    let active = true;
+    setDeliveryEstimate({ status: "checking" });
+    const timer = setTimeout(() => {
+      validateDeliveryAddress({ street, city, state, zipCode, deliveryInstructions: "" })
+        .then((minutes) => {
+          if (active) setDeliveryEstimate({ status: "ready", minutes, checkedAt: new Date() });
+        })
+        .catch((error: unknown) => {
+          if (active) setDeliveryEstimate({ status: "error", message: error instanceof Error ? error.message : "We couldn't check this address." });
+        });
+    }, 700);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [user, street, city, state, zipCode]);
+
   const updateField = (field: keyof CheckoutAddress) => (value: string) =>
     setAddress((current) => ({ ...current, [field]: value }));
 
@@ -284,6 +343,7 @@ export function CheckoutPage() {
               totalWeight={totalWeight}
               deliveryFee={deliveryFee}
               deliveryRadiusMiles={deliverySettings.deliveryRadiusMiles}
+              deliveryEstimate={deliveryEstimate}
             />
           </Elements>
         ) : (
@@ -295,6 +355,7 @@ export function CheckoutPage() {
             totalWeight={totalWeight}
             deliveryFee={deliveryFee}
             deliveryRadiusMiles={deliverySettings.deliveryRadiusMiles}
+            deliveryEstimate={deliveryEstimate}
             payment={
               !publishableKey ? (
                 <p role="alert" className="mt-4 text-sm text-red-800">Card payments are not configured.</p>
