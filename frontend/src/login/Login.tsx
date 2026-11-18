@@ -59,7 +59,7 @@ export function Login() {
 
 export function DedicatedLogin({ role }: { role: "customer" | "manager" }) {
   return (
-    <div className="login-backdrop box-border flex min-h-screen flex-col p-6">
+    <main className="login-backdrop box-border flex min-h-screen flex-col p-6">
       <title>{`${role === "manager" ? "Manager Login" : "Customer Login"}`}</title>
 
       <div className={`flex ${role === "manager" ? "justify-end" : "justify-start"}`}>
@@ -88,6 +88,6 @@ export function DedicatedLogin({ role }: { role: "customer" | "manager" }) {
         <header className="mb-7 text-center text-[2rem] font-extrabold tracking-tight text-ink">{role === "manager" ? "Manager Login" : "Login"}</header>
         <LoginForm role={role} />
       </div>
-    </div>
+    </main>
   );
 }
