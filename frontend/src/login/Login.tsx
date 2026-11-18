@@ -56,10 +56,11 @@ export function Login() {
   return <DedicatedLogin role="customer" />;
 }
 
+
 export function DedicatedLogin({ role }: { role: "customer" | "manager" }) {
   return (
     <div className="login-backdrop box-border flex min-h-screen flex-col p-6">
-
+      <title>{`${role === "manager" ? "Manager Login" : "Customer Login"}`}</title>
 
       <div className={`flex ${role === "manager" ? "justify-end" : "justify-start"}`}>
         <Link

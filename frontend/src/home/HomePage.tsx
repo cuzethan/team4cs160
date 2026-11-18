@@ -41,6 +41,7 @@ function Hero({ threshold }: { threshold: number }) {
   return (
     <section className="overflow-hidden rounded-3xl bg-ink text-white">
       <div className="grid items-center gap-8 px-6 py-10 sm:px-10 sm:py-14 md:grid-cols-[minmax(0,1fr)_auto]">
+      <title>{`OFC HomePage`}</title>
         <div>
           {user ? (
             <p className="mb-4 text-3xl font-extrabold text-accent">Hello, {user.firstName}! 👋</p>
