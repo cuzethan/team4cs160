@@ -1926,6 +1926,8 @@ export interface OrderStore {
   // address, order, items and payment, takes the items out of stock, and empties the cart.
   placeOrder(userId: string, address: NewAddress, payment: PaidCheckout): Promise<OrderRecord>;
   listOrders(userId: string): Promise<OrderRecord[]>;
+  // Every customer's orders, newest first, for the manager's Orders page.
+  listAllOrders?(limit?: number): Promise<(OrderRecord & { userId: string })[]>;
 }
 
 type OrderRow = Omit<OrderRecord, "items">;
@@ -2075,6 +2077,16 @@ export function createPgOrderStore(pool: pg.Pool, settingsStore: SettingsStore =
       );
       if (orders.length === 0) return [];
       return attachItems(orders, await loadOrderItems(pool, orders.map((order) => order.orderId)));
+    },
+    async listAllOrders(limit = 500) {
+      const take = Math.min(Math.max(Math.trunc(limit), 1), 2000);
+      const { rows: orders } = await pool.query<OrderRow & { userId: string }>(
+        `SELECT ${orderColumns}, o.user_id AS "userId" FROM Orders o ORDER BY o.created_at DESC LIMIT $1`,
+        [take],
+      );
+      if (orders.length === 0) return [];
+      const withItems = attachItems(orders, await loadOrderItems(pool, orders.map((order) => order.orderId)));
+      return withItems.map((order, index) => ({ ...order, userId: orders[index].userId }));
     },
   };
 }

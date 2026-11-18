@@ -219,6 +219,12 @@ export function createMemoryOrderStore({ cartStore, products, carts }: ReturnTyp
         .reverse()
         .map(({ userId: _userId, address: _address, ...record }) => record);
     },
+    async listAllOrders(limit = 500) {
+      return [...orders]
+        .reverse()
+        .slice(0, limit)
+        .map(({ address: _address, ...record }) => record);
+    },
   };
 
   return { orderStore };
