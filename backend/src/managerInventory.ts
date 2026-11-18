@@ -108,6 +108,17 @@ export function createManagerInventoryRouter({ store, productStore }: ManagerInv
     res.json({ entries });
   }));
 
+  // One product's price changes and stock movements, for the product's history panel.
+  router.get("/:productId/history", handle(async (req, res) => {
+    if (!(await requireManager(req, res))) return;
+    if (!productStore.getProductHistory) {
+      return res.status(501).json({ error: "Product history is not available." });
+    }
+    const history = await productStore.getProductHistory(String(req.params.productId));
+    if (!history) return res.status(404).json({ error: "Product not found." });
+    res.json({ history });
+  }));
+
   router.post("/", handle(async (req, res) => {
     const user = await requireManager(req, res);
     if (!user) return;

@@ -205,6 +205,26 @@ describe("manager product management API", () => {
     );
   });
 
+  it("shows one product's own price and stock history, newest first", async () => {
+    const { app, manager, customer } = await setup();
+    expect((await request(app).get(`/api/manager/inventory/${APPLES}/history`)).status).toBe(401);
+    expect((await customer.get(`/api/manager/inventory/${APPLES}/history`)).status).toBe(403);
+    expect((await manager.get("/api/manager/inventory/missing/history")).status).toBe(404);
+
+    await manager.patch(`/api/manager/inventory/${APPLES}`).send({ price: 1.99 });
+    await manager.patch(`/api/manager/inventory/${APPLES}/stock`).send({ adjustment: 4, reason: "Weekly delivery" });
+    await manager.patch(`/api/manager/inventory/${APPLES}/stock`).send({ adjustment: -1, reason: "Bruised" });
+    await manager.patch(`/api/manager/inventory/${RICE}/stock`).send({ adjustment: 2, reason: "Recount" });
+
+    const response = await manager.get(`/api/manager/inventory/${APPLES}/history`);
+    expect(response.status).toBe(200);
+    expect(response.body.history.prices).toEqual([
+      expect.objectContaining({ oldPrice: 1.49, newPrice: 1.99 }),
+    ]);
+    expect(response.body.history.stock.map((entry: { reason: string }) => entry.reason)).toEqual(["Bruised", "Weekly delivery"]);
+    expect(response.body.history.stock[0]).toMatchObject({ type: "removal", quantityChanged: -1 });
+  });
+
   it("refuses empty or invalid edits and unknown products", async () => {
     const { manager } = await setup();
     expect((await manager.patch(`/api/manager/inventory/${APPLES}`).send({})).status).toBe(400);

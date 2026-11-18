@@ -352,3 +352,28 @@ async function fetchReport<T>(path: string, range: SalesRange): Promise<T> {
 
 export const fetchInventoryReport = (range: SalesRange) => fetchReport<InventoryReport>("inventory", range);
 export const fetchFailedPaymentsReport = (range: SalesRange) => fetchReport<FailedPaymentsReport>("failed-payments", range);
+
+// One product's own price changes and stock movements, newest first.
+export type ProductHistory = {
+  prices: { changedAt: string; oldPrice: number; newPrice: number; changedBy: string | null }[];
+  stock: {
+    createdAt: string;
+    type: string;
+    quantityChanged: number;
+    quantityAfterChange: number;
+    reason: string | null;
+    changedBy: string | null;
+  }[];
+};
+
+export async function fetchProductHistory(productId: string): Promise<ProductHistory> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/manager/inventory/${encodeURIComponent(productId)}/history`, { credentials: "same-origin" });
+  } catch {
+    throw new Error("Can't reach the server. Please try again.");
+  }
+  const data = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(data?.error ?? "Unable to load this product's history.");
+  return data.history as ProductHistory;
+}

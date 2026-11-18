@@ -373,6 +373,19 @@ export type ManagerAuditEntry = {
   recordId: string | null;
 };
 
+/** One product's own price changes and stock movements, newest first. */
+export type ProductHistory = {
+  prices: { changedAt: Date; oldPrice: number; newPrice: number; changedBy: string | null }[];
+  stock: {
+    createdAt: Date;
+    type: string;
+    quantityChanged: number;
+    quantityAfterChange: number;
+    reason: string | null;
+    changedBy: string | null;
+  }[];
+};
+
 export interface ProductStore {
   // Active products only, ordered by category then name.
   listProducts(): Promise<CatalogProduct[]>;
@@ -394,6 +407,8 @@ export interface ProductStore {
   >;
   /** Recent inventory/price activity for the manager audit log viewer. */
   listManagerAudit?(limit?: number): Promise<ManagerAuditEntry[]>;
+  /** Null when the product doesn't exist. */
+  getProductHistory?(productId: string, limit?: number): Promise<ProductHistory | null>;
 }
 
 export type SalesRange = "today" | "week" | "month" | "all";
@@ -827,6 +842,37 @@ export function createPgProductStore(pool: pg.Pool): ProductStore {
       return nextQuantity < 0
         ? { status: "insufficient-stock" }
         : { status: "maximum-stock" };
+    },
+
+    async getProductHistory(productId, limit = 50) {
+      const take = Math.min(Math.max(Math.trunc(limit), 1), 200);
+      const exists = await pool.query("SELECT 1 FROM Product WHERE product_id = $1", [productId]);
+      if (exists.rowCount === 0) return null;
+      const [prices, stock] = await Promise.all([
+        pool.query<ProductHistory["prices"][number]>(
+          `SELECT ph.changed_at AS "changedAt", ph.old_price::float8 AS "oldPrice", ph.new_price::float8 AS "newPrice",
+                  NULLIF(trim(concat_ws(' ', u.first_name, u.last_name)), '') AS "changedBy"
+           FROM PriceHistory ph
+           LEFT JOIN Users u ON u.user_id = ph.changed_by
+           WHERE ph.product_id = $1
+           ORDER BY ph.changed_at DESC
+           LIMIT $2`,
+          [productId, take],
+        ),
+        pool.query<ProductHistory["stock"][number]>(
+          `SELECT t.created_at AS "createdAt", t.transaction_type AS type,
+                  t.quantity_changed AS "quantityChanged", t.quantity_after_change AS "quantityAfterChange",
+                  NULLIF(trim(t.reason), '') AS reason,
+                  NULLIF(trim(concat_ws(' ', u.first_name, u.last_name)), '') AS "changedBy"
+           FROM Transactions t
+           LEFT JOIN Users u ON u.user_id = t.user_id
+           WHERE t.product_id = $1
+           ORDER BY t.created_at DESC
+           LIMIT $2`,
+          [productId, take],
+        ),
+      ]);
+      return { prices: prices.rows, stock: stock.rows };
     },
 
     async listManagerAudit(limit = 100) {
