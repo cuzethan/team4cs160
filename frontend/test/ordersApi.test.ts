@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createPaymentIntent, fetchLatestCheckoutAddress, fetchMyOrders, placeOrder } from "../src/orders/api";
+import { createPaymentIntent, fetchLatestCheckoutAddress, fetchMyOrders, formatDeliveryEstimate, placeOrder, validateDeliveryAddress } from "../src/orders/api";
 import { deliveryFeeFor } from "../src/cart/delivery";
 
 const record = {
@@ -56,9 +56,9 @@ describe("orders api client", () => {
   });
 
   it("starts a payment intent and returns the client secret", async () => {
-    const fetchMock = mockFetch(200, { clientSecret: "pi_test_secret" });
+    const fetchMock = mockFetch(200, { clientSecret: "pi_test_secret", customerSessionClientSecret: "cuss_test_secret" });
 
-    await expect(createPaymentIntent()).resolves.toBe("pi_test_secret");
+    await expect(createPaymentIntent()).resolves.toEqual({ clientSecret: "pi_test_secret", customerSessionClientSecret: "cuss_test_secret" });
 
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("/api/orders/payment-intent");
@@ -76,5 +76,20 @@ describe("deliveryFeeFor", () => {
   it("is free under 20 lbs and $10 from 20 lbs up", () => {
     expect(deliveryFeeFor(19.9)).toBe(0);
     expect(deliveryFeeFor(20)).toBe(10);
+  });
+});
+
+describe("delivery estimate at checkout", () => {
+  it("returns the server's estimate when the address is in range", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ eligible: true, estimatedMinutes: 75 }), { status: 200 })));
+    const address = { street: "1 Main St", city: "San Jose", state: "CA", zipCode: "95112", deliveryInstructions: "" };
+    expect(await validateDeliveryAddress(address)).toBe(75);
+  });
+
+  it("reads as hours and minutes with an arrival time", () => {
+    const from = new Date(2026, 10, 17, 14, 0);
+    expect(formatDeliveryEstimate(45, from).duration).toBe("About 45 min");
+    expect(formatDeliveryEstimate(60, from).duration).toBe("About 1 hr");
+    expect(formatDeliveryEstimate(95, from)).toEqual({ duration: "About 1 hr 35 min", arrival: expect.stringMatching(/^3:35/) });
   });
 });

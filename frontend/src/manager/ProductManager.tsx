@@ -1,7 +1,7 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { adjustProductStock, emojiFor } from "../inventory/api";
 import { parseStockAmount } from "../inventory/ProductCard";
-import { createProduct, updateProduct, type ManagedProduct, type ProductCategory, type ProductInput } from "./api";
+import { createProduct, fetchProductHistory, updateProduct, type ManagedProduct, type ProductCategory, type ProductHistory as ProductHistoryData, type ProductInput } from "./api";
 
 const inputClassName =
   "mt-1 w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-ink outline-none focus:border-accent-ink";
@@ -182,6 +182,8 @@ export function ProductFormDialog({ product, categories, onClose, onSaved }: Pro
   });
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  // Bumped after a stock change so the history below reloads.
+  const [historyVersion, setHistoryVersion] = useState(0);
 
   // Used in labels and the preview, so every per-unit field names the same unit.
   const unit = fields.unit.trim() || "unit";
@@ -310,7 +312,16 @@ export function ProductFormDialog({ product, categories, onClose, onSaved }: Pro
           </div>
         </form>
 
-        {product && <StockAdjuster product={product} onSaved={onSaved} />}
+        {product && (
+          <StockAdjuster
+            product={product}
+            onSaved={(updated) => {
+              onSaved(updated);
+              setHistoryVersion((version) => version + 1);
+            }}
+          />
+        )}
+        {product && <ProductHistory productId={product.id} unit={product.unit} version={historyVersion} />}
       </section>
     </div>
   );
@@ -385,6 +396,96 @@ function StockAdjuster({ product, onSaved }: { product: ManagedProduct; onSaved:
           Add stock
         </button>
       </div>
+    </section>
+  );
+}
+
+const historyTypeLabels: Record<string, string> = {
+  sale: "Sold",
+  restock: "Added",
+  removal: "Removed",
+  refund: "Returned by refund",
+};
+
+function formatWhen(value: string) {
+  return new Date(value).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+// This product's own price changes and stock movements, so a manager can see how it got here.
+function ProductHistory({ productId, unit, version }: { productId: string; unit: string; version: number }) {
+  const [history, setHistory] = useState<ProductHistoryData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setError(null);
+    fetchProductHistory(productId)
+      .then((loaded) => {
+        if (active) setHistory(loaded);
+      })
+      .catch((loadError: unknown) => {
+        if (active) setError(loadError instanceof Error ? loadError.message : "Unable to load this product's history.");
+      });
+    return () => {
+      active = false;
+    };
+  }, [productId, version]);
+
+  return (
+    <section aria-labelledby="product-history-heading" className="mt-6 border-t border-border pt-5">
+      <h3 id="product-history-heading" className="font-extrabold text-ink">History</h3>
+      {error ? (
+        <p role="alert" className="mt-3 text-sm text-red-800">{error}</p>
+      ) : !history ? (
+        <p role="status" className="mt-3 text-sm text-muted">Loading history…</p>
+      ) : (
+        <div className="mt-3 grid gap-5 sm:grid-cols-2">
+          <div>
+            <h4 className={groupHeadingClassName}>Price changes</h4>
+            {history.prices.length === 0 ? (
+              <p className="mt-2 text-sm text-muted">The price hasn't changed.</p>
+            ) : (
+              <ul className="mt-2 max-h-56 space-y-2 overflow-y-auto">
+                {history.prices.map((entry, index) => (
+                  <li key={`${entry.changedAt}-${index}`} className="rounded-xl bg-canvas px-3 py-2 text-sm">
+                    <p className="font-semibold tabular-nums text-ink">
+                      ${entry.oldPrice.toFixed(2)} → ${entry.newPrice.toFixed(2)}
+                    </p>
+                    <p className="text-xs text-muted">
+                      {formatWhen(entry.changedAt)}{entry.changedBy ? ` · ${entry.changedBy}` : ""}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div>
+            <h4 className={groupHeadingClassName}>Stock changes</h4>
+            {history.stock.length === 0 ? (
+              <p className="mt-2 text-sm text-muted">No stock changes yet.</p>
+            ) : (
+              <ul className="mt-2 max-h-56 space-y-2 overflow-y-auto">
+                {history.stock.map((entry, index) => (
+                  <li key={`${entry.createdAt}-${index}`} className="rounded-xl bg-canvas px-3 py-2 text-sm">
+                    <p className="font-semibold text-ink">
+                      {historyTypeLabels[entry.type] ?? entry.type}{" "}
+                      <span className={`tabular-nums ${entry.quantityChanged > 0 ? "text-green-700" : "text-red-700"}`}>
+                        {entry.quantityChanged > 0 ? "+" : ""}{entry.quantityChanged}
+                      </span>
+                      <span className="font-normal text-muted"> · {entry.quantityAfterChange} {unit} left</span>
+                    </p>
+                    <p className="text-xs text-muted">
+                      {formatWhen(entry.createdAt)}
+                      {entry.type !== "sale" && entry.reason ? ` · ${entry.reason}` : ""}
+                      {entry.type !== "sale" && entry.changedBy ? ` · ${entry.changedBy}` : ""}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
     </section>
   );
 }

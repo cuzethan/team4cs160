@@ -14,17 +14,18 @@ import type { InventoryProduct } from "../inventory/types";
 import { cancelDeliveryRun, createDeliveryRobot, deleteDeliveryRobot, dispatchDeliveries, fetchDeliveries, fetchDeliveryRobots, fetchDeliveryRuns, fetchDeliverySettings, fetchRobotBaseLocation, fetchManagedInventory, fetchManagerAudit, fetchSales, fetchSalesAnalytics, recallDeliveryRobot, refundDeliveryOrder, restoreDeliveryRobot, retireDeliveryRobot, saveDeliverySettings, saveRobotBaseLocation, updateProduct, type DeliveryRobot, type DeliveryRun, type DeliverySettings, type ManagedProduct, type ManagerAuditEntry, type ManagerDelivery, type ProductCategory, type RobotBaseLocation, type SalesAnalytics, type SalesBucket, type SalesRange } from "./api";
 import { ProductFormDialog, ProductTable } from "./ProductManager";
 import { FailedPaymentsPanel, InventoryReportPanel } from "./ReportsPanel";
+import { OrdersPanel } from "./OrdersPanel";
 
 import Map, { Layer, Marker, NavigationControl, Source } from "react-map-gl/maplibre";
 
-const tabs = ["Overview", "Customers", "Inventory", "Delivery", "Robot", "Sales", "Stock report", "Failed payments", "Audit", "Settings"] as const;
+const tabs = ["Overview", "Customers", "Inventory", "Orders", "Delivery", "Robot", "Sales", "Stock report", "Failed payments", "Audit", "Settings"] as const;
 type DashboardTab = (typeof tabs)[number];
 
 // Sidebar sections. A null heading means the tab stands on its own.
 const tabGroups: { heading: string | null; tabs: DashboardTab[] }[] = [
   { heading: null, tabs: ["Overview"] },
   { heading: "Store", tabs: ["Inventory", "Customers"] },
-  { heading: "Orders", tabs: ["Delivery", "Robot"] },
+  { heading: "Orders", tabs: ["Orders", "Delivery", "Robot"] },
   { heading: "Reports", tabs: ["Sales", "Stock report", "Failed payments", "Audit"] },
   { heading: null, tabs: ["Settings"] },
 ];
@@ -111,6 +112,8 @@ export function ManagerDashboard() {
             <CustomersPanel />
           ) : activeTab === "Settings" ? (
             <SettingsPanel />
+          ) : activeTab === "Orders" ? (
+            <OrdersPanel />
           ) : activeTab === "Delivery" ? (
             <DeliveriesPanel />
           ) : (
@@ -963,7 +966,7 @@ function SalesOverview({
         <p role="alert" className="rounded-xl border border-red-200 bg-white p-5 text-sm text-red-700">{salesError}</p>
       ) : analytics && (
         <div className="space-y-4">
-          <section aria-label="Sales summary" className="grid gap-3 sm:grid-cols-3 sm:gap-4">
+          <section aria-label="Sales summary" className="grid gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
             <SalesMetricCard
               label="Revenue"
               value={`$${sales.reduce((total, bucket) => total + bucket.revenue, 0).toFixed(2)}`}
@@ -973,6 +976,11 @@ function SalesOverview({
               label="Orders"
               value={String(sales.reduce((total, bucket) => total + bucket.paidOrders, 0))}
               detail={`Paid orders · ${dateRange.toLowerCase()}`}
+            />
+            <SalesMetricCard
+              label="Delivery fees"
+              value={`$${analytics.deliveryFees.collected.toFixed(2)}`}
+              detail={`Collected on ${analytics.deliveryFees.ordersWithFee} order${analytics.deliveryFees.ordersWithFee === 1 ? "" : "s"} over the free-delivery weight`}
             />
             <SalesMetricCard
               label="Customers"
@@ -999,6 +1007,7 @@ function SalesOverview({
               <SalesPieChart className="xl:flex-1" title="Revenue by Top 3 Categories" values={topSlices(analytics.categories.map((category) => ({ name: category.name, value: category.revenue })), 3)} />
             </div>
           </div>
+          <BestSellers items={analytics.items} />
           <SalesItemsTable items={analytics.items} />
         </div>
       )}
@@ -1200,6 +1209,42 @@ function SalesBarChart({
           </text>
         )}
       </svg>
+    </section>
+  );
+}
+
+// The most-sold products by units, so the manager can see what's in demand.
+function BestSellers({ items }: { items: SalesAnalytics["items"] }) {
+  const best = items
+    .filter((item) => item.quantity > 0)
+    .sort((a, b) => b.quantity - a.quantity || b.revenue - a.revenue)
+    .slice(0, 5);
+
+  return (
+    <section aria-labelledby="best-sellers-heading" className="rounded-2xl border border-border bg-white p-5 shadow-[0_3px_12px_rgba(0,0,0,0.06)] sm:p-6">
+      <h3 id="best-sellers-heading" className="text-lg font-extrabold text-ink">Best sellers</h3>
+      <p className="mt-1 text-sm text-muted">Top products by units sold in this date range.</p>
+      {best.length === 0 ? (
+        <p className="mt-4 text-sm text-muted">No sales in this date range yet.</p>
+      ) : (
+        <ol className="mt-4 divide-y divide-border">
+          {best.map((item, index) => (
+            <li key={item.productId} className="flex items-center gap-4 py-3">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-sm font-extrabold text-accent-ink">
+                {index + 1}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-semibold text-ink">{item.name}</p>
+                <p className="text-xs text-muted">{item.category}</p>
+              </div>
+              <div className="text-right text-sm tabular-nums">
+                <p className="font-bold text-ink">{item.quantity} sold</p>
+                <p className="text-xs text-muted">${item.revenue.toFixed(2)}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
     </section>
   );
 }

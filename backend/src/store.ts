@@ -373,6 +373,19 @@ export type ManagerAuditEntry = {
   recordId: string | null;
 };
 
+/** One product's own price changes and stock movements, newest first. */
+export type ProductHistory = {
+  prices: { changedAt: Date; oldPrice: number; newPrice: number; changedBy: string | null }[];
+  stock: {
+    createdAt: Date;
+    type: string;
+    quantityChanged: number;
+    quantityAfterChange: number;
+    reason: string | null;
+    changedBy: string | null;
+  }[];
+};
+
 export interface ProductStore {
   // Active products only, ordered by category then name.
   listProducts(): Promise<CatalogProduct[]>;
@@ -394,6 +407,8 @@ export interface ProductStore {
   >;
   /** Recent inventory/price activity for the manager audit log viewer. */
   listManagerAudit?(limit?: number): Promise<ManagerAuditEntry[]>;
+  /** Null when the product doesn't exist. */
+  getProductHistory?(productId: string, limit?: number): Promise<ProductHistory | null>;
 }
 
 export type SalesRange = "today" | "week" | "month" | "all";
@@ -614,6 +629,8 @@ export type SalesAnalytics = {
     currentPrice: number;
   }[];
   categories: { name: string; revenue: number }[];
+  /** Delivery fees charged on paid orders in the range (orders over the free-delivery weight). */
+  deliveryFees: { collected: number; ordersWithFee: number };
 };
 
 export interface DeliveryStore {
@@ -827,6 +844,37 @@ export function createPgProductStore(pool: pg.Pool): ProductStore {
         : { status: "maximum-stock" };
     },
 
+    async getProductHistory(productId, limit = 50) {
+      const take = Math.min(Math.max(Math.trunc(limit), 1), 200);
+      const exists = await pool.query("SELECT 1 FROM Product WHERE product_id = $1", [productId]);
+      if (exists.rowCount === 0) return null;
+      const [prices, stock] = await Promise.all([
+        pool.query<ProductHistory["prices"][number]>(
+          `SELECT ph.changed_at AS "changedAt", ph.old_price::float8 AS "oldPrice", ph.new_price::float8 AS "newPrice",
+                  NULLIF(trim(concat_ws(' ', u.first_name, u.last_name)), '') AS "changedBy"
+           FROM PriceHistory ph
+           LEFT JOIN Users u ON u.user_id = ph.changed_by
+           WHERE ph.product_id = $1
+           ORDER BY ph.changed_at DESC
+           LIMIT $2`,
+          [productId, take],
+        ),
+        pool.query<ProductHistory["stock"][number]>(
+          `SELECT t.created_at AS "createdAt", t.transaction_type AS type,
+                  t.quantity_changed AS "quantityChanged", t.quantity_after_change AS "quantityAfterChange",
+                  NULLIF(trim(t.reason), '') AS reason,
+                  NULLIF(trim(concat_ws(' ', u.first_name, u.last_name)), '') AS "changedBy"
+           FROM Transactions t
+           LEFT JOIN Users u ON u.user_id = t.user_id
+           WHERE t.product_id = $1
+           ORDER BY t.created_at DESC
+           LIMIT $2`,
+          [productId, take],
+        ),
+      ]);
+      return { prices: prices.rows, stock: stock.rows };
+    },
+
     async listManagerAudit(limit = 100) {
       const take = Number.isFinite(limit) ? Math.min(Math.max(Math.trunc(limit), 1), 500) : 100;
       const [auditResult, priceResult, stockResult] = await Promise.all([
@@ -989,9 +1037,25 @@ export function createPgSalesStore(pool: pg.Pool): SalesStore {
         LEFT JOIN Category c ON c.category_id = p.category_id
         LEFT JOIN item_sales s ON s.product_id = p.product_id
         ORDER BY revenue DESC, p.product_name`;
-      const [bucketResult, itemResult] = await Promise.all([
+      const feesQuery = `
+        WITH bounds AS (
+          SELECT ${selectedRange.start} AS start_at, ${selectedRange.end} AS end_at,
+                 ${selectedRange.step} AS bucket_step
+        ), paid_orders AS (
+          SELECT DISTINCT p.order_id
+          FROM Payment p CROSS JOIN bounds b
+          WHERE p.payment_status = 'paid'
+            AND p.processed_at >= b.start_at
+            AND p.processed_at < b.end_at + b.bucket_step
+        )
+        SELECT COALESCE(SUM(o.delivery_fee), 0)::float8 AS collected,
+               COUNT(*) FILTER (WHERE o.delivery_fee > 0)::int AS "ordersWithFee"
+        FROM paid_orders po
+        JOIN Orders o ON o.order_id = po.order_id`;
+      const [bucketResult, itemResult, feesResult] = await Promise.all([
         pool.query<SalesAnalytics["profitBuckets"][number]>(bucketQuery),
         pool.query<SalesAnalytics["items"][number]>(itemsQuery),
+        pool.query<SalesAnalytics["deliveryFees"]>(feesQuery),
       ]);
       const categoryTotals = new Map<string, number>();
       for (const item of itemResult.rows) {
@@ -1001,6 +1065,7 @@ export function createPgSalesStore(pool: pg.Pool): SalesStore {
         profitBuckets: bucketResult.rows,
         items: itemResult.rows,
         categories: [...categoryTotals].map(([name, revenue]) => ({ name, revenue })).sort((a, b) => b.revenue - a.revenue),
+        deliveryFees: feesResult.rows[0] ?? { collected: 0, ordersWithFee: 0 },
       };
     },
   };
@@ -1861,6 +1926,8 @@ export interface OrderStore {
   // address, order, items and payment, takes the items out of stock, and empties the cart.
   placeOrder(userId: string, address: NewAddress, payment: PaidCheckout): Promise<OrderRecord>;
   listOrders(userId: string): Promise<OrderRecord[]>;
+  // Every customer's orders, newest first, for the manager's Orders page.
+  listAllOrders?(limit?: number): Promise<(OrderRecord & { userId: string })[]>;
 }
 
 type OrderRow = Omit<OrderRecord, "items">;
@@ -2010,6 +2077,40 @@ export function createPgOrderStore(pool: pg.Pool, settingsStore: SettingsStore =
       );
       if (orders.length === 0) return [];
       return attachItems(orders, await loadOrderItems(pool, orders.map((order) => order.orderId)));
+    },
+    async listAllOrders(limit = 500) {
+      const take = Math.min(Math.max(Math.trunc(limit), 1), 2000);
+      const { rows: orders } = await pool.query<OrderRow & { userId: string }>(
+        `SELECT ${orderColumns}, o.user_id AS "userId" FROM Orders o ORDER BY o.created_at DESC LIMIT $1`,
+        [take],
+      );
+      if (orders.length === 0) return [];
+      const withItems = attachItems(orders, await loadOrderItems(pool, orders.map((order) => order.orderId)));
+      return withItems.map((order, index) => ({ ...order, userId: orders[index].userId }));
+    },
+  };
+}
+
+// Adds the column that remembers each shopper's Stripe customer, for saved cards.
+export async function ensureStripeCustomerSchema(pool: pg.Pool) {
+  await pool.query("ALTER TABLE Users ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255)");
+}
+
+export function createPgStripeCustomerStore(pool: pg.Pool) {
+  return {
+    async find(userId: string) {
+      const { rows } = await pool.query<{ customerId: string | null }>(
+        `SELECT stripe_customer_id AS "customerId" FROM Users WHERE user_id = $1`,
+        [userId],
+      );
+      return rows[0]?.customerId ?? null;
+    },
+    async save(userId: string, customerId: string) {
+      // Keeps the first customer if two checkouts race, so saved cards stay in one place.
+      await pool.query(
+        "UPDATE Users SET stripe_customer_id = $2 WHERE user_id = $1 AND stripe_customer_id IS NULL",
+        [userId, customerId],
+      );
     },
   };
 }

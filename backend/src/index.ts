@@ -2,7 +2,7 @@ import pg from "pg";
 import { createApp } from "./app.js";
 import { createStripePayments } from "./payments.js";
 import { startDeliverySimulator } from "./robotSimulator.js";
-import { createPgCartStore, createPgDeliveryStore, createPgOrderStore, createPgProductStore, createPgSalesStore, createPgSettingsStore, createPgStore, ensureDeliveryTrackingSchema, ensureGlobalSettingsSchema, ensureInventoryManagementSchema, ensureProductCostSchema } from "./store.js";
+import { createPgCartStore, createPgDeliveryStore, createPgOrderStore, createPgProductStore, createPgSalesStore, createPgSettingsStore, createPgStore, createPgStripeCustomerStore, ensureDeliveryTrackingSchema, ensureStripeCustomerSchema, ensureGlobalSettingsSchema, ensureInventoryManagementSchema, ensureProductCostSchema } from "./store.js";
 import { configureRobotBaseLocation } from "./robotBase.js";
 import { createPgReportsStore, ensureFailedPaymentSchema } from "./reports.js";
 
@@ -18,6 +18,7 @@ await ensureInventoryManagementSchema(pool);
 await ensureDeliveryTrackingSchema(pool);
 await ensureProductCostSchema(pool);
 await ensureFailedPaymentSchema(pool);
+await ensureStripeCustomerSchema(pool);
 const deliveryStore = createPgDeliveryStore(pool);
 const app = createApp({
   store: createPgStore(pool),
@@ -28,7 +29,7 @@ const app = createApp({
   salesStore: createPgSalesStore(pool),
   reportsStore: createPgReportsStore(pool),
   deliveryStore,
-  payments: createStripePayments(process.env.STRIPE_SECRET_KEY),
+  payments: createStripePayments(process.env.STRIPE_SECRET_KEY, createPgStripeCustomerStore(pool)),
   appUrl: process.env.APP_URL ?? "http://localhost:5173",
   secureCookies: process.env.NODE_ENV === "production",
   checkDatabase: async () => {

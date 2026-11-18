@@ -2,7 +2,7 @@ import express from "express";
 import { handle } from "./auth.js";
 import { createCustomerGuard } from "./cart.js";
 import { PaymentsNotConfiguredError, type PaymentIntentCreator } from "./payments.js";
-import { distanceInMiles } from "./deliveryArea.js";
+import { distanceInMiles, estimateDeliveryMinutes } from "./deliveryArea.js";
 import { geocodeAddress, type GeocodedLocation } from "./geocoder.js";
 import type { ReportsStore } from "./reports.js";
 import { CheckoutError, type AuthStore, type DeliveryStore, type OrderStore, type SettingsStore } from "./store.js";
@@ -33,21 +33,22 @@ export function createOrderRouter({ store, orderStore, deliveryStore, settingsSt
     try {
       location = await geocode(address);
     } catch {
-      return { status: 503 as const, error: "We couldn't verify this delivery address right now. Please try again." };
+      return { ok: false as const, status: 503 as const, error: "We couldn't verify this delivery address right now. Please try again." };
     }
     if (!location) {
-      return { status: 400 as const, error: "We couldn't locate this delivery address. Please check the address and try again." };
+      return { ok: false as const, status: 400 as const, error: "We couldn't locate this delivery address. Please check the address and try again." };
     }
 
     const [base, settings] = await Promise.all([settingsStore.getRobotBase(), settingsStore.get()]);
     const distance = distanceInMiles(location, base);
     if (distance > settings.deliveryRadiusMiles) {
       return {
+        ok: false as const,
         status: 400 as const,
         error: `Delivery is limited to ${settings.deliveryRadiusMiles} miles from the distribution center. This address is approximately ${distance.toFixed(1)} miles away.`,
       };
     }
-    return null;
+    return { ok: true as const, distanceMiles: distance };
   }
 
   router.post("/validate-address", handle(async (req, res) => {
@@ -65,8 +66,8 @@ export function createOrderRouter({ store, orderStore, deliveryStore, settingsSt
     if (!ZIP_PATTERN.test(address.zipCode)) return res.status(400).json({ error: "Please enter a valid ZIP code." });
 
     const result = await checkDeliveryAddress(address);
-    if (result) return res.status(result.status).json({ error: result.error });
-    res.json({ eligible: true });
+    if (!result.ok) return res.status(result.status).json({ error: result.error });
+    res.json({ eligible: true, estimatedMinutes: estimateDeliveryMinutes(result.distanceMiles) });
   }));
 
   // Starts a Stripe PaymentIntent for the cart total. The browser uses the client secret
@@ -77,11 +78,11 @@ export function createOrderRouter({ store, orderStore, deliveryStore, settingsSt
 
     try {
       const quote = await orderStore.quoteOrder(user.userId);
-      const { clientSecret } = await payments.create({
+      const { clientSecret, customerSessionClientSecret } = await payments.create({
         amountCents: Math.round(quote.grandTotal * 100),
         userId: user.userId,
       });
-      res.json({ clientSecret });
+      res.json({ clientSecret, customerSessionClientSecret: customerSessionClientSecret ?? null });
     } catch (error) {
       if (error instanceof CheckoutError) return res.status(409).json({ error: error.message });
       if (error instanceof PaymentsNotConfiguredError) {
@@ -164,7 +165,7 @@ export function createOrderRouter({ store, orderStore, deliveryStore, settingsSt
       }
 
       const deliveryCheck = await checkDeliveryAddress(address);
-      if (deliveryCheck) return res.status(deliveryCheck.status).json({ error: deliveryCheck.error });
+      if (!deliveryCheck.ok) return res.status(deliveryCheck.status).json({ error: deliveryCheck.error });
 
       const order = await orderStore.placeOrder(user.userId, address, {
         paymentIntentId: payment.id,

@@ -21,6 +21,13 @@ export function CartItemCard({ item, onIncrease, onDecrease, onRemove }: CartIte
         <h2 className="truncate text-lg font-bold">{item.name}</h2>
         <p className="mt-1 text-sm text-muted">${item.price.toFixed(2)} / {item.unit}</p>
         <p className="mt-1 text-sm text-muted">{(item.weightLbs * item.quantity).toFixed(1)} lb total</p>
+        {item.available && item.quantity >= item.quantityInStock && (
+          <p className="mt-1 text-xs font-bold text-warning">
+            {item.quantity > item.quantityInStock
+              ? `Only ${item.quantityInStock} left. Lower the quantity to check out.`
+              : `That's all we have (${item.quantityInStock} left).`}
+          </p>
+        )}
         {!item.available && (
           <p className="mt-2 w-fit rounded-full bg-red-50 px-3 py-1 text-xs font-bold text-red-700">
             No longer available. Remove it to check out.

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { stockLabel, stockToneClass } from "./stock";
 import type { InventoryProduct } from "./types";
 
 // Managers restock in bulk, so the +/- buttons move stock by the typed amount.
@@ -28,6 +29,7 @@ export function ProductCard({
 }: ProductCardProps) {
   const [amountText, setAmountText] = useState("1");
   const amount = parseStockAmount(amountText);
+  const stock = stockLabel(product.quantityInStock);
   const handleCardClick = () => onClick(product.id);
   const handleAddToCartClick = () => onAddToCart(product, 1);
 
@@ -48,11 +50,7 @@ export function ProductCard({
         </div>
         <div className="px-4 pb-2 pt-4">
           <h3 className="truncate text-base font-bold text-ink">{product.name}</h3>
-          {product.quantityInStock === 0 ? (
-            <p className="mt-1 text-sm font-bold text-red-700">Out of stock</p>
-          ) : (
-            <p className="mt-1 text-sm text-muted">{product.quantityInStock} in stock</p>
-          )}
+          <p className={`mt-1 text-sm ${stockToneClass[stock.tone]}`}>{stock.text}</p>
         </div>
       </button>
       <div className="flex items-center justify-between px-4 pb-4 pt-2">

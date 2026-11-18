@@ -219,6 +219,12 @@ export function createMemoryOrderStore({ cartStore, products, carts }: ReturnTyp
         .reverse()
         .map(({ userId: _userId, address: _address, ...record }) => record);
     },
+    async listAllOrders(limit = 500) {
+      return [...orders]
+        .reverse()
+        .slice(0, limit)
+        .map(({ address: _address, ...record }) => record);
+    },
   };
 
   return { orderStore };
@@ -325,6 +331,26 @@ export function createMemoryProductStore({ products }: ReturnType<typeof createM
         type: adjustment > 0 ? "restock" : "removal", createdAt: new Date(),
       });
       return { status: "updated", quantityInStock: nextQuantity };
+    },
+    async getProductHistory(productId, limit = 50) {
+      if (!products.has(productId)) return null;
+      const newestFirst = <T extends { createdAt: Date }>(a: T, b: T) => b.createdAt.getTime() - a.createdAt.getTime();
+      return {
+        // Reversed first so entries saved in the same millisecond still come out newest first.
+        prices: [...priceHistory].reverse()
+          .filter((entry) => entry.productId === productId)
+          .sort(newestFirst)
+          .slice(0, limit)
+          .map((entry) => ({ changedAt: entry.createdAt, oldPrice: entry.oldPrice, newPrice: entry.newPrice, changedBy: actorName(entry.changedBy) })),
+        stock: [...transactions].reverse()
+          .filter((entry) => entry.productId === productId)
+          .sort(newestFirst)
+          .slice(0, limit)
+          .map((entry) => ({
+            createdAt: entry.createdAt, type: entry.type, quantityChanged: entry.quantityChanged,
+            quantityAfterChange: entry.quantityAfterChange, reason: entry.reason || null, changedBy: actorName(entry.userId),
+          })),
+      };
     },
     async listManagerAudit(limit = 100) {
       const take = Math.min(Math.max(Math.trunc(limit), 1), 500);

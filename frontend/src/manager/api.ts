@@ -23,6 +23,7 @@ export type SalesAnalytics = {
     currentPrice: number;
   }[];
   categories: { name: string; revenue: number }[];
+  deliveryFees: { collected: number; ordersWithFee: number };
 };
 
 export async function fetchSalesAnalytics(range: SalesRange): Promise<SalesAnalytics> {
@@ -351,3 +352,80 @@ async function fetchReport<T>(path: string, range: SalesRange): Promise<T> {
 
 export const fetchInventoryReport = (range: SalesRange) => fetchReport<InventoryReport>("inventory", range);
 export const fetchFailedPaymentsReport = (range: SalesRange) => fetchReport<FailedPaymentsReport>("failed-payments", range);
+
+// One product's own price changes and stock movements, newest first.
+export type ProductHistory = {
+  prices: { changedAt: string; oldPrice: number; newPrice: number; changedBy: string | null }[];
+  stock: {
+    createdAt: string;
+    type: string;
+    quantityChanged: number;
+    quantityAfterChange: number;
+    reason: string | null;
+    changedBy: string | null;
+  }[];
+};
+
+export async function fetchProductHistory(productId: string): Promise<ProductHistory> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/manager/inventory/${encodeURIComponent(productId)}/history`, { credentials: "same-origin" });
+  } catch {
+    throw new Error("Can't reach the server. Please try again.");
+  }
+  const data = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(data?.error ?? "Unable to load this product's history.");
+  return data.history as ProductHistory;
+}
+
+// One order on the manager's Orders page, with who placed it.
+export type ManagerOrder = {
+  orderId: string;
+  createdAt: string;
+  orderStatus: string;
+  paymentStatus: string;
+  subtotal: number;
+  deliveryFee: number;
+  grandTotal: number;
+  totalWeight: number;
+  customerId: string;
+  customerName: string;
+  customerEmail: string | null;
+  items: { orderItemId: string; productId: string; productName: string; quantity: number; priceAtPurchase: number }[];
+};
+
+export async function fetchManagerOrders(): Promise<ManagerOrder[]> {
+  let response: Response;
+  try {
+    response = await fetch("/api/manager/orders", { credentials: "same-origin" });
+  } catch {
+    throw new Error("Can't reach the server. Please try again.");
+  }
+  const data = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(data?.error ?? "Unable to load orders.");
+  return data.orders as ManagerOrder[];
+}
+
+export type OrderGroup = "pending" | "out_for_delivery" | "completed" | "cancelled" | "refunded";
+
+// Which status filter an order falls under. A refund also cancels the order, so it
+// counts as refunded rather than cancelled.
+export function orderGroup(order: Pick<ManagerOrder, "orderStatus" | "paymentStatus">): OrderGroup {
+  if (order.paymentStatus === "refunded") return "refunded";
+  if (order.orderStatus === "cancelled") return "cancelled";
+  if (order.orderStatus === "completed") return "completed";
+  if (order.orderStatus === "out_for_delivery") return "out_for_delivery";
+  return "pending";
+}
+
+// Matches the search box against the customer, the order number, and the items bought.
+export function orderMatchesSearch(order: ManagerOrder, search: string) {
+  const term = search.trim().toLowerCase();
+  if (!term) return true;
+  return [
+    order.customerName,
+    order.customerEmail ?? "",
+    order.orderId,
+    ...order.items.map((item) => item.productName),
+  ].some((value) => value.toLowerCase().includes(term.replace(/^#/, "")));
+}

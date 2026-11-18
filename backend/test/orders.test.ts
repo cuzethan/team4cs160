@@ -30,6 +30,7 @@ describe("orders API", () => {
   let app: ReturnType<typeof createApp>;
   let paymentRequests: PaymentIntentRequest[];
   let confirmedPayment: ConfirmedPayment | null;
+  let customerId: string;
 
   beforeEach(() => {
     paymentRequests = [];
@@ -43,7 +44,7 @@ describe("orders API", () => {
       cartStore: cart.cartStore,
       orderStore: createMemoryOrderStore(cart).orderStore,
       productStore: createMemoryProductStore(cart).productStore,
-      salesStore: { listSales: async () => [], listSalesAnalytics: async () => ({ profitBuckets: [], items: [], categories: [] }) },
+      salesStore: { listSales: async () => [], listSalesAnalytics: async () => ({ profitBuckets: [], items: [], categories: [], deliveryFees: { collected: 0, ordersWithFee: 0 } }) },
       deliveryStore: { listDeliveries: async () => [] },
       payments: {
         async create(input) {
@@ -96,7 +97,7 @@ describe("orders API", () => {
       cartStore: cart.cartStore,
       orderStore: createMemoryOrderStore(cart).orderStore,
       productStore: createMemoryProductStore(cart).productStore,
-      salesStore: { listSales: async () => [], listSalesAnalytics: async () => ({ profitBuckets: [], items: [], categories: [] }) },
+      salesStore: { listSales: async () => [], listSalesAnalytics: async () => ({ profitBuckets: [], items: [], categories: [], deliveryFees: { collected: 0, ordersWithFee: 0 } }) },
       deliveryStore: { listDeliveries: async () => [] },
       payments: {
         async create() { return { clientSecret: "pi_test_secret" }; },
@@ -130,7 +131,7 @@ describe("orders API", () => {
 
     const res = await agent.post("/api/orders/payment-intent");
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ clientSecret: "pi_test_secret" });
+    expect(res.body).toEqual({ clientSecret: "pi_test_secret", customerSessionClientSecret: null });
     expect(paymentRequests).toEqual([{ amountCents: 897, userId: expect.any(String) }]);
   });
 

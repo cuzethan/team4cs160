@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { stockLabel, stockToneClass } from "./stock";
 import type { InventoryProduct } from "./types";
 
 type ProductDetailPageProps = {
@@ -9,6 +10,7 @@ type ProductDetailPageProps = {
 
 export function ProductDetailPage({ product, onClose, onAddToCart }: ProductDetailPageProps) {
   const [quantity, setQuantity] = useState(1);
+  const stock = stockLabel(product.quantityInStock);
   const quantityChoices = Array.from(
     { length: product.quantityInStock },
     (_, index) => index + 1,
@@ -58,12 +60,12 @@ export function ProductDetailPage({ product, onClose, onAddToCart }: ProductDeta
             ${product.price.toFixed(2)} <span className="text-sm font-medium text-muted">/ {product.unit}</span>
           </p>
           <p className="mt-5 leading-7 text-muted">{product.description}</p>
-          {product.quantityInStock === 0 ? (
-            <p className="mt-5 text-sm font-bold text-red-700">Out of stock</p>
-          ) : (
+          {stock.tone === "normal" ? (
             <p className="mt-5 text-sm font-semibold text-muted">
               {product.quantityInStock} {product.unit === "each" ? "available" : "in stock"}
             </p>
+          ) : (
+            <p className={`mt-5 text-sm ${stockToneClass[stock.tone]}`}>{stock.text}</p>
           )}
 
           <div className="mt-auto flex flex-col gap-3 pt-8 sm:flex-row">

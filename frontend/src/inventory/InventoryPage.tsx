@@ -76,7 +76,15 @@ function InventorySearch({ value, onChange }: { value: string; onChange: (value:
   );
 }
 
-type SortOption = "featured" | "price-low" | "price-high";
+type SortOption = "featured" | "price-low" | "price-high" | "weight-low" | "weight-high";
+
+// Thrifty shoppers sort by price; shoppers watching the delivery-fee weight limit sort by weight.
+const sortComparators: Record<Exclude<SortOption, "featured">, (a: InventoryProduct, b: InventoryProduct) => number> = {
+  "price-low": (a, b) => a.price - b.price,
+  "price-high": (a, b) => b.price - a.price,
+  "weight-low": (a, b) => a.weightLbs - b.weightLbs,
+  "weight-high": (a, b) => b.weightLbs - a.weightLbs,
+};
 
 function SortControl({
   value,
@@ -97,6 +105,8 @@ function SortControl({
         <option value="featured">Featured</option>
         <option value="price-low">Price: low to high</option>
         <option value="price-high">Price: high to low</option>
+        <option value="weight-low">Weight: light to heavy</option>
+        <option value="weight-high">Weight: heavy to light</option>
       </select>
     </label>
   );
@@ -147,9 +157,7 @@ export function InventoryPage() {
   const sortedProducts =
     sortOption === "featured"
       ? visibleProducts
-      : [...visibleProducts].sort((a, b) =>
-          sortOption === "price-low" ? a.price - b.price : b.price - a.price,
-        );
+      : [...visibleProducts].sort(sortComparators[sortOption]);
 
   const handleCardClick = (productId: string) => {
     setSelectedProduct(

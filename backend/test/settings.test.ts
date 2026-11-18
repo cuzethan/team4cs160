@@ -17,7 +17,7 @@ describe("global delivery settings", () => {
       store: memory.store, settingsStore: settings.settingsStore, cartStore: cart.cartStore,
       orderStore: createMemoryOrderStore(cart, settings.settingsStore).orderStore,
       productStore: createMemoryProductStore(cart).productStore, salesStore: {
-        listSales: async () => [], listSalesAnalytics: async () => ({ profitBuckets: [], items: [], categories: [] }),
+        listSales: async () => [], listSalesAnalytics: async () => ({ profitBuckets: [], items: [], categories: [], deliveryFees: { collected: 0, ordersWithFee: 0 } }),
       },
       deliveryStore: { listDeliveries: async () => [] },
       payments: {
