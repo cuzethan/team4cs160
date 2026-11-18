@@ -187,5 +187,10 @@ describe("report calculations", () => {
     expect(failureReason("generic_decline", "card_declined")).toBe("Card declined");
     expect(failureReason(null, null)).toBe("Card declined");
     expect(failureReason("do_not_honor", null)).toBe("Do not honor");
+    expect(failureReason("stolen_card", null)).toBe("Card reported lost or stolen");
+    expect(failureReason(null, "incorrect_cvc")).toBe("Incorrect security code");
+    expect(failureReason(null, "processing_error")).toBe("Processing error");
+    expect(failureReason("card_velocity_exceeded", null)).toBe("Too many attempts");
+    expect(failureReason("fraudulent", null)).toBe("Flagged as fraud");
   });
 });
