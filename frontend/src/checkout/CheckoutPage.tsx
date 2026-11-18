@@ -225,6 +225,7 @@ export function CheckoutPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [address, setAddress] = useState<CheckoutAddress>(emptyAddress);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [customerSessionClientSecret, setCustomerSessionClientSecret] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [deliverySettings, setDeliverySettings] = useState<DeliverySettings>({ deliveryFee: 10, freeDeliveryWeightThreshold: 20, deliveryRadiusMiles: 50 });
@@ -234,7 +235,9 @@ export function CheckoutPage() {
     setPaymentError(null);
     setClientSecret(null);
     try {
-      setClientSecret(await createPaymentIntent());
+      const secrets = await createPaymentIntent();
+      setCustomerSessionClientSecret(secrets.customerSessionClientSecret);
+      setClientSecret(secrets.clientSecret);
     } catch (error) {
       setPaymentError((error as Error).message);
     } finally {
@@ -332,6 +335,7 @@ export function CheckoutPage() {
             stripe={stripePromise}
             options={{
               clientSecret,
+              ...(customerSessionClientSecret ? { customerSessionClientSecret } : {}),
               appearance: { theme: "stripe", variables: { colorPrimary: "#B6EAF5", borderRadius: "12px" } },
             }}
           >

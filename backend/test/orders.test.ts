@@ -130,7 +130,7 @@ describe("orders API", () => {
 
     const res = await agent.post("/api/orders/payment-intent");
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ clientSecret: "pi_test_secret" });
+    expect(res.body).toEqual({ clientSecret: "pi_test_secret", customerSessionClientSecret: null });
     expect(paymentRequests).toEqual([{ amountCents: 897, userId: expect.any(String) }]);
   });
 

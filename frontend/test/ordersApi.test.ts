@@ -56,9 +56,9 @@ describe("orders api client", () => {
   });
 
   it("starts a payment intent and returns the client secret", async () => {
-    const fetchMock = mockFetch(200, { clientSecret: "pi_test_secret" });
+    const fetchMock = mockFetch(200, { clientSecret: "pi_test_secret", customerSessionClientSecret: "cuss_test_secret" });
 
-    await expect(createPaymentIntent()).resolves.toBe("pi_test_secret");
+    await expect(createPaymentIntent()).resolves.toEqual({ clientSecret: "pi_test_secret", customerSessionClientSecret: "cuss_test_secret" });
 
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("/api/orders/payment-intent");

@@ -2090,3 +2090,27 @@ export function createPgOrderStore(pool: pg.Pool, settingsStore: SettingsStore =
     },
   };
 }
+
+// Adds the column that remembers each shopper's Stripe customer, for saved cards.
+export async function ensureStripeCustomerSchema(pool: pg.Pool) {
+  await pool.query("ALTER TABLE Users ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255)");
+}
+
+export function createPgStripeCustomerStore(pool: pg.Pool) {
+  return {
+    async find(userId: string) {
+      const { rows } = await pool.query<{ customerId: string | null }>(
+        `SELECT stripe_customer_id AS "customerId" FROM Users WHERE user_id = $1`,
+        [userId],
+      );
+      return rows[0]?.customerId ?? null;
+    },
+    async save(userId: string, customerId: string) {
+      // Keeps the first customer if two checkouts race, so saved cards stay in one place.
+      await pool.query(
+        "UPDATE Users SET stripe_customer_id = $2 WHERE user_id = $1 AND stripe_customer_id IS NULL",
+        [userId, customerId],
+      );
+    },
+  };
+}

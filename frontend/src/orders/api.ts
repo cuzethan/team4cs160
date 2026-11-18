@@ -116,8 +116,11 @@ export async function reportFailedPayment(paymentIntentId: string) {
 
 // Asks the server to price the cart and start a Stripe PaymentIntent. The client secret
 // lets the checkout page collect the card without ever seeing the secret key.
+// The card form needs the payment's secret; the customer session secret (when the server
+// sends one) lets it show the shopper's saved cards and offer to save a new one.
 export async function createPaymentIntent() {
-  return (await request<{ clientSecret: string }>("POST", "/payment-intent")).clientSecret;
+  const data = await request<{ clientSecret: string; customerSessionClientSecret?: string | null }>("POST", "/payment-intent");
+  return { clientSecret: data.clientSecret, customerSessionClientSecret: data.customerSessionClientSecret ?? null };
 }
 
 export async function fetchMyOrders() {

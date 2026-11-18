@@ -78,11 +78,11 @@ export function createOrderRouter({ store, orderStore, deliveryStore, settingsSt
 
     try {
       const quote = await orderStore.quoteOrder(user.userId);
-      const { clientSecret } = await payments.create({
+      const { clientSecret, customerSessionClientSecret } = await payments.create({
         amountCents: Math.round(quote.grandTotal * 100),
         userId: user.userId,
       });
-      res.json({ clientSecret });
+      res.json({ clientSecret, customerSessionClientSecret: customerSessionClientSecret ?? null });
     } catch (error) {
       if (error instanceof CheckoutError) return res.status(409).json({ error: error.message });
       if (error instanceof PaymentsNotConfiguredError) {
