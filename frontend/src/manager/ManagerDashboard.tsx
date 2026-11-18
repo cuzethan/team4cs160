@@ -1061,6 +1061,7 @@ const chartColors = ["#B6EAF5", "#A7E0D4", "#F9D9A8", "#F8C4B0", "#C7C5F4", "#F5
 
 function SalesPieChart({ title, values, className = "" }: { title: string; values: PieSlice[]; className?: string }) {
   const total = values.reduce((sum, item) => sum + item.value, 0);
+  const [hoveredSlice, setHoveredSlice] = useState<number | null>(null);
   let angle = -90;
   let labelAngle = -90;
 
@@ -1071,9 +1072,21 @@ function SalesPieChart({ title, values, className = "" }: { title: string; value
         <p className="py-12 text-center text-sm text-muted">No item sales in this range.</p>
       ) : (
         <div className="mt-4 flex flex-col items-center gap-5 sm:flex-row">
-          <svg viewBox="0 0 200 200" role="img" aria-label={`${title}, total $${total.toFixed(2)}`} className="h-44 w-44 shrink-0">
+          <svg viewBox="0 0 200 200" role="group" aria-label={`${title}, total $${total.toFixed(2)}`} className="h-44 w-44 shrink-0">
             {values.length === 1 ? (
-              <circle cx="100" cy="100" r="98" fill={chartColors[0]} />
+              <circle
+                cx="100"
+                cy="100"
+                r="98"
+                fill={chartColors[0]}
+                role="img"
+                tabIndex={0}
+                aria-label={`${values[0].name}: 100%`}
+                onMouseEnter={() => setHoveredSlice(0)}
+                onMouseLeave={() => setHoveredSlice(null)}
+                onFocus={() => setHoveredSlice(0)}
+                onBlur={() => setHoveredSlice(null)}
+              />
             ) : values.map((item, index) => {
               const start = angle;
               const sweep = (item.value / total) * 360;
@@ -1089,19 +1102,29 @@ function SalesPieChart({ title, values, className = "" }: { title: string; value
                   fill={chartColors[index % chartColors.length]}
                   stroke="white"
                   strokeWidth="1.5"
+                  role="img"
+                  tabIndex={0}
+                  aria-label={`${item.name}: ${((item.value / total) * 100).toFixed(1)}%`}
+                  onMouseEnter={() => setHoveredSlice(index)}
+                  onMouseLeave={() => setHoveredSlice(null)}
+                  onFocus={() => setHoveredSlice(index)}
+                  onBlur={() => setHoveredSlice(null)}
                 />
               );
             })}
             {values.length === 1 ? (
-              <text x="100" y="104" textAnchor="middle" className="fill-white text-[13px] font-bold">
-                100%
-              </text>
-            ) : values.map((item) => {
+              hoveredSlice === 0 && (
+                <text x="100" y="104" textAnchor="middle" className="fill-white text-[13px] font-bold" pointerEvents="none">
+                  100%
+                </text>
+              )
+            ) : values.map((item, index) => {
               const start = labelAngle;
               const sweep = (item.value / total) * 360;
               labelAngle += sweep;
               const middle = start + sweep / 2;
               const labelPoint = polarPoint(100, 100, 62, middle);
+              if (hoveredSlice !== index) return null;
               return (
                 <text
                   key={`${item.name}-percentage`}
@@ -1110,16 +1133,17 @@ function SalesPieChart({ title, values, className = "" }: { title: string; value
                   textAnchor="middle"
                   dominantBaseline="middle"
                   className="fill-white text-[10px] font-bold [paint-order:stroke] stroke-ink [stroke-width:2px]"
+                  pointerEvents="none"
                 >
                   {((item.value / total) * 100).toFixed(1)}%
                 </text>
               );
             })}
           </svg>
-          <ul className="grid w-full min-w-0 flex-1 gap-2 text-sm">
+          <ul className="grid w-full min-w-0 flex-1 gap-1 text-xs">
             {values.map((item, index) => (
-              <li key={item.name} className="flex items-center justify-between gap-3">
-                <span className="flex min-w-0 items-center gap-2 text-ink">
+              <li key={item.name} className="flex items-center justify-between gap-2">
+                <span className="flex min-w-0 items-center gap-1.5 text-ink">
                   <span aria-hidden="true" className="h-3 w-3 shrink-0 rounded-sm" style={{ backgroundColor: chartColors[index % chartColors.length] }} />
                   <span className="truncate">{item.name}</span>
                 </span>
