@@ -7,7 +7,8 @@ import { fetchCart, type CartLine } from "../cart/api";
 import { deliveryFeeFor } from "../cart/delivery";
 import { fetchDeliverySettings, type DeliverySettings } from "../manager/api";
 import { SiteHeader } from "../components/SiteHeader";
-import { createPaymentIntent, fetchLatestCheckoutAddress, formatDeliveryEstimate, placeOrder, reportFailedPayment, validateDeliveryAddress, type CheckoutAddress } from "../orders/api";
+import { createPaymentIntent, fetchLatestCheckoutAddress, formatDeliveryEstimate, placeOrder, reportFailedPayment, validateDeliveryAddress, type AddressSuggestion, type CheckoutAddress } from "../orders/api";
+import { StreetAddressInput } from "./StreetAddressInput";
 
 const publishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
 const stripePromise = publishableKey ? loadStripe(publishableKey) : null;
@@ -36,6 +37,7 @@ type CheckoutFormProps = {
   lines: CartLine[];
   address: CheckoutAddress;
   updateField: (field: keyof CheckoutAddress) => (value: string) => void;
+  pickAddress: (suggestion: AddressSuggestion) => void;
   subtotal: number;
   totalWeight: number;
   deliveryFee: number;
@@ -59,7 +61,7 @@ function DeliveryEstimateText({ minutes, checkedAt }: { minutes: number; checked
 }
 
 function CheckoutForm({
-  lines, address, updateField, subtotal, totalWeight, deliveryFee, deliveryRadiusMiles, deliveryEstimate,
+  lines, address, updateField, pickAddress, subtotal, totalWeight, deliveryFee, deliveryRadiusMiles, deliveryEstimate,
   payment, submitError, isSubmitting, canSubmit, onSubmit,
 }: CheckoutFormProps) {
   return (
@@ -71,7 +73,7 @@ function CheckoutForm({
           <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-6">
             <label className="text-sm font-semibold text-muted sm:col-span-6">
               Street address
-              <input required autoComplete="street-address" value={address.street} onChange={(event) => updateField("street")(event.target.value)} className={inputClassName} />
+              <StreetAddressInput value={address.street} onChange={updateField("street")} onPick={pickAddress} className={inputClassName} />
             </label>
             <label className="text-sm font-semibold text-muted sm:col-span-3">
               City
@@ -299,6 +301,8 @@ export function CheckoutPage() {
 
   const updateField = (field: keyof CheckoutAddress) => (value: string) =>
     setAddress((current) => ({ ...current, [field]: value }));
+  const pickAddress = ({ street, city, state, zipCode }: AddressSuggestion) =>
+    setAddress((current) => ({ ...current, street, city, state, zipCode }));
 
   const subtotal = lines.reduce((total, line) => total + line.price * line.quantity, 0);
   const totalWeight = lines.reduce((total, line) => total + line.weightLbs * line.quantity, 0);
@@ -343,6 +347,7 @@ export function CheckoutPage() {
               lines={lines}
               address={address}
               updateField={updateField}
+              pickAddress={pickAddress}
               subtotal={subtotal}
               totalWeight={totalWeight}
               deliveryFee={deliveryFee}
@@ -355,6 +360,7 @@ export function CheckoutPage() {
             lines={lines}
             address={address}
             updateField={updateField}
+            pickAddress={pickAddress}
             subtotal={subtotal}
             totalWeight={totalWeight}
             deliveryFee={deliveryFee}

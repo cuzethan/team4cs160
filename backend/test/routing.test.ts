@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { dispatchPendingOrders } from "../src/batching.js";
-import { geocodeAddress } from "../src/geocoder.js";
+import { geocodeAddress, suggestAddresses } from "../src/geocoder.js";
 import { calculateDeliveryRoute, type RoutePoint } from "../src/routeService.js";
 import { configureRobotBaseLocation, getRobotBaseLocation, isAtRobotBaseLocation } from "../src/robotBase.js";
 import type { DeliveryStore } from "../src/store.js";
@@ -202,6 +202,65 @@ describe("address lookup backup", () => {
       ? Promise.reject(new TypeError("fetch failed"))
       : jsonResponse({ result: { addressMatches: [] } })));
     await expect(geocodeAddress(address, "http://photon", "http://census")).rejects.toThrow("fetch failed");
+  });
+});
+
+describe("address suggestions", () => {
+  const house = (properties: Record<string, string>) => ({ properties: { countrycode: "US", city: "San Jose", state: "California", postcode: "95112", ...properties } });
+
+  function photon(houses: unknown[], streets: unknown[] = []) {
+    const fetchMock = vi.fn(async (input: string | URL) =>
+      jsonResponse({ features: new URL(String(input)).searchParams.get("layer") === "street" ? streets : houses }));
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  it("turns matching houses near the store into full addresses", async () => {
+    const fetchMock = photon([
+      house({ housenumber: "200", street: "East Santa Clara Street" }),
+      house({ housenumber: "200", street: "East Santa Clara Street", name: "City Hall" }),
+      house({ housenumber: "12", street: "Somewhere Road", countrycode: "CA" }),
+    ]);
+
+    const found = await suggestAddresses("200 E Santa Clara St", "http://photon-a");
+
+    expect(found).toEqual([{ label: "200 East Santa Clara Street, San Jose, CA 95112", street: "200 East Santa Clara Street", city: "San Jose", state: "CA", zipCode: "95112" }]);
+    const url = new URL(String(fetchMock.mock.calls[0][0]));
+    expect(url.searchParams.get("q")).toBe("200 East Santa Clara Street");
+    expect(url.searchParams.get("bbox")).toBe([-121.8863 - 0.75, 37.3382 - 0.75, -121.8863 + 0.75, 37.3382 + 0.75].join(","));
+  });
+
+  it("puts the typed house number on a matching street when the house isn't mapped", async () => {
+    photon(
+      [house({ housenumber: "769", street: "South 11th Street" })],
+      [{ properties: { countrycode: "US", name: "Willow Street", city: "San Jose", state: "CA", postcode: "95125" } }],
+    );
+
+    const found = await suggestAddresses("769 Willow St", "http://photon-b");
+
+    expect(found.map((s) => s.label)).toEqual(["769 Willow Street, San Jose, CA 95125"]);
+  });
+
+  it("leaves a trailing direction letter alone while it's still being typed", async () => {
+    const fetchMock = photon([]);
+    await suggestAddresses("10 N 1st S", "http://photon-c");
+    expect(new URL(String(fetchMock.mock.calls[0][0])).searchParams.get("q")).toBe("10 North 1st S");
+  });
+
+  it("skips a bare house number and remembers recent answers", async () => {
+    const fetchMock = photon([house({ housenumber: "5", street: "Story Road" })]);
+    await expect(suggestAddresses("123", "http://photon-d")).resolves.toEqual([]);
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await suggestAddresses("5 Story Rd", "http://photon-d");
+    const calls = fetchMock.mock.calls.length;
+    await suggestAddresses("5  story rd", "http://photon-d");
+    expect(fetchMock.mock.calls.length).toBe(calls);
+  });
+
+  it("reports a lookup service error", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({}, false, 429)));
+    await expect(suggestAddresses("1 Main St", "http://photon-e")).rejects.toThrow("HTTP 429");
   });
 });
 

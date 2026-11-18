@@ -3,7 +3,7 @@ import { handle } from "./auth.js";
 import { createCustomerGuard } from "./cart.js";
 import { PaymentsNotConfiguredError, type PaymentIntentCreator } from "./payments.js";
 import { distanceInMiles, estimateDeliveryMinutes } from "./deliveryArea.js";
-import { geocodeAddress, type GeocodedLocation } from "./geocoder.js";
+import { geocodeAddress, suggestAddresses, type GeocodedLocation } from "./geocoder.js";
 import type { ReportsStore } from "./reports.js";
 import { CheckoutError, type AuthStore, type DeliveryStore, type OrderStore, type SettingsStore } from "./store.js";
 
@@ -15,6 +15,7 @@ export type OrderOptions = {
   payments: PaymentIntentCreator;
   reportsStore?: ReportsStore;
   geocode?: typeof geocodeAddress;
+  suggest?: typeof suggestAddresses;
 };
 
 const ZIP_PATTERN = /^\d{5}(-\d{4})?$/;
@@ -24,7 +25,7 @@ function text(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-export function createOrderRouter({ store, orderStore, deliveryStore, settingsStore, payments, reportsStore, geocode = geocodeAddress }: OrderOptions) {
+export function createOrderRouter({ store, orderStore, deliveryStore, settingsStore, payments, reportsStore, geocode = geocodeAddress, suggest = suggestAddresses }: OrderOptions) {
   const router = express.Router();
   const requireCustomer = createCustomerGuard(store, "Please log in to see your orders and check out.");
 
@@ -50,6 +51,19 @@ export function createOrderRouter({ store, orderStore, deliveryStore, settingsSt
     }
     return { ok: true as const, distanceMiles: distance };
   }
+
+  // Address suggestions while the shopper types the street at checkout.
+  router.get("/address-suggestions", handle(async (req, res) => {
+    const user = await requireCustomer(req, res);
+    if (!user) return;
+    const query = text(req.query.q).slice(0, 200);
+    if (query.length < 3) return res.json({ suggestions: [] });
+    try {
+      res.json({ suggestions: await suggest(query) });
+    } catch {
+      res.status(503).json({ error: "Address suggestions are unavailable right now." });
+    }
+  }));
 
   router.post("/validate-address", handle(async (req, res) => {
     const user = await requireCustomer(req, res);
