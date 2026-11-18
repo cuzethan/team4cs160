@@ -170,6 +170,41 @@ describe("address lookup", () => {
   });
 });
 
+describe("address lookup backup", () => {
+  const address = { street: "200 E Santa Clara St", city: "San Jose", state: "CA", zipCode: "95113" };
+
+  it("asks the Census geocoder when Photon is down", async () => {
+    const fetchMock = vi.fn(async (input: string | URL) => String(input).startsWith("http://photon")
+      ? Promise.reject(new TypeError("fetch failed"))
+      : jsonResponse({ result: { addressMatches: [{ coordinates: { x: -121.8862, y: 37.3382 } }] } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(geocodeAddress(address, "http://photon", "http://census")).resolves.toEqual({ latitude: 37.3382, longitude: -121.8862 });
+    const census = new URL(String(fetchMock.mock.calls[1][0]));
+    expect(census.pathname).toBe("/geocoder/locations/onelineaddress");
+    expect(census.searchParams.get("address")).toBe("200 E Santa Clara St, San Jose, CA 95113");
+  });
+
+  it("asks the Census geocoder when Photon can't find the address", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => String(input).startsWith("http://photon")
+      ? jsonResponse({ features: [] })
+      : jsonResponse({ result: { addressMatches: [{ coordinates: { x: -121.9, y: 37.3 } }] } })));
+    await expect(geocodeAddress(address, "http://photon", "http://census")).resolves.toEqual({ latitude: 37.3, longitude: -121.9 });
+  });
+
+  it("reports an outage when both are down, so the order stays queued", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new TypeError("fetch failed"))));
+    await expect(geocodeAddress(address, "http://photon", "http://census")).rejects.toThrow("fetch failed");
+  });
+
+  it("reports an outage when Photon is down and Census doesn't know the address", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => String(input).startsWith("http://photon")
+      ? Promise.reject(new TypeError("fetch failed"))
+      : jsonResponse({ result: { addressMatches: [] } })));
+    await expect(geocodeAddress(address, "http://photon", "http://census")).rejects.toThrow("fetch failed");
+  });
+});
+
 describe("robot base location", () => {
   it("uses the configured store location, or San Jose by default", () => {
     vi.stubEnv("ROBOT_BASE_LATITUDE", "");
