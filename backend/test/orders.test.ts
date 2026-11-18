@@ -30,6 +30,7 @@ describe("orders API", () => {
   let app: ReturnType<typeof createApp>;
   let paymentRequests: PaymentIntentRequest[];
   let confirmedPayment: ConfirmedPayment | null;
+  let customerId: string;
 
   beforeEach(() => {
     paymentRequests = [];
