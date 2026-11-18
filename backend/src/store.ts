@@ -614,6 +614,8 @@ export type SalesAnalytics = {
     currentPrice: number;
   }[];
   categories: { name: string; revenue: number }[];
+  /** Delivery fees charged on paid orders in the range (orders over the free-delivery weight). */
+  deliveryFees: { collected: number; ordersWithFee: number };
 };
 
 export interface DeliveryStore {
@@ -989,9 +991,25 @@ export function createPgSalesStore(pool: pg.Pool): SalesStore {
         LEFT JOIN Category c ON c.category_id = p.category_id
         LEFT JOIN item_sales s ON s.product_id = p.product_id
         ORDER BY revenue DESC, p.product_name`;
-      const [bucketResult, itemResult] = await Promise.all([
+      const feesQuery = `
+        WITH bounds AS (
+          SELECT ${selectedRange.start} AS start_at, ${selectedRange.end} AS end_at,
+                 ${selectedRange.step} AS bucket_step
+        ), paid_orders AS (
+          SELECT DISTINCT p.order_id
+          FROM Payment p CROSS JOIN bounds b
+          WHERE p.payment_status = 'paid'
+            AND p.processed_at >= b.start_at
+            AND p.processed_at < b.end_at + b.bucket_step
+        )
+        SELECT COALESCE(SUM(o.delivery_fee), 0)::float8 AS collected,
+               COUNT(*) FILTER (WHERE o.delivery_fee > 0)::int AS "ordersWithFee"
+        FROM paid_orders po
+        JOIN Orders o ON o.order_id = po.order_id`;
+      const [bucketResult, itemResult, feesResult] = await Promise.all([
         pool.query<SalesAnalytics["profitBuckets"][number]>(bucketQuery),
         pool.query<SalesAnalytics["items"][number]>(itemsQuery),
+        pool.query<SalesAnalytics["deliveryFees"]>(feesQuery),
       ]);
       const categoryTotals = new Map<string, number>();
       for (const item of itemResult.rows) {
@@ -1001,6 +1019,7 @@ export function createPgSalesStore(pool: pg.Pool): SalesStore {
         profitBuckets: bucketResult.rows,
         items: itemResult.rows,
         categories: [...categoryTotals].map(([name, revenue]) => ({ name, revenue })).sort((a, b) => b.revenue - a.revenue),
+        deliveryFees: feesResult.rows[0] ?? { collected: 0, ordersWithFee: 0 },
       };
     },
   };

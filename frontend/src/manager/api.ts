@@ -23,6 +23,7 @@ export type SalesAnalytics = {
     currentPrice: number;
   }[];
   categories: { name: string; revenue: number }[];
+  deliveryFees: { collected: number; ordersWithFee: number };
 };
 
 export async function fetchSalesAnalytics(range: SalesRange): Promise<SalesAnalytics> {

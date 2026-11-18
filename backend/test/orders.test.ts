@@ -43,7 +43,7 @@ describe("orders API", () => {
       cartStore: cart.cartStore,
       orderStore: createMemoryOrderStore(cart).orderStore,
       productStore: createMemoryProductStore(cart).productStore,
-      salesStore: { listSales: async () => [], listSalesAnalytics: async () => ({ profitBuckets: [], items: [], categories: [] }) },
+      salesStore: { listSales: async () => [], listSalesAnalytics: async () => ({ profitBuckets: [], items: [], categories: [], deliveryFees: { collected: 0, ordersWithFee: 0 } }) },
       deliveryStore: { listDeliveries: async () => [] },
       payments: {
         async create(input) {
@@ -96,7 +96,7 @@ describe("orders API", () => {
       cartStore: cart.cartStore,
       orderStore: createMemoryOrderStore(cart).orderStore,
       productStore: createMemoryProductStore(cart).productStore,
-      salesStore: { listSales: async () => [], listSalesAnalytics: async () => ({ profitBuckets: [], items: [], categories: [] }) },
+      salesStore: { listSales: async () => [], listSalesAnalytics: async () => ({ profitBuckets: [], items: [], categories: [], deliveryFees: { collected: 0, ordersWithFee: 0 } }) },
       deliveryStore: { listDeliveries: async () => [] },
       payments: {
         async create() { return { clientSecret: "pi_test_secret" }; },

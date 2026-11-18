@@ -963,7 +963,7 @@ function SalesOverview({
         <p role="alert" className="rounded-xl border border-red-200 bg-white p-5 text-sm text-red-700">{salesError}</p>
       ) : analytics && (
         <div className="space-y-4">
-          <section aria-label="Sales summary" className="grid gap-3 sm:grid-cols-3 sm:gap-4">
+          <section aria-label="Sales summary" className="grid gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
             <SalesMetricCard
               label="Revenue"
               value={`$${sales.reduce((total, bucket) => total + bucket.revenue, 0).toFixed(2)}`}
@@ -973,6 +973,11 @@ function SalesOverview({
               label="Orders"
               value={String(sales.reduce((total, bucket) => total + bucket.paidOrders, 0))}
               detail={`Paid orders · ${dateRange.toLowerCase()}`}
+            />
+            <SalesMetricCard
+              label="Delivery fees"
+              value={`$${analytics.deliveryFees.collected.toFixed(2)}`}
+              detail={`Collected on ${analytics.deliveryFees.ordersWithFee} order${analytics.deliveryFees.ordersWithFee === 1 ? "" : "s"} over the free-delivery weight`}
             />
             <SalesMetricCard
               label="Customers"

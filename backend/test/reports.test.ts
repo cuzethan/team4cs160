@@ -40,7 +40,7 @@ function setup(failures: Map<string, FailedPaymentAttempt> = new Map()) {
     cartStore: cart.cartStore,
     orderStore: createMemoryOrderStore(cart).orderStore,
     productStore: createMemoryProductStore(cart).productStore,
-    salesStore: { listSales: async () => [], listSalesAnalytics: async () => ({ profitBuckets: [], items: [], categories: [] }) },
+    salesStore: { listSales: async () => [], listSalesAnalytics: async () => ({ profitBuckets: [], items: [], categories: [], deliveryFees: { collected: 0, ordersWithFee: 0 } }) },
     reportsStore,
     deliveryStore: { listDeliveries: async () => [] },
     payments: {
