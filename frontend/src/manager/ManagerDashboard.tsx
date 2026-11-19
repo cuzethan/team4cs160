@@ -61,6 +61,7 @@ export function ManagerDashboard() {
 
   return (
     <div className="min-h-screen bg-canvas text-ink">
+      <title>{`OFS Manager Dashboard`}</title>
       <SiteHeader />
       <main className="flex min-h-[calc(100vh-4.75rem)] flex-col md:flex-row md:items-stretch">
         <aside
