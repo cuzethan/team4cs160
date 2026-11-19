@@ -134,3 +134,18 @@ export async function fetchOrderTracking(orderId: string) {
 export async function confirmOrderReceived(orderId: string) {
   return request<{ orderId: string; orderStatus: string }>("POST", `/${encodeURIComponent(orderId)}/received`);
 }
+
+export type AddressSuggestion = { label: string; street: string; city: string; state: string; zipCode: string };
+
+// Street addresses near the store that match what's been typed. Suggestions are a convenience,
+// so any failure just means no suggestions.
+export async function fetchAddressSuggestions(query: string, signal?: AbortSignal): Promise<AddressSuggestion[]> {
+  try {
+    const response = await fetch(`/api/orders/address-suggestions?q=${encodeURIComponent(query)}`, { credentials: "same-origin", signal });
+    if (!response.ok) return [];
+    const data = (await response.json()) as { suggestions?: AddressSuggestion[] };
+    return data.suggestions ?? [];
+  } catch {
+    return [];
+  }
+}

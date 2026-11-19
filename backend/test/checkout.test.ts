@@ -43,6 +43,39 @@ async function shopper(app: ReturnType<typeof createApp>) {
   return { agent, userId: registered.body.user.id as string };
 }
 
+describe("address suggestions", () => {
+  const suggestion = { label: "1 Washington Square, San Jose, CA 95192", street: "1 Washington Square", city: "San Jose", state: "CA", zipCode: "95192" };
+
+  it("suggests addresses for what the shopper typed", async () => {
+    const suggestAddresses = vi.fn(async () => [suggestion]);
+    const { agent } = await shopper(setup({ suggestAddresses }));
+
+    const res = await agent.get("/api/orders/address-suggestions").query({ q: " 1 Washington " });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ suggestions: [suggestion] });
+    expect(suggestAddresses).toHaveBeenCalledWith("1 Washington");
+  });
+
+  it("waits for at least three characters", async () => {
+    const suggestAddresses = vi.fn(async () => [suggestion]);
+    const { agent } = await shopper(setup({ suggestAddresses }));
+    expect((await agent.get("/api/orders/address-suggestions").query({ q: "1 " })).body).toEqual({ suggestions: [] });
+    expect(suggestAddresses).not.toHaveBeenCalled();
+  });
+
+  it("says suggestions are unavailable when the lookup fails", async () => {
+    const { agent } = await shopper(setup({ suggestAddresses: async () => { throw new Error("down"); } }));
+    const res = await agent.get("/api/orders/address-suggestions").query({ q: "1 Washington" });
+    expect(res.status).toBe(503);
+  });
+
+  it("is only for signed-in shoppers", async () => {
+    const res = await request(setup()).get("/api/orders/address-suggestions").query({ q: "1 Washington" });
+    expect(res.status).toBe(401);
+  });
+});
+
 describe("checking a delivery address", () => {
   it("gives an estimated delivery time for an address in range", async () => {
     const { agent } = await shopper(setup());

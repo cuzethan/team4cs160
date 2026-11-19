@@ -177,6 +177,45 @@ describe("manager robot and delivery controls", () => {
   });
 });
 
+describe("dispatching a single order", () => {
+  const waiting = (orderId: string) => ({
+    orderId, customerId: "c", addressId: `addr-${orderId}`, totalWeight: 5, createdAt: new Date(),
+    street: "", city: "", state: "", zipCode: "", latitude: 37.335, longitude: -121.881,
+  });
+
+  it("sends only the chosen order and leaves the rest queued", async () => {
+    vi.stubEnv("VALHALLA_URL", "");
+    const createDeliveryRun = vi.fn(async () => "run-1");
+    const { manager } = await setup({
+      listUnassignedPaidOrders: async () => [waiting("first"), waiting("second")],
+      listRobots: async () => [{ robotId: ROBOT, robotName: "R1", status: "available", maximumOrders: 10, maximumWeight: 200, currentLatitude: 37.3382, currentLongitude: -121.8863, lastUpdated: new Date() }],
+      createDeliveryRun,
+      saveAddressCoordinates: async () => true,
+    });
+
+    const res = await manager.post("/api/manager/deliveries/dispatch").send({ orderId: "second" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.runs).toEqual([expect.objectContaining({ orderIds: ["second"] })]);
+    expect(createDeliveryRun).toHaveBeenCalledTimes(1);
+    vi.unstubAllEnvs();
+  });
+
+  it("refuses an order that isn't waiting for dispatch", async () => {
+    const { manager } = await setup({
+      listUnassignedPaidOrders: async () => [waiting("first")],
+      listRobots: async () => [],
+      createDeliveryRun: async () => "run-1",
+      saveAddressCoordinates: async () => true,
+    });
+
+    const res = await manager.post("/api/manager/deliveries/dispatch").send({ orderId: "gone" });
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toMatch(/isn't waiting for dispatch/);
+  });
+});
+
 describe("delivery notifications", () => {
   it("list a shopper's notifications and mark them read", async () => {
     const markNotificationRead = vi.fn(async (_userId: string, id: string) => id === "n1");

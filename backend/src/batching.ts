@@ -41,6 +41,8 @@ export async function dispatchPendingOrders(
     geocode?: typeof geocodeAddress;
     route?: typeof calculateDeliveryRoute;
     now?: () => Date;
+    /** Dispatch only these orders (for a single-order dispatch); others stay queued. */
+    orderIds?: string[];
   } = {},
 ): Promise<DispatchResult> {
   if (!deliveryStore.listUnassignedPaidOrders || !deliveryStore.listRobots ||
@@ -48,10 +50,11 @@ export async function dispatchPendingOrders(
     throw new Error("Delivery batching storage is not available.");
   }
 
-  const [orders, robots] = await Promise.all([
+  const [queuedOrders, robots] = await Promise.all([
     deliveryStore.listUnassignedPaidOrders(),
     deliveryStore.listRobots(),
   ]);
+  const orders = options.orderIds ? queuedOrders.filter((order) => options.orderIds!.includes(order.orderId)) : queuedOrders;
   const availableRobots = robots.filter((robot) => robot.status === "available");
   const unresolvedAddressOrderIds: string[] = [];
   const outOfRangeOrderIds: string[] = [];
