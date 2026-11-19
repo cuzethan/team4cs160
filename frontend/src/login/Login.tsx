@@ -62,28 +62,21 @@ export function DedicatedLogin({ role }: { role: "customer" | "manager" }) {
     <main className="login-backdrop box-border flex min-h-screen flex-col p-6">
       <title>{`${role === "manager" ? "Manager Login" : "Customer Login"}`}</title>
 
-      <div className={`flex ${role === "manager" ? "justify-end" : "justify-start"}`}>
+      <div className="flex items-center justify-between gap-4">
         <Link
           to={role === "customer" ? "/home" : "/customer-login"}
           className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-bold text-ink no-underline shadow-sm transition hover:bg-accent-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink"
         >
           Back to Homepage
         </Link>
-        
-      </div>
-
-      <div className={`flex ${role === "manager" ? "justify-start" : "justify-end"}`}>
         <Link
           to={role === "customer" ? "/manager-login" : "/customer-login"}
           className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-bold text-ink no-underline shadow-sm transition hover:bg-accent-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink"
         >
           {role === "customer" ? "Manager →" : "← Customer"}
         </Link>
-        
       </div>
 
-      
-      
       <div className="my-auto box-border w-full max-w-[420px] self-center rounded-[18px] border border-border bg-surface px-7 py-8 shadow-[0_12px_28px_rgba(0,0,0,0.08)]">
         <header className="mb-7 text-center text-[2rem] font-extrabold tracking-tight text-ink">{role === "manager" ? "Manager Login" : "Login"}</header>
         <LoginForm role={role} />
