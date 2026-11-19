@@ -61,6 +61,7 @@ export function ManagerDashboard() {
 
   return (
     <div className="min-h-screen bg-canvas text-ink">
+      <title>{`OFS Manager Dashboard`}</title>
       <SiteHeader />
       <main className="flex min-h-[calc(100vh-4.75rem)] flex-col md:flex-row md:items-stretch">
         <aside
@@ -751,6 +752,7 @@ function DeliveriesPanel() {
   const [deliveries, setDeliveries] = useState<ManagerDelivery[]>([]);
   const [loading, setLoading] = useState(true);
   const [dispatching, setDispatching] = useState(false);
+  const [dispatchingOrderId, setDispatchingOrderId] = useState<string | null>(null);
   const [refundingOrderId, setRefundingOrderId] = useState<string | null>(null);
   const [dispatchSummary, setDispatchSummary] = useState("");
   const [error, setError] = useState("");
@@ -795,6 +797,26 @@ function DeliveriesPanel() {
     }
   };
 
+  const dispatchOrder = async (orderId: string) => {
+    setDispatchingOrderId(orderId);
+    setError("");
+    setDispatchSummary("");
+    try {
+      const result = await dispatchDeliveries(orderId);
+      const order = shortOrderId(orderId);
+      if (result.runs.length > 0) setDispatchSummary(`Order ${order} is on its way.`);
+      else if (result.unresolvedAddressOrderIds.length > 0) setError(`We couldn't find order ${order}'s address on the map. Try again in a moment.`);
+      else if (result.outOfRangeOrderIds.length > 0) setError(`Order ${order} is outside the delivery radius.`);
+      else if (result.overCapacityOrderIds.length > 0) setError(`Order ${order} is over the 200 lb robot limit.`);
+      else setError(`No robot is free for order ${order} right now. Try again when one returns.`);
+      setDeliveries(await fetchDeliveries());
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Unable to dispatch this order.");
+    } finally {
+      setDispatchingOrderId(null);
+    }
+  };
+
   const refundOrder = async (orderId: string) => {
     if (!window.confirm("Refund this order and return its items to stock? This only works before the order is dispatched to a robot.")) {
       return;
@@ -823,7 +845,7 @@ function DeliveriesPanel() {
         <button
           type="button"
           onClick={() => void runDispatch()}
-          disabled={loading || dispatching || refundingOrderId !== null}
+          disabled={loading || dispatching || dispatchingOrderId !== null || refundingOrderId !== null}
           className="rounded-full bg-accent px-5 py-2.5 text-sm font-bold text-on-accent transition hover:bg-accent-hover disabled:cursor-wait disabled:opacity-60"
         >
           {dispatching ? "Dispatching…" : "Dispatch paid orders"}
@@ -860,14 +882,25 @@ function DeliveriesPanel() {
                   </td>
                   <td className="px-5 py-4">
                     {canRefundDelivery(delivery.deliveryProgress) ? (
-                      <button
-                        type="button"
-                        onClick={() => void refundOrder(delivery.orderId)}
-                        disabled={dispatching || refundingOrderId !== null}
-                        className="rounded-full border border-border px-3 py-1.5 text-sm font-semibold text-accent-ink transition hover:bg-canvas disabled:cursor-wait disabled:opacity-60"
-                      >
-                        {refundingOrderId === delivery.orderId ? "Refunding…" : "Refund"}
-                      </button>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void dispatchOrder(delivery.orderId)}
+                          disabled={dispatching || dispatchingOrderId !== null || refundingOrderId !== null}
+                          aria-label={`Dispatch order ${shortOrderId(delivery.orderId)}`}
+                          className="rounded-full bg-accent px-3 py-1.5 text-sm font-bold text-on-accent transition hover:bg-accent-hover disabled:cursor-wait disabled:opacity-60"
+                        >
+                          {dispatchingOrderId === delivery.orderId ? "Dispatching…" : "Dispatch"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void refundOrder(delivery.orderId)}
+                          disabled={dispatching || dispatchingOrderId !== null || refundingOrderId !== null}
+                          className="rounded-full border border-border px-3 py-1.5 text-sm font-semibold text-accent-ink transition hover:bg-canvas disabled:cursor-wait disabled:opacity-60"
+                        >
+                          {refundingOrderId === delivery.orderId ? "Refunding…" : "Refund"}
+                        </button>
+                      </div>
                     ) : (
                       <span className="text-sm text-muted">Cancel run to refund</span>
                     )}

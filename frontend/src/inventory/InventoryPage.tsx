@@ -167,6 +167,7 @@ export function InventoryPage() {
 
   return (
     <div className="min-h-screen bg-canvas text-ink">
+      <title>{`OFS StorePage`}</title>
       <SiteHeader />
 
       <main className="mx-auto max-w-7xl px-5 py-8 sm:px-8 sm:py-12">

@@ -44,6 +44,7 @@ export function Register() {
 
   return (
     <div className="box-border flex min-h-screen items-stretch justify-center bg-canvas p-6">
+      <title>{`Account Signup`}</title>
       <div className="my-auto box-border w-full max-w-[620px] rounded-[18px] border border-border bg-white px-7 py-8 shadow-[0_12px_28px_rgba(0,0,0,0.08)]">
         <header className="mb-7 text-center text-[2rem] font-bold text-ink">Create Account</header>
         <form onSubmit={handleSubmit}>

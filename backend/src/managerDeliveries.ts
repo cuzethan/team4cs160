@@ -126,11 +126,19 @@ export function createManagerDeliveriesRouter({ store, deliveryStore, settingsSt
     const user = await findCurrentUser(store, req);
     if (!user) return res.status(401).json({ error: "Not logged in." });
     if (user.role !== "admin") return res.status(403).json({ error: "Manager access is required." });
+    const orderId = typeof req.body?.orderId === "string" ? req.body.orderId : undefined;
+    if (orderId !== undefined) {
+      const queued = await deliveryStore.listUnassignedPaidOrders?.();
+      if (!queued?.some((order) => order.orderId === orderId)) {
+        return res.status(404).json({ error: "This order isn't waiting for dispatch." });
+      }
+    }
     const [settings, robotBase] = await Promise.all([settingsStore.get(), settingsStore.getRobotBase()]);
     const result = await dispatchPendingOrders(deliveryStore, {
       photonUrl: process.env.PHOTON_URL,
       deliveryRadiusMiles: settings.deliveryRadiusMiles,
       robotBase,
+      orderIds: orderId === undefined ? undefined : [orderId],
     });
     res.json(result);
   }));

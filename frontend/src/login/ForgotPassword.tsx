@@ -56,6 +56,7 @@ function ForgotPassword() {
 
   return (
     <div className="absolute left-1/2 top-1/2 box-border w-full max-w-[420px] -translate-x-1/2 -translate-y-1/2 rounded-[18px] border border-border bg-white px-7 py-[34px] shadow-[0_12px_28px_rgba(0,0,0,0.08)]">
+      <title>{`OFS Forgot Password`}</title>
       <h2 className="mb-3 text-center text-[2rem] font-extrabold tracking-tight text-ink">Forgot Password?</h2>
       <p className="mb-8 text-center text-[0.95rem] text-muted">
         {step === "email" && "Enter the email address on your account."}

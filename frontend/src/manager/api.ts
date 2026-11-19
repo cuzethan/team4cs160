@@ -171,10 +171,16 @@ export function recallDeliveryRobot(robotId: string) {
   );
 }
 
-export async function dispatchDeliveries(): Promise<DispatchResult> {
+// With an order id, dispatches just that order; otherwise every paid order waiting in the queue.
+export async function dispatchDeliveries(orderId?: string): Promise<DispatchResult> {
   let response: Response;
   try {
-    response = await fetch("/api/manager/deliveries/dispatch", { method: "POST", credentials: "same-origin" });
+    response = await fetch("/api/manager/deliveries/dispatch", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: orderId ? { "Content-Type": "application/json" } : undefined,
+      body: orderId ? JSON.stringify({ orderId }) : undefined,
+    });
   } catch {
     throw new Error("Can't reach the server. Please try again.");
   }
