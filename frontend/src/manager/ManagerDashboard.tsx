@@ -1124,12 +1124,12 @@ function SalesPieChart({ title, values, className = "" }: { title: string; value
 
   return (
     <section className={`flex min-w-0 flex-col rounded-2xl border border-border bg-white p-4 shadow-[0_3px_12px_rgba(0,0,0,0.06)] sm:p-5 ${className}`} aria-label={title}>
-      <h3 className="text-lg font-extrabold text-ink">{title}</h3>
+      <h3 className="break-words text-lg font-extrabold text-ink">{title}</h3>
       {total <= 0 ? (
         <p className="py-12 text-center text-sm text-muted">No item sales in this range.</p>
       ) : (
-        <div className="mt-4 flex flex-col items-center gap-5 sm:flex-row">
-          <svg viewBox="0 0 200 200" role="group" aria-label={`${title}, total $${total.toFixed(2)}`} className="h-44 w-44 shrink-0">
+        <div className="mt-4 flex min-w-0 flex-col items-center gap-5 2xl:flex-row">
+          <svg viewBox="0 0 200 200" role="group" aria-label={`${title}, total $${total.toFixed(2)}`} className="h-36 w-36 shrink-0">
             {values.length === 1 ? (
               <circle
                 cx="100"
@@ -1202,7 +1202,7 @@ function SalesPieChart({ title, values, className = "" }: { title: string; value
               <li key={item.name} className="flex items-center justify-between gap-2">
                 <span className="flex min-w-0 items-center gap-1.5 text-ink">
                   <span aria-hidden="true" className="h-3 w-3 shrink-0 rounded-sm" style={{ backgroundColor: chartColors[index % chartColors.length] }} />
-                  <span className="truncate">{item.name}</span>
+                  <span className="min-w-0 break-words [overflow-wrap:anywhere]">{item.name}</span>
                 </span>
                 <span className="shrink-0 tabular-nums font-semibold text-ink">
                   ${item.value.toFixed(2)}
