@@ -152,6 +152,7 @@ const suggestionCache = new Map<string, AddressSuggestion[]>();
 export async function suggestAddresses(
   query: string,
   photonUrl = process.env.PHOTON_URL ?? "https://photon.komoot.io",
+  censusUrl = process.env.CENSUS_GEOCODER_URL ?? "https://geocoding.geo.census.gov",
 ): Promise<AddressSuggestion[]> {
   const expanded = expandAbbreviations(query.trim().replace(/\s+/g, " "));
   // A bare house number matches nothing useful.
@@ -159,7 +160,7 @@ export async function suggestAddresses(
   const cacheKey = `${photonUrl}|${expanded.toLowerCase()}`;
   const cached = suggestionCache.get(cacheKey);
   if (cached) return cached;
-  const suggestions = await findSuggestions(expanded, photonUrl);
+  const suggestions = await findSuggestions(expanded, photonUrl, censusUrl);
   if (suggestionCache.size >= 500) suggestionCache.delete(suggestionCache.keys().next().value!);
   suggestionCache.set(cacheKey, suggestions);
   return suggestions;
@@ -181,7 +182,24 @@ export function resetSuggestionPause() {
   suggestionCache.clear();
 }
 
-async function findSuggestions(expanded: string, photonUrl: string): Promise<AddressSuggestion[]> {
+// The ZIP code of one exact house from the Census geocoder, or "" when it doesn't know the house.
+async function censusZip(street: string, city: string, state: string, censusUrl: string) {
+  try {
+    const url = new URL("/geocoder/locations/onelineaddress", censusUrl);
+    url.searchParams.set("address", `${street}, ${city}, ${state}`);
+    url.searchParams.set("benchmark", "Public_AR_Current");
+    url.searchParams.set("format", "json");
+    const response = await fetch(url, { signal: AbortSignal.timeout(4_000) });
+    if (!response.ok) return "";
+    const data = (await response.json()) as { result?: { addressMatches?: { addressComponents?: { zip?: string } }[] } };
+    const zip = data.result?.addressMatches?.[0]?.addressComponents?.zip ?? "";
+    return /^\d{5}$/.test(zip) ? zip : "";
+  } catch {
+    return "";
+  }
+}
+
+async function findSuggestions(expanded: string, photonUrl: string, censusUrl: string): Promise<AddressSuggestion[]> {
   const typedNumber = /^(\d+[A-Za-z]?)\s+(.+)$/.exec(expanded);
   const base = getRobotBaseLocation();
 
@@ -211,12 +229,17 @@ async function findSuggestions(expanded: string, photonUrl: string): Promise<Add
   }
 
   const suggestions: AddressSuggestion[] = [];
-  function add(place: PhotonPlace, street: string) {
+  // A street's ZIP code in OpenStreetMap is just one of the ZIP codes it runs through, so a house
+  // number put on a street gets its ZIP code from the Census geocoder, or none if that's unknown.
+  const needZip: AddressSuggestion[] = [];
+  function add(place: PhotonPlace, street: string, exactHouse = true) {
     const state = STATE_CODES[place.state ?? ""] ?? (/^[A-Z]{2}$/.test(place.state ?? "") ? place.state! : "");
     const zipCode = (place.postcode ?? "").slice(0, 5);
-    if (place.countrycode !== "US" || !place.city || !state || !/^\d{5}$/.test(zipCode)) return;
+    if (place.countrycode !== "US" || !place.city || !state || (exactHouse && !/^\d{5}$/.test(zipCode))) return;
     if (suggestions.length === 5 || suggestions.some((s) => s.street === street && s.city === place.city)) return;
-    suggestions.push({ label: `${street}, ${place.city}, ${state} ${zipCode}`, street, city: place.city, state, zipCode });
+    const suggestion = { label: `${street}, ${place.city}, ${state} ${zipCode}`, street, city: place.city, state, zipCode };
+    if (!exactHouse) needZip.push(suggestion);
+    suggestions.push(suggestion);
   }
 
   // One request at a time, and the street lookup only when the houses didn't fill the list.
@@ -229,7 +252,11 @@ async function findSuggestions(expanded: string, photonUrl: string): Promise<Add
   }
   if (typedNumber && suggestions.length < 3) {
     const streets = await search(typedNumber[2], "street");
-    for (const place of streets) if (place.name && matchesTypedStreet(place.name, typedNumber[2])) add(place, `${typedNumber[1]} ${place.name}`);
+    for (const place of streets) if (place.name && matchesTypedStreet(place.name, typedNumber[2])) add(place, `${typedNumber[1]} ${place.name}`, false);
+    await Promise.all(needZip.map(async (suggestion) => {
+      suggestion.zipCode = await censusZip(suggestion.street, suggestion.city, suggestion.state, censusUrl);
+      suggestion.label = `${suggestion.street}, ${suggestion.city}, ${suggestion.state}${suggestion.zipCode ? ` ${suggestion.zipCode}` : ""}`;
+    }));
   }
   return suggestions;
 }

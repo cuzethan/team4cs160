@@ -228,9 +228,15 @@ describe("address suggestions", () => {
   beforeEach(() => resetSuggestionPause());
   const house = (properties: Record<string, string>) => ({ properties: { countrycode: "US", city: "San Jose", state: "California", postcode: "95112", ...properties } });
 
-  function photon(houses: unknown[], streets: unknown[] = []) {
-    const fetchMock = vi.fn(async (input: string | URL) =>
-      jsonResponse({ features: new URL(String(input)).searchParams.get("layer") === "street" ? streets : houses }));
+  function photon(houses: unknown[], streets: unknown[] = [], censusZips: Record<string, string> = {}) {
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname.startsWith("/geocoder")) {
+        const zip = censusZips[url.searchParams.get("address") ?? ""];
+        return jsonResponse({ result: { addressMatches: zip ? [{ addressComponents: { zip } }] : [] } });
+      }
+      return jsonResponse({ features: url.searchParams.get("layer") === "street" ? streets : houses });
+    });
     vi.stubGlobal("fetch", fetchMock);
     return fetchMock;
   }
@@ -250,15 +256,26 @@ describe("address suggestions", () => {
     expect(url.searchParams.get("bbox")).toBe([-121.8863 - 0.75, 37.3382 - 0.75, -121.8863 + 0.75, 37.3382 + 0.75].join(","));
   });
 
-  it("puts the typed house number on a matching street when the house isn't mapped", async () => {
+  it("puts the typed house number on a matching street, with that house's ZIP code from Census", async () => {
     photon(
       [house({ housenumber: "769", street: "South 11th Street" })],
-      [{ properties: { countrycode: "US", name: "Willow Street", city: "San Jose", state: "CA", postcode: "95125" } }],
+      // OpenStreetMap gives the street one ZIP code even though it runs through several.
+      [{ properties: { countrycode: "US", name: "Willow Street", city: "San Jose", state: "CA", postcode: "95192" } }],
+      { "769 Willow Street, San Jose, CA": "95125" },
     );
 
-    const found = await suggestAddresses("769 Willow St", "http://photon-b");
+    const found = await suggestAddresses("769 Willow St", "http://photon-b", "http://census");
 
     expect(found.map((s) => s.label)).toEqual(["769 Willow Street, San Jose, CA 95125"]);
+    expect(found[0].zipCode).toBe("95125");
+  });
+
+  it("leaves the ZIP code for the shopper when Census doesn't know the house", async () => {
+    photon([], [{ properties: { countrycode: "US", name: "Story Road", city: "San Jose", state: "CA", postcode: "95192" } }]);
+
+    const found = await suggestAddresses("174 Story Rd", "http://photon-f", "http://census");
+
+    expect(found).toEqual([{ label: "174 Story Road, San Jose, CA", street: "174 Story Road", city: "San Jose", state: "CA", zipCode: "" }]);
   });
 
   it("leaves a trailing direction letter alone while it's still being typed", async () => {
