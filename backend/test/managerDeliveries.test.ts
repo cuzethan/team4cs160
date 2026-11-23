@@ -108,6 +108,11 @@ describe("manager deliveries API", () => {
       customerName: "Lee Nguyen",
       deliveryProgress: "Awaiting dispatch",
       eta: null,
+      totalWeight: 3.5,
+      itemCount: 4,
+      addressLocated: false,
+      robotName: null,
+      stopNumber: null,
     }];
     const listDeliveries = vi.fn(async () => deliveries);
     const app = createApp({

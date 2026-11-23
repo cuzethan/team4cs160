@@ -11,7 +11,7 @@ import {
 import { SiteHeader } from "../components/SiteHeader";
 import { emojiFor } from "../inventory/api";
 import type { InventoryProduct } from "../inventory/types";
-import { cancelDeliveryRun, createDeliveryRobot, deleteDeliveryRobot, dispatchDeliveries, fetchDeliveries, fetchDeliveryRobots, fetchDeliveryRuns, fetchDeliverySettings, fetchRobotBaseLocation, fetchManagedInventory, fetchManagerAudit, fetchSales, fetchSalesAnalytics, recallDeliveryRobot, refundDeliveryOrder, restoreDeliveryRobot, retireDeliveryRobot, saveDeliverySettings, saveRobotBaseLocation, updateProduct, type DeliveryRobot, type DeliveryRun, type DeliverySettings, type ManagedProduct, type ManagerAuditEntry, type ManagerDelivery, type ProductCategory, type RobotBaseLocation, type SalesAnalytics, type SalesBucket, type SalesRange } from "./api";
+import { cancelDeliveryRun, createDeliveryRobot, deleteDeliveryRobot, dispatchDeliveries, fetchDeliveries, fetchDeliveryRobots, fetchDeliveryRuns, fetchDeliverySettings, fetchRobotBaseLocation, fetchManagedInventory, fetchManagerAudit, fetchSales, fetchSalesAnalytics, recallDeliveryRobot, refundDeliveryOrder, restoreDeliveryRobot, retireDeliveryRobot, saveDeliverySettings, saveRobotBaseLocation, updateProduct, type DeliveryRobot, type DeliveryRun, type DeliverySettings, type DispatchResult, type ManagedProduct, type ManagerAuditEntry, type ManagerDelivery, type ProductCategory, type RobotBaseLocation, type SalesAnalytics, type SalesBucket, type SalesRange } from "./api";
 import { ProductFormDialog, ProductTable } from "./ProductManager";
 import { FailedPaymentsPanel, InventoryReportPanel } from "./ReportsPanel";
 import { OrdersPanel } from "./OrdersPanel";
@@ -744,6 +744,10 @@ function CustomerDetailPanel({
   );
 }
 
+function formatWeight(pounds: number) {
+  return `${Number.isInteger(pounds) ? pounds : pounds.toFixed(1)} lb`;
+}
+
 function canRefundDelivery(progress: string) {
   return progress.toLowerCase() === "awaiting dispatch";
 }
@@ -756,6 +760,29 @@ function DeliveriesPanel() {
   const [refundingOrderId, setRefundingOrderId] = useState<string | null>(null);
   const [dispatchSummary, setDispatchSummary] = useState("");
   const [error, setError] = useState("");
+  // Why the last dispatch left an order behind, shown on that order's row.
+  const [skipReasons, setSkipReasons] = useState<Record<string, string>>({});
+
+  const rememberSkips = (result: DispatchResult) => {
+    const reasons: Record<string, string> = {};
+    for (const id of result.pendingOrderIds) reasons[id] = "No robot had room. Dispatch again when one is free.";
+    for (const id of result.unresolvedAddressOrderIds) reasons[id] = "Address couldn't be found on the map. Dispatch again.";
+    for (const id of result.outOfRangeOrderIds) reasons[id] = "Address is outside the delivery radius.";
+    for (const id of result.overCapacityOrderIds) reasons[id] = "Over the 200 lb robot limit.";
+    setSkipReasons((current) => {
+      const next = { ...current };
+      for (const run of result.runs) for (const id of run.orderIds) delete next[id];
+      return { ...next, ...reasons };
+    });
+  };
+
+  // Keep progress, robot and stop up to date while robots are out.
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      fetchDeliveries().then(setDeliveries).catch(() => {});
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -782,6 +809,7 @@ function DeliveriesPanel() {
     setDispatchSummary("");
     try {
       const result = await dispatchDeliveries();
+      rememberSkips(result);
       setDispatchSummary(
         `${result.runs.length} run${result.runs.length === 1 ? "" : "s"} created. ` +
         `${result.pendingOrderIds.length} order${result.pendingOrderIds.length === 1 ? " remains" : "s remain"} queued; ` +
@@ -803,6 +831,7 @@ function DeliveriesPanel() {
     setDispatchSummary("");
     try {
       const result = await dispatchDeliveries(orderId);
+      rememberSkips(result);
       const order = shortOrderId(orderId);
       if (result.runs.length > 0) setDispatchSummary(`Order ${order} is on its way.`);
       else if (result.unresolvedAddressOrderIds.length > 0) setError(`We couldn't find order ${order}'s address on the map. Try again in a moment.`);
@@ -859,12 +888,14 @@ function DeliveriesPanel() {
         </p>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-border bg-white shadow-[0_3px_12px_rgba(0,0,0,0.06)]">
-          <table className="w-full min-w-[36rem] text-left">
+          <table className="w-full min-w-[52rem] text-left">
             <thead className="bg-canvas text-xs uppercase tracking-wide text-muted">
               <tr>
                 <th scope="col" className="px-5 py-3 font-bold">Order</th>
                 <th scope="col" className="px-5 py-3 font-bold">Customer</th>
+                <th scope="col" className="px-5 py-3 font-bold">Load</th>
                 <th scope="col" className="px-5 py-3 font-bold">Delivery progress</th>
+                <th scope="col" className="px-5 py-3 font-bold">Robot</th>
                 <th scope="col" className="px-5 py-3 font-bold">ETA</th>
                 <th scope="col" className="px-5 py-3 font-bold">Actions</th>
               </tr>
@@ -876,7 +907,32 @@ function DeliveriesPanel() {
                     {shortOrderId(delivery.orderId)}
                   </th>
                   <td className="px-5 py-4 font-semibold text-ink">{delivery.customerName}</td>
-                  <td className="px-5 py-4 text-sm capitalize text-muted">{delivery.deliveryProgress}</td>
+                  <td className="px-5 py-4 text-sm whitespace-nowrap text-ink">
+                    <span className="font-semibold">{formatWeight(delivery.totalWeight)}</span>
+                    <span className="block text-xs text-muted">{delivery.itemCount} item{delivery.itemCount === 1 ? "" : "s"}</span>
+                  </td>
+                  <td className="px-5 py-4 text-sm text-muted">
+                    <span className="capitalize">{delivery.deliveryProgress.replace(/_/g, " ")}</span>
+                    {canRefundDelivery(delivery.deliveryProgress) && skipReasons[delivery.orderId] ? (
+                      <span role="note" className="mt-1 block rounded-lg bg-warning-soft px-2 py-1 text-xs font-semibold text-warning">
+                        ⚠ {skipReasons[delivery.orderId]}
+                      </span>
+                    ) : canRefundDelivery(delivery.deliveryProgress) && !delivery.addressLocated ? (
+                      <span role="note" className="mt-1 block rounded-lg bg-warning-soft px-2 py-1 text-xs font-semibold text-warning">
+                        ⚠ Address not on the map yet. Dispatch will look it up.
+                      </span>
+                    ) : null}
+                  </td>
+                  <td className="px-5 py-4 text-sm text-ink">
+                    {delivery.robotName ? (
+                      <>
+                        <span className="font-semibold">{delivery.robotName}</span>
+                        {delivery.stopNumber !== null && <span className="block text-xs text-muted">Stop {delivery.stopNumber}</span>}
+                      </>
+                    ) : (
+                      <span className="text-muted">—</span>
+                    )}
+                  </td>
                   <td className="px-5 py-4 text-sm text-muted">
                     {delivery.eta ? new Date(delivery.eta).toLocaleString() : "Not scheduled"}
                   </td>
@@ -909,7 +965,7 @@ function DeliveriesPanel() {
               ))}
               {deliveries.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-5 py-8 text-center text-sm text-muted">
+                  <td colSpan={7} className="px-5 py-8 text-center text-sm text-muted">
                     No orders to deliver yet.
                   </td>
                 </tr>

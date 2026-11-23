@@ -415,6 +415,11 @@ export function createMemoryDeliveryStore(
           customerName: order.customerName,
           deliveryProgress: order.activeDelivery ? "en_route" : "Awaiting dispatch",
           eta: null,
+          totalWeight: order.items.reduce((sum, item) => sum + item.quantity * (item.weightAtPurchase ?? 0), 0),
+          itemCount: order.items.reduce((sum, item) => sum + item.quantity, 0),
+          addressLocated: true,
+          robotName: null,
+          stopNumber: null,
         }));
     },
 

@@ -74,6 +74,11 @@ export type ManagerDelivery = {
   customerName: string;
   deliveryProgress: string;
   eta: string | null;
+  totalWeight: number;
+  itemCount: number;
+  addressLocated: boolean;
+  robotName: string | null;
+  stopNumber: number | null;
 };
 
 export type DispatchResult = {

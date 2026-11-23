@@ -425,6 +425,12 @@ export type ManagerDelivery = {
   customerName: string;
   deliveryProgress: string;
   eta: Date | null;
+  totalWeight: number;
+  itemCount: number;
+  // Whether the delivery address has map coordinates; dispatch can't route it without them.
+  addressLocated: boolean;
+  robotName: string | null;
+  stopNumber: number | null;
 };
 
 export type DeliveryRobot = {
@@ -1079,14 +1085,22 @@ export function createPgDeliveryStore(pool: pg.Pool): DeliveryStore {
         `SELECT o.order_id AS "orderId",
                 concat_ws(' ', u.first_name, u.last_name) AS "customerName",
                 COALESCE(d.delivery_status, 'Awaiting dispatch') AS "deliveryProgress",
-                d.estimated_delivery_time AS eta
+                d.estimated_delivery_time AS eta,
+                o.total_weight::float8 AS "totalWeight",
+                (SELECT COALESCE(sum(quantity), 0)::int FROM OrderItem WHERE order_id = o.order_id) AS "itemCount",
+                (a.latitude IS NOT NULL AND a.longitude IS NOT NULL) AS "addressLocated",
+                d.robot_name AS "robotName",
+                d.stop_number AS "stopNumber"
          FROM Orders o
          JOIN Users u ON u.user_id = o.user_id
+         LEFT JOIN Address a ON a.address_id = o.address_id
          LEFT JOIN LATERAL (
-           SELECT delivery_status, estimated_delivery_time
-           FROM Delivery
-           WHERE order_id = o.order_id
-           ORDER BY updated_at DESC, created_at DESC, delivery_id DESC
+           SELECT dl.delivery_status, dl.estimated_delivery_time, dl.stop_number, r.robot_name
+           FROM Delivery dl
+           LEFT JOIN DeliveryRun dr ON dr.run_id = dl.run_id
+           LEFT JOIN Robot r ON r.robot_id = dr.robot_id
+           WHERE dl.order_id = o.order_id
+           ORDER BY dl.updated_at DESC, dl.created_at DESC, dl.delivery_id DESC
            LIMIT 1
          ) d ON true
          WHERE o.payment_status = 'paid'
