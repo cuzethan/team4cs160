@@ -1,7 +1,9 @@
 import type { UnassignedPaidOrder } from "./store.js";
 import { getRobotBaseLocation } from "./robotBase.js";
 
-export type GeocodedLocation = { latitude: number; longitude: number };
+// foundState and foundZipCode are what the map has for that exact house, when it knows them, so a
+// mistyped state or ZIP code can be caught.
+export type GeocodedLocation = { latitude: number; longitude: number; foundState?: string; foundZipCode?: string };
 
 type PhotonResponse = {
   features?: { geometry?: { coordinates?: [number, number] }; properties?: Record<string, string | undefined> }[];
@@ -16,12 +18,41 @@ export async function geocodeAddress(
   photonUrl = process.env.PHOTON_URL ?? "https://photon.komoot.io",
   censusUrl = process.env.CENSUS_GEOCODER_URL ?? "https://geocoding.geo.census.gov",
 ): Promise<GeocodedLocation | null> {
+  const key = `${photonUrl}|${censusUrl}|${[address.street, address.city, address.state, address.zipCode].map((part) => part.trim().replace(/\s+/g, " ")).join("|").toLowerCase()}`;
+  const cached = geocodeCache.get(key);
+  if (cached && cached.expires > Date.now()) return cached.location;
+  const location = await lookUpAddress(address, photonUrl, censusUrl);
+  // Checkout looks the same address up while the shopper types, again when they pay, and again at
+  // dispatch, so remember answers for ten minutes instead of asking the map service each time.
+  if (geocodeCache.size >= 500) geocodeCache.delete(geocodeCache.keys().next().value!);
+  geocodeCache.set(key, { location, expires: Date.now() + 10 * 60_000 });
+  return location;
+}
+
+const geocodeCache = new Map<string, { location: GeocodedLocation | null; expires: number }>();
+
+export function clearGeocodeCache() {
+  geocodeCache.clear();
+}
+
+async function lookUpAddress(
+  address: Pick<UnassignedPaidOrder, "street" | "city" | "state" | "zipCode">,
+  photonUrl: string,
+  censusUrl: string,
+): Promise<GeocodedLocation | null> {
   let photonError: unknown = null;
+  let photonFound: GeocodedLocation | null = null;
   try {
-    const found = await geocodeWithPhoton(address, photonUrl);
-    if (found) return found;
+    photonFound = await geocodeWithPhoton(address, photonUrl);
   } catch (error) {
     photonError = error;
+  }
+  const typedZip = address.zipCode.trim().slice(0, 5);
+  if (photonFound && (!photonFound.foundZipCode || photonFound.foundZipCode === typedZip)) return photonFound;
+  if (photonFound) {
+    // OpenStreetMap's ZIP code for a house is sometimes wrong, so let Census confirm the typed one.
+    const census = await geocodeWithCensus(address, censusUrl).catch(() => null);
+    return census?.foundZipCode === typedZip ? census : photonFound;
   }
   try {
     const found = await geocodeWithCensus(address, censusUrl);
@@ -58,8 +89,12 @@ async function geocodeWithPhoton(
   for (const feature of data.features ?? []) {
     const coordinates = feature.geometry?.coordinates;
     if (!coordinates || coordinates.length !== 2 || !coordinates.every(Number.isFinite)) continue;
-    if (!isTypedAddress(feature.properties ?? {}, address)) continue;
-    return { longitude: coordinates[0], latitude: coordinates[1] };
+    const place = feature.properties ?? {};
+    if (!isTypedAddress(place, address)) continue;
+    const foundState = stateCode(place.state ?? "") ?? undefined;
+    // A street's ZIP code is only one of the ZIP codes it runs through, so only trust a house's.
+    const foundZipCode = place.housenumber && /^\d{5}/.test(place.postcode ?? "") ? place.postcode!.slice(0, 5) : undefined;
+    return { longitude: coordinates[0], latitude: coordinates[1], foundState, foundZipCode };
   }
   return null;
 }
@@ -88,7 +123,7 @@ function isTypedAddress(place: Record<string, string | undefined>, address: { st
 }
 
 type CensusResponse = {
-  result?: { addressMatches?: { coordinates?: { x?: number; y?: number } }[] };
+  result?: { addressMatches?: { coordinates?: { x?: number; y?: number }; addressComponents?: { zip?: string; state?: string } }[] };
 };
 
 async function geocodeWithCensus(
@@ -103,9 +138,12 @@ async function geocodeWithCensus(
   const response = await fetch(url, { signal: AbortSignal.timeout(8_000) });
   if (!response.ok) throw new Error(`Census geocoder returned HTTP ${response.status}.`);
   const data = (await response.json()) as CensusResponse;
-  const { x, y } = data.result?.addressMatches?.[0]?.coordinates ?? {};
+  const match = data.result?.addressMatches?.[0];
+  const { x, y } = match?.coordinates ?? {};
   if (typeof x !== "number" || typeof y !== "number" || !Number.isFinite(x) || !Number.isFinite(y)) return null;
-  return { longitude: x, latitude: y };
+  const foundState = stateCode(match?.addressComponents?.state ?? "") ?? undefined;
+  const foundZipCode = /^\d{5}$/.test(match?.addressComponents?.zip ?? "") ? match!.addressComponents!.zip : undefined;
+  return { longitude: x, latitude: y, foundState, foundZipCode };
 }
 
 export type AddressSuggestion = { label: string; street: string; city: string; state: string; zipCode: string };
@@ -136,6 +174,16 @@ export function matchesTypedAddress(label: string, typed: string) {
   const words = (text: string) => expandAbbreviations(text.replace(/[.,]/g, " ").trim().replace(/\s+/g, " ")).toLowerCase().split(" ").filter(Boolean);
   const addressWords = words(label);
   return words(typed).every((part) => addressWords.some((word) => word.startsWith(part)));
+}
+
+// "CA", "ca" or "California" as "CA"; null for anything that isn't a US state.
+export function stateCode(text: string) {
+  const trimmed = text.trim().replace(/\s+/g, " ").toLowerCase();
+  if (!trimmed) return null;
+  for (const [name, code] of Object.entries(STATE_CODES)) {
+    if (trimmed === name.toLowerCase() || trimmed === code.toLowerCase()) return code;
+  }
+  return null;
 }
 
 const STATE_CODES: Record<string, string> = {

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { dispatchPendingOrders } from "../src/batching.js";
-import { geocodeAddress, resetSuggestionPause, suggestAddresses } from "../src/geocoder.js";
+import { clearGeocodeCache, geocodeAddress, resetSuggestionPause, suggestAddresses } from "../src/geocoder.js";
 import { calculateDeliveryRoute, type RoutePoint } from "../src/routeService.js";
 import { configureRobotBaseLocation, getRobotBaseLocation, isAtRobotBaseLocation } from "../src/robotBase.js";
 import type { DeliveryStore } from "../src/store.js";
@@ -124,6 +124,7 @@ describe("delivery route with a map server", () => {
 });
 
 describe("address lookup", () => {
+  beforeEach(() => clearGeocodeCache());
   const sjsu = { geometry: { coordinates: [-121.88, 37.33] }, properties: { street: "Washington Square", housenumber: "1", city: "San Jose", postcode: "95192" } };
 
   it("returns the coordinates of the best match near the store", async () => {
@@ -132,7 +133,7 @@ describe("address lookup", () => {
 
     const location = await geocodeAddress({ street: "1 Washington Sq", city: "San Jose", state: "CA", zipCode: "95192" }, "http://photon");
 
-    expect(location).toEqual({ latitude: 37.33, longitude: -121.88 });
+    expect(location).toEqual({ latitude: 37.33, longitude: -121.88, foundZipCode: "95192" });
     const url = new URL(String(fetchMock.mock.calls[0][0]));
     expect(url.searchParams.get("q")).toBe("1 Washington Square, San Jose, CA 95192");
     expect(url.searchParams.get("lat")).toBe("37.3382");
@@ -190,6 +191,7 @@ describe("address lookup", () => {
 });
 
 describe("address lookup backup", () => {
+  beforeEach(() => clearGeocodeCache());
   const address = { street: "200 E Santa Clara St", city: "San Jose", state: "CA", zipCode: "95113" };
 
   it("asks the Census geocoder when Photon is down", async () => {
@@ -209,6 +211,23 @@ describe("address lookup backup", () => {
       ? jsonResponse({ features: [] })
       : jsonResponse({ result: { addressMatches: [{ coordinates: { x: -121.9, y: 37.3 } }] } })));
     await expect(geocodeAddress(address, "http://photon", "http://census")).resolves.toEqual({ latitude: 37.3, longitude: -121.9 });
+  });
+
+  it("lets Census confirm a typed ZIP code that the map has differently", async () => {
+    const photonHouse = { geometry: { coordinates: [-121.89, 37.34] }, properties: { street: "East Santa Clara Street", housenumber: "200", city: "San Jose", state: "California", postcode: "95112" } };
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => String(input).startsWith("http://photon")
+      ? jsonResponse({ features: [photonHouse] })
+      : jsonResponse({ result: { addressMatches: [{ coordinates: { x: -121.8862, y: 37.3382 }, addressComponents: { zip: "95113", state: "CA" } }] } })));
+    await expect(geocodeAddress(address, "http://photon", "http://census")).resolves.toEqual({ latitude: 37.3382, longitude: -121.8862, foundState: "CA", foundZipCode: "95113" });
+  });
+
+  it("remembers an answer instead of asking again", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ result: { addressMatches: [{ coordinates: { x: -121.9, y: 37.3 } }] } }));
+    vi.stubGlobal("fetch", fetchMock);
+    await geocodeAddress(address, "http://photon", "http://census");
+    const calls = fetchMock.mock.calls.length;
+    await geocodeAddress({ ...address, street: " 200  E Santa Clara St" }, "http://photon", "http://census");
+    expect(fetchMock.mock.calls.length).toBe(calls);
   });
 
   it("reports an outage when both are down, so the order stays queued", async () => {

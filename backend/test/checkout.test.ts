@@ -123,6 +123,57 @@ describe("checking a delivery address", () => {
     expect((await agent.post("/api/orders/validate-address").send({})).status).toBe(400);
   });
 
+  it("accepts a state written out or in lowercase, and refuses one that isn't a US state", async () => {
+    const { agent } = await shopper(setup());
+    for (const state of ["California", "ca", " CA "]) {
+      expect((await agent.post("/api/orders/validate-address").send({ address: { ...address, state } })).status).toBe(200);
+    }
+    const bad = await agent.post("/api/orders/validate-address").send({ address: { ...address, state: "ZZ" } });
+    expect(bad.status).toBe(400);
+    expect(bad.body.error).toBe("Please enter a US state, like CA.");
+  });
+
+  it("says when the typed state or ZIP code doesn't match the address found", async () => {
+    const found = { latitude: 37.3352, longitude: -121.8811, foundState: "CA", foundZipCode: "95192" };
+    const { agent } = await shopper(setup({ geocodeDeliveryAddress: async () => found }));
+
+    const wrongState = await agent.post("/api/orders/validate-address").send({ address: { ...address, state: "NY" } });
+    expect(wrongState.status).toBe(400);
+    expect(wrongState.body.error).toBe("This address is in CA, not NY. Please check the state.");
+
+    const wrongZip = await agent.post("/api/orders/validate-address").send({ address: { ...address, zipCode: "90210" } });
+    expect(wrongZip.status).toBe(400);
+    expect(wrongZip.body.error).toBe("The ZIP code for this address is 95192, not 90210. Please check the ZIP code.");
+
+    expect((await agent.post("/api/orders/validate-address").send({ address: { ...address, zipCode: "95192-0001" } })).status).toBe(200);
+  });
+
+  it("refuses fields too long to save", async () => {
+    const { agent } = await shopper(setup());
+    const res = await agent.post("/api/orders/validate-address").send({ address: { ...address, city: "x".repeat(101) } });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("City can be at most 100 characters.");
+  });
+
+  it("saves the state as its two-letter code", async () => {
+    let userId = "";
+    const cart = createMemoryCartStore([
+      { productId: APPLES, name: "Gala Apples", category: "Fruits", unit: "lb", price: 1.49, unitCost: 0.8, weightLbs: 1, quantityInStock: 5, active: true },
+    ]);
+    const { orderStore } = createMemoryOrderStore(cart);
+    const placeOrder = vi.spyOn(orderStore, "placeOrder");
+    const app = setup({
+      cartStore: cart.cartStore,
+      orderStore,
+      payments: { create: async () => ({ clientSecret: "s" }), retrieveSucceeded: async (id) => ({ id, amountCents: 149, userId }), retrieveFailure: async () => null },
+    });
+    const customer = await shopper(app);
+    userId = customer.userId;
+    await customer.agent.post("/api/cart/items").send({ productId: APPLES, quantity: 1 });
+    expect((await customer.agent.post("/api/orders").send({ address: { ...address, state: "california" }, paymentIntentId: "pi_s" })).status).toBe(201);
+    expect(placeOrder.mock.calls[0][1].state).toBe("CA");
+  });
+
   it("explains when the address can't be found or checked", async () => {
     const notFound = await shopper(setup({ geocodeDeliveryAddress: async () => null }));
     const res = await notFound.agent.post("/api/orders/validate-address").send({ address });

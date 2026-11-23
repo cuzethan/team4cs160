@@ -3,7 +3,7 @@ import { handle } from "./auth.js";
 import { createCustomerGuard } from "./cart.js";
 import { PaymentsNotConfiguredError, type PaymentIntentCreator } from "./payments.js";
 import { distanceInMiles, estimateDeliveryMinutes } from "./deliveryArea.js";
-import { geocodeAddress, matchesTypedAddress, suggestAddresses, type AddressSuggestion, type GeocodedLocation } from "./geocoder.js";
+import { geocodeAddress, matchesTypedAddress, stateCode, suggestAddresses, type AddressSuggestion, type GeocodedLocation } from "./geocoder.js";
 import type { ReportsStore } from "./reports.js";
 import { CheckoutError, PaymentAlreadyUsedError, type AuthStore, type DeliveryStore, type OrderStore, type SettingsStore } from "./store.js";
 
@@ -22,7 +22,35 @@ const ZIP_PATTERN = /^\d{5}(-\d{4})?$/;
 type DeliveryAddress = { street: string; city: string; state: string; zipCode: string };
 
 function text(value: unknown) {
-  return typeof value === "string" ? value.trim() : "";
+  return typeof value === "string" ? value.trim().replace(/[^\S\n]+/g, " ") : "";
+}
+
+// Longest each field may be; the database columns are 255, 100 and 20 characters.
+const MAX_LENGTH = { street: 200, city: 100, zipCode: 10, deliveryInstructions: 500 };
+
+// The delivery address from a checkout request, with the state written as its two-letter code.
+function readAddress(body: unknown): { address: DeliveryAddress & { deliveryInstructions: string } } | { error: string } {
+  const input = (body ?? {}) as Record<string, unknown>;
+  const address = {
+    street: text(input.street),
+    city: text(input.city),
+    state: text(input.state),
+    zipCode: text(input.zipCode),
+    deliveryInstructions: typeof input.deliveryInstructions === "string" ? input.deliveryInstructions.trim() : "",
+  };
+  if (!address.street || !address.city || !address.state || !address.zipCode) {
+    return { error: "Please fill in your street, city, state, and ZIP code." };
+  }
+  for (const [field, limit] of Object.entries(MAX_LENGTH) as [keyof typeof MAX_LENGTH, number][]) {
+    if (address[field].length > limit) {
+      const name = { street: "Street address", city: "City", zipCode: "ZIP code", deliveryInstructions: "Drop-off instructions" }[field];
+      return { error: `${name} can be at most ${limit} characters.` };
+    }
+  }
+  if (!ZIP_PATTERN.test(address.zipCode)) return { error: "Please enter a valid ZIP code." };
+  const state = stateCode(address.state);
+  if (!state) return { error: "Please enter a US state, like CA." };
+  return { address: { ...address, state } };
 }
 
 export function createOrderRouter({ store, orderStore, deliveryStore, settingsStore, payments, reportsStore, geocode = geocodeAddress, suggest = suggestAddresses }: OrderOptions) {
@@ -38,6 +66,12 @@ export function createOrderRouter({ store, orderStore, deliveryStore, settingsSt
     }
     if (!location) {
       return { ok: false as const, status: 400 as const, error: "We couldn't locate this delivery address. Please check the address and try again." };
+    }
+    if (location.foundState && location.foundState !== address.state) {
+      return { ok: false as const, status: 400 as const, error: `This address is in ${location.foundState}, not ${address.state}. Please check the state.` };
+    }
+    if (location.foundZipCode && location.foundZipCode !== address.zipCode.slice(0, 5)) {
+      return { ok: false as const, status: 400 as const, error: `The ZIP code for this address is ${location.foundZipCode}, not ${address.zipCode}. Please check the ZIP code.` };
     }
 
     const [base, settings] = await Promise.all([settingsStore.getRobotBase(), settingsStore.get()]);
@@ -75,16 +109,9 @@ export function createOrderRouter({ store, orderStore, deliveryStore, settingsSt
   router.post("/validate-address", handle(async (req, res) => {
     const user = await requireCustomer(req, res);
     if (!user) return;
-    const address = {
-      street: text(req.body?.address?.street),
-      city: text(req.body?.address?.city),
-      state: text(req.body?.address?.state),
-      zipCode: text(req.body?.address?.zipCode),
-    };
-    if (!address.street || !address.city || !address.state || !address.zipCode) {
-      return res.status(400).json({ error: "Please fill in your street, city, state, and ZIP code." });
-    }
-    if (!ZIP_PATTERN.test(address.zipCode)) return res.status(400).json({ error: "Please enter a valid ZIP code." });
+    const parsed = readAddress(req.body?.address);
+    if ("error" in parsed) return res.status(400).json({ error: parsed.error });
+    const { address } = parsed;
 
     const result = await checkDeliveryAddress(address);
     if (!result.ok) return res.status(result.status).json({ error: result.error });
@@ -155,19 +182,9 @@ export function createOrderRouter({ store, orderStore, deliveryStore, settingsSt
     const user = await requireCustomer(req, res);
     if (!user) return;
 
-    const address = {
-      street: text(req.body?.address?.street),
-      city: text(req.body?.address?.city),
-      state: text(req.body?.address?.state),
-      zipCode: text(req.body?.address?.zipCode),
-      deliveryInstructions: text(req.body?.address?.deliveryInstructions),
-    };
-    if (!address.street || !address.city || !address.state || !address.zipCode) {
-      return res.status(400).json({ error: "Please fill in your street, city, state, and ZIP code." });
-    }
-    if (!ZIP_PATTERN.test(address.zipCode)) {
-      return res.status(400).json({ error: "Please enter a valid ZIP code." });
-    }
+    const parsed = readAddress(req.body?.address);
+    if ("error" in parsed) return res.status(400).json({ error: parsed.error });
+    const { address } = parsed;
 
     const paymentIntentId = text(req.body?.paymentIntentId);
 
