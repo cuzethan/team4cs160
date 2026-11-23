@@ -49,7 +49,7 @@ export function createOrderRouter({ store, orderStore, deliveryStore, settingsSt
         error: `Delivery is limited to ${settings.deliveryRadiusMiles} miles from the distribution center. This address is approximately ${distance.toFixed(1)} miles away.`,
       };
     }
-    return { ok: true as const, distanceMiles: distance };
+    return { ok: true as const, distanceMiles: distance, location };
   }
 
   // Address suggestions while the shopper types the street at checkout.
@@ -178,13 +178,14 @@ export function createOrderRouter({ store, orderStore, deliveryStore, settingsSt
         return res.status(409).json({ error: "Your cart total changed. Refresh checkout and pay again." });
       }
 
+      // The location found here is saved with the address, so dispatch doesn't have to look it up again.
       const deliveryCheck = await checkDeliveryAddress(address);
       if (!deliveryCheck.ok) return res.status(deliveryCheck.status).json({ error: deliveryCheck.error });
 
       const order = await orderStore.placeOrder(user.userId, address, {
         paymentIntentId: payment.id,
         amountCents: payment.amountCents,
-      });
+      }, deliveryCheck.location);
       res.status(201).json({ order });
     } catch (error) {
       if (error instanceof CheckoutError) return res.status(409).json({ error: error.message });

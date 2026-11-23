@@ -2,6 +2,7 @@ import type pg from "pg";
 import { getRobotBaseLocation, isAtRobotBaseLocation } from "./robotBase.js";
 import { DEFAULT_DELIVERY_SETTINGS, deliveryFeeFor, roundCents, type DeliverySettings } from "./pricing.js";
 import { calculateDeliveryRoute } from "./routeService.js";
+import type { GeocodedLocation } from "./geocoder.js";
 
 export type { DeliverySettings } from "./pricing.js";
 export { DEFAULT_DELIVERY_SETTINGS } from "./pricing.js";
@@ -1924,7 +1925,7 @@ export interface OrderStore {
   quoteOrder(userId: string): Promise<CheckoutQuote>;
   // Turns the user's cart into a paid order in one transaction: checks stock, saves the
   // address, order, items and payment, takes the items out of stock, and empties the cart.
-  placeOrder(userId: string, address: NewAddress, payment: PaidCheckout): Promise<OrderRecord>;
+  placeOrder(userId: string, address: NewAddress, payment: PaidCheckout, location?: GeocodedLocation): Promise<OrderRecord>;
   listOrders(userId: string): Promise<OrderRecord[]>;
   // Every customer's orders, newest first, for the manager's Orders page.
   listAllOrders?(limit?: number): Promise<(OrderRecord & { userId: string })[]>;
@@ -2003,7 +2004,7 @@ export function createPgOrderStore(pool: pg.Pool, settingsStore: SettingsStore =
       return quoteFromLines(await loadCheckoutLines(pool, userId, false), await settingsStore.get());
     },
 
-    async placeOrder(userId, address, payment) {
+    async placeOrder(userId, address, payment, location) {
       const client = await pool.connect();
       try {
         await client.query("BEGIN");
@@ -2016,10 +2017,11 @@ export function createPgOrderStore(pool: pg.Pool, settingsStore: SettingsStore =
         }
 
         const { rows: [{ addressId }] } = await client.query<{ addressId: string }>(
-          `INSERT INTO Address (user_id, street, city, state, zip_code, delivery_instructions)
-           VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''))
+          `INSERT INTO Address (user_id, street, city, state, zip_code, delivery_instructions, latitude, longitude)
+           VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), $7, $8)
            RETURNING address_id AS "addressId"`,
-          [userId, address.street, address.city, address.state, address.zipCode, address.deliveryInstructions],
+          [userId, address.street, address.city, address.state, address.zipCode, address.deliveryInstructions,
+           location?.latitude ?? null, location?.longitude ?? null],
         );
 
         const { rows: [order] } = await client.query<OrderRow>(

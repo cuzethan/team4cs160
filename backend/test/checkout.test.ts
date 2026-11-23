@@ -171,6 +171,30 @@ describe("paying at checkout", () => {
     expect((await customer.agent.get("/api/cart")).body.items).toHaveLength(1);
   });
 
+  it("saves the checked location with the order so dispatch doesn't look it up again", async () => {
+    let userId = "";
+    const cart = createMemoryCartStore([
+      { productId: APPLES, name: "Gala Apples", category: "Fruits", unit: "lb", price: 1.49, unitCost: 0.8, weightLbs: 1, quantityInStock: 5, active: true },
+    ]);
+    const { orderStore } = createMemoryOrderStore(cart);
+    const placeOrder = vi.spyOn(orderStore, "placeOrder");
+    const app = setup({
+      cartStore: cart.cartStore,
+      orderStore,
+      payments: {
+        create: async () => ({ clientSecret: "secret" }),
+        retrieveSucceeded: async (id) => ({ id, amountCents: 149, userId }),
+        retrieveFailure: async () => null,
+      },
+    });
+    const customer = await shopper(app);
+    userId = customer.userId;
+    await customer.agent.post("/api/cart/items").send({ productId: APPLES, quantity: 1 });
+
+    expect((await customer.agent.post("/api/orders").send({ address, paymentIntentId: "pi_1" })).status).toBe(201);
+    expect(placeOrder).toHaveBeenCalledWith(userId, expect.objectContaining(address), expect.anything(), { latitude: 37.3352, longitude: -121.8811 });
+  });
+
   it("refuses an order paid by someone else or with a bad ZIP code", async () => {
     const app = setup({
       payments: {
