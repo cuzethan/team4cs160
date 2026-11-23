@@ -4,7 +4,7 @@ import { getRobotBaseLocation } from "./robotBase.js";
 export type GeocodedLocation = { latitude: number; longitude: number };
 
 type PhotonResponse = {
-  features?: { geometry?: { coordinates?: [number, number] } }[];
+  features?: { geometry?: { coordinates?: [number, number] }; properties?: Record<string, string | undefined> }[];
 };
 
 /**
@@ -40,8 +40,10 @@ async function geocodeWithPhoton(
   photonUrl: string,
 ): Promise<GeocodedLocation | null> {
   const url = new URL("/api", photonUrl);
-  url.searchParams.set("q", `${address.street}, ${address.city}, ${address.state} ${address.zipCode}`);
-  url.searchParams.set("limit", "1");
+  // Photon matches "Story Road" but not "Story Rd".
+  const street = expandAbbreviations(address.street.trim().replace(/\s+/g, " "));
+  url.searchParams.set("q", `${street}, ${address.city}, ${address.state} ${address.zipCode}`);
+  url.searchParams.set("limit", "5");
   // Prefer locations near the configured robot base.
   const base = getRobotBaseLocation();
   url.searchParams.set("lat", String(base.latitude));
@@ -51,9 +53,38 @@ async function geocodeWithPhoton(
   const response = await fetch(url, { signal: AbortSignal.timeout(5_000) });
   if (!response.ok) throw new Error(`Photon returned HTTP ${response.status}.`);
   const data = (await response.json()) as PhotonResponse;
-  const coordinates = data.features?.[0]?.geometry?.coordinates;
-  if (!coordinates || coordinates.length !== 2 || !coordinates.every(Number.isFinite)) return null;
-  return { longitude: coordinates[0], latitude: coordinates[1] };
+  // Photon always answers with its closest guess, even a shop whose name shares one word with the
+  // address. Only accept a place on the street that was typed, in the city or ZIP code that was typed.
+  for (const feature of data.features ?? []) {
+    const coordinates = feature.geometry?.coordinates;
+    if (!coordinates || coordinates.length !== 2 || !coordinates.every(Number.isFinite)) continue;
+    if (!isTypedAddress(feature.properties ?? {}, address)) continue;
+    return { longitude: coordinates[0], latitude: coordinates[1] };
+  }
+  return null;
+}
+
+const NUMBER_WORDS = new Set(["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"]);
+// Directions and street types are often left off or abbreviated differently, so they don't have to match.
+const OPTIONAL_STREET_WORDS = new Set([...Object.values({
+  st: "street", rd: "road", ave: "avenue", blvd: "boulevard", dr: "drive", ln: "lane", ct: "court", pl: "place",
+  sq: "square", pkwy: "parkway", hwy: "highway", cir: "circle", ter: "terrace", expy: "expressway", way: "way",
+  n: "north", s: "south", e: "east", w: "west",
+}), "n", "s", "e", "w", "ne", "nw", "se", "sw"]);
+
+function isTypedAddress(place: Record<string, string | undefined>, address: { street: string; city: string; zipCode: string }) {
+  // Leave out an apartment or unit number; the map only knows the building.
+  const street = address.street.replace(/[.,]/g, " ").replace(/\s(#|apt|unit|suite|ste)\b.*$/i, "");
+  const typedWords = expandAbbreviations(street.trim().replace(/\s+/g, " ")).toLowerCase().split(" ")
+    .filter((word, index) => !(index === 0 && (/^\d+[a-z]?$/.test(word) || NUMBER_WORDS.has(word))));
+  const nameWords = typedWords.filter((word) => !OPTIONAL_STREET_WORDS.has(word));
+  const placeStreet = (place.street ?? (place.osm_key === "highway" ? place.name : undefined) ?? "").toLowerCase();
+  if (!placeStreet || nameWords.length === 0) return false;
+  const placeWords = placeStreet.replace(/[.,]/g, " ").split(/\s+/);
+  if (!nameWords.every((word) => placeWords.includes(word))) return false;
+  const sameCity = (place.city ?? "").toLowerCase() === address.city.trim().toLowerCase();
+  const sameZip = (place.postcode ?? "").slice(0, 5) === address.zipCode.trim().slice(0, 5);
+  return sameCity || sameZip;
 }
 
 type CensusResponse = {

@@ -124,16 +124,35 @@ describe("delivery route with a map server", () => {
 });
 
 describe("address lookup", () => {
+  const sjsu = { geometry: { coordinates: [-121.88, 37.33] }, properties: { street: "Washington Square", housenumber: "1", city: "San Jose", postcode: "95192" } };
+
   it("returns the coordinates of the best match near the store", async () => {
-    const fetchMock = vi.fn(async () => jsonResponse({ features: [{ geometry: { coordinates: [-121.88, 37.33] } }] }));
+    const fetchMock = vi.fn(async () => jsonResponse({ features: [sjsu] }));
     vi.stubGlobal("fetch", fetchMock);
 
     const location = await geocodeAddress({ street: "1 Washington Sq", city: "San Jose", state: "CA", zipCode: "95192" }, "http://photon");
 
     expect(location).toEqual({ latitude: 37.33, longitude: -121.88 });
     const url = new URL(String(fetchMock.mock.calls[0][0]));
-    expect(url.searchParams.get("q")).toBe("1 Washington Sq, San Jose, CA 95192");
+    expect(url.searchParams.get("q")).toBe("1 Washington Square, San Jose, CA 95192");
     expect(url.searchParams.get("lat")).toBe("37.3382");
+  });
+
+  it("ignores guesses that aren't on the typed street and in the typed city or ZIP", async () => {
+    const guesses = [
+      { geometry: { coordinates: [-121.88, 37.23] }, properties: { name: "Blvd Coffee", street: "Meridian Avenue", city: "San Jose", postcode: "95118" } },
+      { geometry: { coordinates: [-121.9, 37.4] }, properties: { street: "Nowhere Boulevard", city: "Fresno", postcode: "93701" } },
+    ];
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => String(input).startsWith("http://photon")
+      ? jsonResponse({ features: guesses })
+      : jsonResponse({ result: { addressMatches: [] } })));
+    await expect(geocodeAddress({ street: "99999 Nowhere Blvd", city: "San Jose", state: "CA", zipCode: "95112" }, "http://photon", "http://census")).resolves.toBeNull();
+  });
+
+  it("accepts a street-only match, an apartment number and a different street type spelling", async () => {
+    const storyRoad = { geometry: { coordinates: [-121.86, 37.33] }, properties: { osm_key: "highway", name: "Story Road", city: "San Jose", postcode: "95116" } };
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ features: [storyRoad] })));
+    await expect(geocodeAddress({ street: "174 Story Rd. Apt 4", city: "San Jose", state: "CA", zipCode: "95112" }, "http://photon")).resolves.toEqual({ latitude: 37.33, longitude: -121.86 });
   });
 
   it("returns nothing when the address isn't found", async () => {
@@ -149,7 +168,7 @@ describe("address lookup", () => {
   it("is used by dispatch when no lookup is passed in", async () => {
     vi.stubEnv("VALHALLA_URL", "");
     vi.stubEnv("PHOTON_URL", "http://photon");
-    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ features: [{ geometry: { coordinates: [-121.88, 37.33] } }] })));
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ features: [sjsu] })));
     const store: DeliveryStore = {
       listDeliveries: async () => [],
       listUnassignedPaidOrders: async () => [{
