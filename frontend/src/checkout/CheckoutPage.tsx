@@ -203,7 +203,9 @@ function PayableCheckout(props: Omit<CheckoutFormProps, "payment" | "submitError
       const order = await placeOrder(props.address, result.paymentIntent.id);
       navigate("/orders", { state: { placedOrderId: order.id } });
     } catch (error) {
-      setSubmitError(`${(error as Error).message} Your card was charged, so please don't try again.`);
+      // The server says whether the payment was refunded; otherwise the card was charged.
+      const message = (error as Error).message;
+      setSubmitError(/refund/i.test(message) ? message : `${message} Your card was charged, so please don't try again.`);
       setIsSubmitting(false);
     }
   };

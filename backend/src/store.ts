@@ -1894,6 +1894,8 @@ export type OrderRecord = {
 
 // Thrown when checkout can't go ahead; the message is safe to show the customer.
 export class CheckoutError extends Error {}
+// The Stripe payment already paid for an order, for example after a double click on Place order.
+export class PaymentAlreadyUsedError extends CheckoutError {}
 
 export type CheckoutQuote = {
   subtotal: number;
@@ -2042,6 +2044,11 @@ export function createPgOrderStore(pool: pg.Pool, settingsStore: SettingsStore =
       const client = await pool.connect();
       try {
         await client.query("BEGIN");
+
+        // One order per payment. The lock makes a second request with the same payment wait for the first.
+        await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [payment.paymentIntentId]);
+        const { rowCount: used } = await client.query("SELECT 1 FROM Payment WHERE transaction_reference = $1", [payment.paymentIntentId]);
+        if (used) throw new PaymentAlreadyUsedError("This payment was already used for an order. Check your orders page.");
 
         // Lock the products being bought so two checkouts can't oversell the same stock.
         const lines = await loadCheckoutLines(client, userId, true);

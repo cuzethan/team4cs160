@@ -211,6 +211,73 @@ describe("paying at checkout", () => {
     expect(placeOrder).toHaveBeenCalledWith(userId, expect.objectContaining(address), expect.anything(), { latitude: 37.3352, longitude: -121.8811 });
   });
 
+  describe("when the card was charged but the order can't be saved", () => {
+    async function paidShopper(overrides: Partial<AppOptions> = {}) {
+      let userId = "";
+      const refund = vi.fn(async () => {});
+      const app = setup({
+        payments: {
+          create: async () => ({ clientSecret: "secret" }),
+          retrieveSucceeded: async (id) => ({ id, amountCents: 149, userId }),
+          retrieveFailure: async () => null,
+          refund,
+        },
+        ...overrides,
+      });
+      const customer = await shopper(app);
+      userId = customer.userId;
+      await customer.agent.post("/api/cart/items").send({ productId: APPLES, quantity: 1 });
+      return { ...customer, refund };
+    }
+
+    it("refunds the payment when the address can't be checked", async () => {
+      const { agent, refund } = await paidShopper({ geocodeDeliveryAddress: async () => { throw new Error("down"); } });
+      const res = await agent.post("/api/orders").send({ address, paymentIntentId: "pi_1" });
+      expect(res.status).toBe(503);
+      expect(res.body.error).toMatch(/payment was refunded/);
+      expect(refund).toHaveBeenCalledWith("pi_1");
+    });
+
+    it("refunds the payment when saving the order fails", async () => {
+      const cart = createMemoryCartStore([
+        { productId: APPLES, name: "Gala Apples", category: "Fruits", unit: "lb", price: 1.49, unitCost: 0.8, weightLbs: 1, quantityInStock: 5, active: true },
+      ]);
+      const { orderStore } = createMemoryOrderStore(cart);
+      orderStore.placeOrder = async () => { throw new Error("database down"); };
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      const { agent, refund } = await paidShopper({ cartStore: cart.cartStore, orderStore });
+      const res = await agent.post("/api/orders").send({ address, paymentIntentId: "pi_2" });
+      expect(res.status).toBe(500);
+      expect(res.body.error).toMatch(/couldn't save your order\. Your payment was refunded/);
+      expect(refund).toHaveBeenCalledWith("pi_2");
+      vi.restoreAllMocks();
+    });
+
+    it("says to contact us when the refund itself fails", async () => {
+      const { agent, refund } = await paidShopper({ geocodeDeliveryAddress: async () => null });
+      refund.mockRejectedValueOnce(new Error("stripe down"));
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      const res = await agent.post("/api/orders").send({ address, paymentIntentId: "pi_3" });
+      expect(res.body.error).toMatch(/contact us for a refund/);
+      vi.restoreAllMocks();
+    });
+
+    it("never refunds a payment that already paid for an order", async () => {
+      const cart = createMemoryCartStore([
+        { productId: APPLES, name: "Gala Apples", category: "Fruits", unit: "lb", price: 1.49, unitCost: 0.8, weightLbs: 1, quantityInStock: 5, active: true },
+      ]);
+      const { agent, refund } = await paidShopper({ cartStore: cart.cartStore, orderStore: createMemoryOrderStore(cart).orderStore });
+      expect((await agent.post("/api/orders").send({ address, paymentIntentId: "pi_4" })).status).toBe(201);
+
+      // Same total in the cart again, same payment sent again.
+      await agent.post("/api/cart/items").send({ productId: APPLES, quantity: 1 });
+      const again = await agent.post("/api/orders").send({ address, paymentIntentId: "pi_4" });
+      expect(again.status).toBe(409);
+      expect(again.body.error).toMatch(/already used/);
+      expect(refund).not.toHaveBeenCalled();
+    });
+  });
+
   it("refuses an order paid by someone else or with a bad ZIP code", async () => {
     const app = setup({
       payments: {

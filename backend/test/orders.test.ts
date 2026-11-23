@@ -228,7 +228,7 @@ describe("orders API", () => {
 
     const wrongAmount = await agent.post("/api/orders").send(payFor(userId, 1));
     expect(wrongAmount.status).toBe(409);
-    expect(wrongAmount.body.error).toBe("Your cart total changed. Refresh checkout and pay again.");
+    expect(wrongAmount.body.error).toMatch(/^Your cart total changed. Refresh checkout and pay again. Your card was charged/);
 
     expect((await agent.get("/api/cart")).body.items).toHaveLength(1);
     expect(cart.products.get(APPLES)!.quantityInStock).toBe(5);

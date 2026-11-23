@@ -5,7 +5,7 @@ import { PaymentsNotConfiguredError, type PaymentIntentCreator } from "./payment
 import { distanceInMiles, estimateDeliveryMinutes } from "./deliveryArea.js";
 import { geocodeAddress, suggestAddresses, type AddressSuggestion, type GeocodedLocation } from "./geocoder.js";
 import type { ReportsStore } from "./reports.js";
-import { CheckoutError, type AuthStore, type DeliveryStore, type OrderStore, type SettingsStore } from "./store.js";
+import { CheckoutError, PaymentAlreadyUsedError, type AuthStore, type DeliveryStore, type OrderStore, type SettingsStore } from "./store.js";
 
 export type OrderOptions = {
   store: AuthStore;
@@ -182,19 +182,46 @@ export function createOrderRouter({ store, orderStore, deliveryStore, settingsSt
       if (!payment || payment.userId !== user.userId) {
         return res.status(402).json({ error: "Your payment could not be verified." });
       }
+
+      // From here the card has been charged, so if the order can't be saved the money goes back.
+      const refundWith = async (status: number, reason: string) => {
+        let refunded = false;
+        try {
+          if (payments.refund) {
+            await payments.refund(payment.id);
+            refunded = true;
+          }
+        } catch (refundError) {
+          console.error("Refund failed for unplaced order", payment.id, refundError);
+        }
+        res.status(status).json({
+          error: refunded
+            ? `${reason} Your payment was refunded, so you weren't charged.`
+            : `${reason} Your card was charged; please contact us for a refund instead of paying again.`,
+        });
+      };
+
       if (payment.amountCents !== Math.round(quote.grandTotal * 100)) {
-        return res.status(409).json({ error: "Your cart total changed. Refresh checkout and pay again." });
+        return refundWith(409, "Your cart total changed. Refresh checkout and pay again.");
       }
 
-      // The location found here is saved with the address, so dispatch doesn't have to look it up again.
-      const deliveryCheck = await checkDeliveryAddress(address);
-      if (!deliveryCheck.ok) return res.status(deliveryCheck.status).json({ error: deliveryCheck.error });
+      try {
+        // The location found here is saved with the address, so dispatch doesn't have to look it up again.
+        const deliveryCheck = await checkDeliveryAddress(address);
+        if (!deliveryCheck.ok) return refundWith(deliveryCheck.status, deliveryCheck.error);
 
-      const order = await orderStore.placeOrder(user.userId, address, {
-        paymentIntentId: payment.id,
-        amountCents: payment.amountCents,
-      }, deliveryCheck.location);
-      res.status(201).json({ order });
+        const order = await orderStore.placeOrder(user.userId, address, {
+          paymentIntentId: payment.id,
+          amountCents: payment.amountCents,
+        }, deliveryCheck.location);
+        return res.status(201).json({ order });
+      } catch (error) {
+        // A payment that already paid for an order keeps paying for it.
+        if (error instanceof PaymentAlreadyUsedError) return res.status(409).json({ error: error.message });
+        if (error instanceof CheckoutError) return refundWith(409, error.message);
+        console.error("Order could not be saved", error);
+        return refundWith(500, "We couldn't save your order.");
+      }
     } catch (error) {
       if (error instanceof CheckoutError) return res.status(409).json({ error: error.message });
       if (error instanceof PaymentsNotConfiguredError) {

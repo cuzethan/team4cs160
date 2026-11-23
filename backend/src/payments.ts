@@ -35,6 +35,8 @@ export type PaymentIntentCreator = {
   retrieveSucceeded(id: string): Promise<ConfirmedPayment | null>;
   // The latest declined attempt for this id; null when Stripe has none.
   retrieveFailure(id: string): Promise<FailedPaymentAttempt | null>;
+  // Gives back a charge whose order couldn't be saved. Safe to call twice for the same payment.
+  refund?(id: string): Promise<void>;
 };
 
 export class PaymentsNotConfiguredError extends Error {}
@@ -98,6 +100,11 @@ export function createStripePayments(secretKey: string | undefined, customers?: 
         if (error instanceof Stripe.errors.StripeInvalidRequestError) return null;
         throw error;
       }
+    },
+
+    async refund(id) {
+      if (!stripe) throw new PaymentsNotConfiguredError("STRIPE_SECRET_KEY is not set.");
+      await stripe.refunds.create({ payment_intent: id }, { idempotencyKey: `unplaced-order-${id}` });
     },
 
     async retrieveFailure(id) {

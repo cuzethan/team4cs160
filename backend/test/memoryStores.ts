@@ -12,6 +12,7 @@ import {
   type ManagerDelivery,
   type RefundResult,
   CheckoutError,
+  PaymentAlreadyUsedError,
   quoteFromLines,
   type OrderRecord,
   type OrderStore,
@@ -156,6 +157,7 @@ export function createMemoryCartStore(products: CartProduct[]) {
 
 export function createMemoryOrderStore({ cartStore, products, carts }: ReturnType<typeof createMemoryCartStore>, settingsStore?: SettingsStore) {
   const orders: (OrderRecord & { userId: string; address: SavedAddress })[] = [];
+  const usedPayments = new Set<string>();
 
   async function pricedLines(userId: string) {
     const lines = await cartStore.listCartItems(userId);
@@ -194,6 +196,7 @@ export function createMemoryOrderStore({ cartStore, products, carts }: ReturnTyp
       return quoteFromLines(await pricedLines(userId), await settingsStore?.get() ?? DEFAULT_DELIVERY_SETTINGS);
     },
     async placeOrder(userId, address, payment) {
+      if (usedPayments.has(payment.paymentIntentId)) throw new PaymentAlreadyUsedError("This payment was already used for an order. Check your orders page.");
       const lines = await cartStore.listCartItems(userId);
       const { subtotal, deliveryFee, grandTotal, totalWeight } = quoteFromLines(await pricedLines(userId), await settingsStore?.get() ?? DEFAULT_DELIVERY_SETTINGS);
       if (Math.round(grandTotal * 100) !== payment.amountCents) {
@@ -222,6 +225,7 @@ export function createMemoryOrderStore({ cartStore, products, carts }: ReturnTyp
       for (const line of lines) products.get(line.productId)!.quantityInStock -= line.quantity;
       carts.delete(userId);
       orders.push(order);
+      usedPayments.add(payment.paymentIntentId);
       const { userId: _userId, ...record } = order;
       return record;
     },
