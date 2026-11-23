@@ -67,7 +67,35 @@ describe("address suggestions", () => {
   it("says suggestions are unavailable when the lookup fails", async () => {
     const { agent } = await shopper(setup({ suggestAddresses: async () => { throw new Error("down"); } }));
     const res = await agent.get("/api/orders/address-suggestions").query({ q: "1 Washington" });
-    expect(res.status).toBe(503);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ suggestions: [], unavailable: true });
+  });
+
+  it("suggests the shopper's own past addresses first, even when the lookup is down", async () => {
+    const pastAddress = { label: "1 Washington Sq, San Jose, CA 95192", street: "1 Washington Sq", city: "San Jose", state: "CA", zipCode: "95192" };
+    const cart = createMemoryCartStore([]);
+    const { orderStore } = createMemoryOrderStore(cart);
+    orderStore.listAddresses = async () => [{ street: "1 Washington Sq", city: "San Jose", state: "CA", zipCode: "95192", deliveryInstructions: "" }];
+    let down = false;
+    const { agent } = await shopper(setup({ orderStore, suggestAddresses: async () => { if (down) throw new Error("down"); return [suggestion, pastAddress]; } }));
+
+    expect((await agent.get("/api/orders/address-suggestions").query({ q: "" })).body).toEqual({ suggestions: [pastAddress] });
+    expect((await agent.get("/api/orders/address-suggestions").query({ q: "1 wash" })).body).toEqual({ suggestions: [pastAddress, suggestion] });
+    down = true;
+    expect((await agent.get("/api/orders/address-suggestions").query({ q: "1 wash" })).body).toEqual({ suggestions: [pastAddress], unavailable: true });
+    expect((await agent.get("/api/orders/address-suggestions").query({ q: "Story" })).body).toEqual({ suggestions: [], unavailable: true });
+  });
+
+  it("only suggests a past address when every typed word starts one of its words", async () => {
+    const cart = createMemoryCartStore([]);
+    const { orderStore } = createMemoryOrderStore(cart);
+    orderStore.listAddresses = async () => [{ street: "4343 Stevens Creek Blvd", city: "Santa Clara", state: "CA", zipCode: "95051", deliveryInstructions: "" }];
+    const { agent } = await shopper(setup({ orderStore, suggestAddresses: async () => [] }));
+    const labels = async (q: string) => (await agent.get("/api/orders/address-suggestions").query({ q })).body.suggestions.map((s: { street: string }) => s.street);
+
+    expect(await labels("Santa Clara St")).toEqual([]);
+    expect(await labels("4343 Stevens Creek Boulevard")).toEqual(["4343 Stevens Creek Blvd"]);
+    expect(await labels("4343 stev")).toEqual(["4343 Stevens Creek Blvd"]);
   });
 
   it("is only for signed-in shoppers", async () => {
@@ -93,6 +121,57 @@ describe("checking a delivery address", () => {
     expect(badZip.status).toBe(400);
     expect(badZip.body.error).toMatch(/valid ZIP/);
     expect((await agent.post("/api/orders/validate-address").send({})).status).toBe(400);
+  });
+
+  it("accepts a state written out or in lowercase, and refuses one that isn't a US state", async () => {
+    const { agent } = await shopper(setup());
+    for (const state of ["California", "ca", " CA "]) {
+      expect((await agent.post("/api/orders/validate-address").send({ address: { ...address, state } })).status).toBe(200);
+    }
+    const bad = await agent.post("/api/orders/validate-address").send({ address: { ...address, state: "ZZ" } });
+    expect(bad.status).toBe(400);
+    expect(bad.body.error).toBe("Please enter a US state, like CA.");
+  });
+
+  it("says when the typed state or ZIP code doesn't match the address found", async () => {
+    const found = { latitude: 37.3352, longitude: -121.8811, foundState: "CA", foundZipCode: "95192" };
+    const { agent } = await shopper(setup({ geocodeDeliveryAddress: async () => found }));
+
+    const wrongState = await agent.post("/api/orders/validate-address").send({ address: { ...address, state: "NY" } });
+    expect(wrongState.status).toBe(400);
+    expect(wrongState.body.error).toBe("This address is in CA, not NY. Please check the state.");
+
+    const wrongZip = await agent.post("/api/orders/validate-address").send({ address: { ...address, zipCode: "90210" } });
+    expect(wrongZip.status).toBe(400);
+    expect(wrongZip.body.error).toBe("The ZIP code for this address is 95192, not 90210. Please check the ZIP code.");
+
+    expect((await agent.post("/api/orders/validate-address").send({ address: { ...address, zipCode: "95192-0001" } })).status).toBe(200);
+  });
+
+  it("refuses fields too long to save", async () => {
+    const { agent } = await shopper(setup());
+    const res = await agent.post("/api/orders/validate-address").send({ address: { ...address, city: "x".repeat(101) } });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("City can be at most 100 characters.");
+  });
+
+  it("saves the state as its two-letter code", async () => {
+    let userId = "";
+    const cart = createMemoryCartStore([
+      { productId: APPLES, name: "Gala Apples", category: "Fruits", unit: "lb", price: 1.49, unitCost: 0.8, weightLbs: 1, quantityInStock: 5, active: true },
+    ]);
+    const { orderStore } = createMemoryOrderStore(cart);
+    const placeOrder = vi.spyOn(orderStore, "placeOrder");
+    const app = setup({
+      cartStore: cart.cartStore,
+      orderStore,
+      payments: { create: async () => ({ clientSecret: "s" }), retrieveSucceeded: async (id) => ({ id, amountCents: 149, userId }), retrieveFailure: async () => null },
+    });
+    const customer = await shopper(app);
+    userId = customer.userId;
+    await customer.agent.post("/api/cart/items").send({ productId: APPLES, quantity: 1 });
+    expect((await customer.agent.post("/api/orders").send({ address: { ...address, state: "california" }, paymentIntentId: "pi_s" })).status).toBe(201);
+    expect(placeOrder.mock.calls[0][1].state).toBe("CA");
   });
 
   it("explains when the address can't be found or checked", async () => {
@@ -193,6 +272,73 @@ describe("paying at checkout", () => {
 
     expect((await customer.agent.post("/api/orders").send({ address, paymentIntentId: "pi_1" })).status).toBe(201);
     expect(placeOrder).toHaveBeenCalledWith(userId, expect.objectContaining(address), expect.anything(), { latitude: 37.3352, longitude: -121.8811 });
+  });
+
+  describe("when the card was charged but the order can't be saved", () => {
+    async function paidShopper(overrides: Partial<AppOptions> = {}) {
+      let userId = "";
+      const refund = vi.fn(async () => {});
+      const app = setup({
+        payments: {
+          create: async () => ({ clientSecret: "secret" }),
+          retrieveSucceeded: async (id) => ({ id, amountCents: 149, userId }),
+          retrieveFailure: async () => null,
+          refund,
+        },
+        ...overrides,
+      });
+      const customer = await shopper(app);
+      userId = customer.userId;
+      await customer.agent.post("/api/cart/items").send({ productId: APPLES, quantity: 1 });
+      return { ...customer, refund };
+    }
+
+    it("refunds the payment when the address can't be checked", async () => {
+      const { agent, refund } = await paidShopper({ geocodeDeliveryAddress: async () => { throw new Error("down"); } });
+      const res = await agent.post("/api/orders").send({ address, paymentIntentId: "pi_1" });
+      expect(res.status).toBe(503);
+      expect(res.body.error).toMatch(/payment was refunded/);
+      expect(refund).toHaveBeenCalledWith("pi_1");
+    });
+
+    it("refunds the payment when saving the order fails", async () => {
+      const cart = createMemoryCartStore([
+        { productId: APPLES, name: "Gala Apples", category: "Fruits", unit: "lb", price: 1.49, unitCost: 0.8, weightLbs: 1, quantityInStock: 5, active: true },
+      ]);
+      const { orderStore } = createMemoryOrderStore(cart);
+      orderStore.placeOrder = async () => { throw new Error("database down"); };
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      const { agent, refund } = await paidShopper({ cartStore: cart.cartStore, orderStore });
+      const res = await agent.post("/api/orders").send({ address, paymentIntentId: "pi_2" });
+      expect(res.status).toBe(500);
+      expect(res.body.error).toMatch(/couldn't save your order\. Your payment was refunded/);
+      expect(refund).toHaveBeenCalledWith("pi_2");
+      vi.restoreAllMocks();
+    });
+
+    it("says to contact us when the refund itself fails", async () => {
+      const { agent, refund } = await paidShopper({ geocodeDeliveryAddress: async () => null });
+      refund.mockRejectedValueOnce(new Error("stripe down"));
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      const res = await agent.post("/api/orders").send({ address, paymentIntentId: "pi_3" });
+      expect(res.body.error).toMatch(/contact us for a refund/);
+      vi.restoreAllMocks();
+    });
+
+    it("never refunds a payment that already paid for an order", async () => {
+      const cart = createMemoryCartStore([
+        { productId: APPLES, name: "Gala Apples", category: "Fruits", unit: "lb", price: 1.49, unitCost: 0.8, weightLbs: 1, quantityInStock: 5, active: true },
+      ]);
+      const { agent, refund } = await paidShopper({ cartStore: cart.cartStore, orderStore: createMemoryOrderStore(cart).orderStore });
+      expect((await agent.post("/api/orders").send({ address, paymentIntentId: "pi_4" })).status).toBe(201);
+
+      // Same total in the cart again, same payment sent again.
+      await agent.post("/api/cart/items").send({ productId: APPLES, quantity: 1 });
+      const again = await agent.post("/api/orders").send({ address, paymentIntentId: "pi_4" });
+      expect(again.status).toBe(409);
+      expect(again.body.error).toMatch(/already used/);
+      expect(refund).not.toHaveBeenCalled();
+    });
   });
 
   it("refuses an order paid by someone else or with a bad ZIP code", async () => {

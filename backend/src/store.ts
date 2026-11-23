@@ -3,6 +3,7 @@ import { getRobotBaseLocation, isAtRobotBaseLocation } from "./robotBase.js";
 import { DEFAULT_DELIVERY_SETTINGS, deliveryFeeFor, roundCents, type DeliverySettings } from "./pricing.js";
 import { calculateDeliveryRoute } from "./routeService.js";
 import type { GeocodedLocation } from "./geocoder.js";
+import { ROBOT_SPEED_METERS_PER_SECOND } from "./robotSpeed.js";
 
 export type { DeliverySettings } from "./pricing.js";
 export { DEFAULT_DELIVERY_SETTINGS } from "./pricing.js";
@@ -1376,7 +1377,7 @@ export function createPgDeliveryStore(pool: pg.Pool): DeliveryStore {
           );
         const returnGeometry = returnRoute.geometry;
         const distance = routeDistanceMeters(returnGeometry);
-        const durationSeconds = Math.max(1, Math.round(distance / 1.2));
+        const durationSeconds = Math.max(1, Math.round(distance / ROBOT_SPEED_METERS_PER_SECOND));
         let returnRunId: string;
         if (activeRun) {
           returnRunId = activeRun.runId;
@@ -1894,6 +1895,8 @@ export type OrderRecord = {
 
 // Thrown when checkout can't go ahead; the message is safe to show the customer.
 export class CheckoutError extends Error {}
+// The Stripe payment already paid for an order, for example after a double click on Place order.
+export class PaymentAlreadyUsedError extends CheckoutError {}
 
 export type CheckoutQuote = {
   subtotal: number;
@@ -1935,6 +1938,8 @@ export type PaidCheckout = {
 
 export interface OrderStore {
   getLatestAddress(userId: string): Promise<SavedAddress | null>;
+  // The shopper's own past delivery addresses, most recent first, for checkout suggestions.
+  listAddresses?(userId: string): Promise<SavedAddress[]>;
   // Prices the cart the same way placeOrder will, so Stripe is charged the server total.
   quoteOrder(userId: string): Promise<CheckoutQuote>;
   // Turns the user's cart into a paid order in one transaction: checks stock, saves the
@@ -2014,6 +2019,24 @@ export function createPgOrderStore(pool: pg.Pool, settingsStore: SettingsStore =
       return rows[0] ?? null;
     },
 
+    async listAddresses(userId) {
+      const { rows } = await pool.query<SavedAddress>(
+        `SELECT street, city, state, "zipCode", '' AS "deliveryInstructions"
+         FROM (
+           SELECT DISTINCT ON (lower(a.street), lower(a.city), a.zip_code)
+                  a.street, a.city, a.state, a.zip_code AS "zipCode", o.created_at
+           FROM Orders o
+           JOIN Address a ON a.address_id = o.address_id
+           WHERE o.user_id = $1
+           ORDER BY lower(a.street), lower(a.city), a.zip_code, o.created_at DESC
+         ) recent
+         ORDER BY created_at DESC
+         LIMIT 5`,
+        [userId],
+      );
+      return rows;
+    },
+
     async quoteOrder(userId) {
       return quoteFromLines(await loadCheckoutLines(pool, userId, false), await settingsStore.get());
     },
@@ -2022,6 +2045,11 @@ export function createPgOrderStore(pool: pg.Pool, settingsStore: SettingsStore =
       const client = await pool.connect();
       try {
         await client.query("BEGIN");
+
+        // One order per payment. The lock makes a second request with the same payment wait for the first.
+        await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [payment.paymentIntentId]);
+        const { rowCount: used } = await client.query("SELECT 1 FROM Payment WHERE transaction_reference = $1", [payment.paymentIntentId]);
+        if (used) throw new PaymentAlreadyUsedError("This payment was already used for an order. Check your orders page.");
 
         // Lock the products being bought so two checkouts can't oversell the same stock.
         const lines = await loadCheckoutLines(client, userId, true);

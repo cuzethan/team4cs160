@@ -139,13 +139,15 @@ export type AddressSuggestion = { label: string; street: string; city: string; s
 
 // Street addresses near the store that match what's been typed. Suggestions are a convenience,
 // so any failure just means no suggestions.
-export async function fetchAddressSuggestions(query: string, signal?: AbortSignal): Promise<AddressSuggestion[]> {
+// Suggestions for what the shopper typed. `unavailable` means the map service couldn't be asked,
+// so only the shopper's own past addresses are included.
+export async function fetchAddressSuggestions(query: string, signal?: AbortSignal): Promise<{ suggestions: AddressSuggestion[]; unavailable: boolean }> {
   try {
     const response = await fetch(`/api/orders/address-suggestions?q=${encodeURIComponent(query)}`, { credentials: "same-origin", signal });
-    if (!response.ok) return [];
-    const data = (await response.json()) as { suggestions?: AddressSuggestion[] };
-    return data.suggestions ?? [];
+    if (!response.ok) return { suggestions: [], unavailable: true };
+    const data = (await response.json()) as { suggestions?: AddressSuggestion[]; unavailable?: boolean };
+    return { suggestions: data.suggestions ?? [], unavailable: Boolean(data.unavailable) };
   } catch {
-    return [];
+    return { suggestions: [], unavailable: true };
   }
 }

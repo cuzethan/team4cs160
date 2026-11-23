@@ -3,9 +3,9 @@ import { handle } from "./auth.js";
 import { createCustomerGuard } from "./cart.js";
 import { PaymentsNotConfiguredError, type PaymentIntentCreator } from "./payments.js";
 import { distanceInMiles, estimateDeliveryMinutes } from "./deliveryArea.js";
-import { geocodeAddress, suggestAddresses, type GeocodedLocation } from "./geocoder.js";
+import { geocodeAddress, matchesTypedAddress, stateCode, suggestAddresses, type AddressSuggestion, type GeocodedLocation } from "./geocoder.js";
 import type { ReportsStore } from "./reports.js";
-import { CheckoutError, type AuthStore, type DeliveryStore, type OrderStore, type SettingsStore } from "./store.js";
+import { CheckoutError, PaymentAlreadyUsedError, type AuthStore, type DeliveryStore, type OrderStore, type SettingsStore } from "./store.js";
 
 export type OrderOptions = {
   store: AuthStore;
@@ -22,7 +22,35 @@ const ZIP_PATTERN = /^\d{5}(-\d{4})?$/;
 type DeliveryAddress = { street: string; city: string; state: string; zipCode: string };
 
 function text(value: unknown) {
-  return typeof value === "string" ? value.trim() : "";
+  return typeof value === "string" ? value.trim().replace(/[^\S\n]+/g, " ") : "";
+}
+
+// Longest each field may be; the database columns are 255, 100 and 20 characters.
+const MAX_LENGTH = { street: 200, city: 100, zipCode: 10, deliveryInstructions: 500 };
+
+// The delivery address from a checkout request, with the state written as its two-letter code.
+function readAddress(body: unknown): { address: DeliveryAddress & { deliveryInstructions: string } } | { error: string } {
+  const input = (body ?? {}) as Record<string, unknown>;
+  const address = {
+    street: text(input.street),
+    city: text(input.city),
+    state: text(input.state),
+    zipCode: text(input.zipCode),
+    deliveryInstructions: typeof input.deliveryInstructions === "string" ? input.deliveryInstructions.trim() : "",
+  };
+  if (!address.street || !address.city || !address.state || !address.zipCode) {
+    return { error: "Please fill in your street, city, state, and ZIP code." };
+  }
+  for (const [field, limit] of Object.entries(MAX_LENGTH) as [keyof typeof MAX_LENGTH, number][]) {
+    if (address[field].length > limit) {
+      const name = { street: "Street address", city: "City", zipCode: "ZIP code", deliveryInstructions: "Drop-off instructions" }[field];
+      return { error: `${name} can be at most ${limit} characters.` };
+    }
+  }
+  if (!ZIP_PATTERN.test(address.zipCode)) return { error: "Please enter a valid ZIP code." };
+  const state = stateCode(address.state);
+  if (!state) return { error: "Please enter a US state, like CA." };
+  return { address: { ...address, state } };
 }
 
 export function createOrderRouter({ store, orderStore, deliveryStore, settingsStore, payments, reportsStore, geocode = geocodeAddress, suggest = suggestAddresses }: OrderOptions) {
@@ -38,6 +66,12 @@ export function createOrderRouter({ store, orderStore, deliveryStore, settingsSt
     }
     if (!location) {
       return { ok: false as const, status: 400 as const, error: "We couldn't locate this delivery address. Please check the address and try again." };
+    }
+    if (location.foundState && location.foundState !== address.state) {
+      return { ok: false as const, status: 400 as const, error: `This address is in ${location.foundState}, not ${address.state}. Please check the state.` };
+    }
+    if (location.foundZipCode && location.foundZipCode !== address.zipCode.slice(0, 5)) {
+      return { ok: false as const, status: 400 as const, error: `The ZIP code for this address is ${location.foundZipCode}, not ${address.zipCode}. Please check the ZIP code.` };
     }
 
     const [base, settings] = await Promise.all([settingsStore.getRobotBase(), settingsStore.get()]);
@@ -57,27 +91,27 @@ export function createOrderRouter({ store, orderStore, deliveryStore, settingsSt
     const user = await requireCustomer(req, res);
     if (!user) return;
     const query = text(req.query.q).slice(0, 200);
-    if (query.length < 3) return res.json({ suggestions: [] });
+    // The shopper's own past addresses come first, and still work when the map service is down.
+    const saved = (await orderStore.listAddresses?.(user.userId) ?? [])
+      .map(({ street, city, state, zipCode }) => ({ label: `${street}, ${city}, ${state} ${zipCode}`, street, city, state, zipCode }));
+    const own = saved.filter((address) => matchesTypedAddress(address.label, query));
+    if (query.length < 3) return res.json({ suggestions: own.slice(0, 3) });
+    let found: AddressSuggestion[];
     try {
-      res.json({ suggestions: await suggest(query) });
+      found = await suggest(query);
     } catch {
-      res.status(503).json({ error: "Address suggestions are unavailable right now." });
+      return res.json({ suggestions: own, unavailable: true });
     }
+    const labels = new Set(own.map((address) => address.label.toLowerCase()));
+    res.json({ suggestions: [...own, ...found.filter((address) => !labels.has(address.label.toLowerCase()))].slice(0, 6) });
   }));
 
   router.post("/validate-address", handle(async (req, res) => {
     const user = await requireCustomer(req, res);
     if (!user) return;
-    const address = {
-      street: text(req.body?.address?.street),
-      city: text(req.body?.address?.city),
-      state: text(req.body?.address?.state),
-      zipCode: text(req.body?.address?.zipCode),
-    };
-    if (!address.street || !address.city || !address.state || !address.zipCode) {
-      return res.status(400).json({ error: "Please fill in your street, city, state, and ZIP code." });
-    }
-    if (!ZIP_PATTERN.test(address.zipCode)) return res.status(400).json({ error: "Please enter a valid ZIP code." });
+    const parsed = readAddress(req.body?.address);
+    if ("error" in parsed) return res.status(400).json({ error: parsed.error });
+    const { address } = parsed;
 
     const result = await checkDeliveryAddress(address);
     if (!result.ok) return res.status(result.status).json({ error: result.error });
@@ -148,19 +182,9 @@ export function createOrderRouter({ store, orderStore, deliveryStore, settingsSt
     const user = await requireCustomer(req, res);
     if (!user) return;
 
-    const address = {
-      street: text(req.body?.address?.street),
-      city: text(req.body?.address?.city),
-      state: text(req.body?.address?.state),
-      zipCode: text(req.body?.address?.zipCode),
-      deliveryInstructions: text(req.body?.address?.deliveryInstructions),
-    };
-    if (!address.street || !address.city || !address.state || !address.zipCode) {
-      return res.status(400).json({ error: "Please fill in your street, city, state, and ZIP code." });
-    }
-    if (!ZIP_PATTERN.test(address.zipCode)) {
-      return res.status(400).json({ error: "Please enter a valid ZIP code." });
-    }
+    const parsed = readAddress(req.body?.address);
+    if ("error" in parsed) return res.status(400).json({ error: parsed.error });
+    const { address } = parsed;
 
     const paymentIntentId = text(req.body?.paymentIntentId);
 
@@ -174,19 +198,46 @@ export function createOrderRouter({ store, orderStore, deliveryStore, settingsSt
       if (!payment || payment.userId !== user.userId) {
         return res.status(402).json({ error: "Your payment could not be verified." });
       }
+
+      // From here the card has been charged, so if the order can't be saved the money goes back.
+      const refundWith = async (status: number, reason: string) => {
+        let refunded = false;
+        try {
+          if (payments.refund) {
+            await payments.refund(payment.id);
+            refunded = true;
+          }
+        } catch (refundError) {
+          console.error("Refund failed for unplaced order", payment.id, refundError);
+        }
+        res.status(status).json({
+          error: refunded
+            ? `${reason} Your payment was refunded, so you weren't charged.`
+            : `${reason} Your card was charged; please contact us for a refund instead of paying again.`,
+        });
+      };
+
       if (payment.amountCents !== Math.round(quote.grandTotal * 100)) {
-        return res.status(409).json({ error: "Your cart total changed. Refresh checkout and pay again." });
+        return refundWith(409, "Your cart total changed. Refresh checkout and pay again.");
       }
 
-      // The location found here is saved with the address, so dispatch doesn't have to look it up again.
-      const deliveryCheck = await checkDeliveryAddress(address);
-      if (!deliveryCheck.ok) return res.status(deliveryCheck.status).json({ error: deliveryCheck.error });
+      try {
+        // The location found here is saved with the address, so dispatch doesn't have to look it up again.
+        const deliveryCheck = await checkDeliveryAddress(address);
+        if (!deliveryCheck.ok) return refundWith(deliveryCheck.status, deliveryCheck.error);
 
-      const order = await orderStore.placeOrder(user.userId, address, {
-        paymentIntentId: payment.id,
-        amountCents: payment.amountCents,
-      }, deliveryCheck.location);
-      res.status(201).json({ order });
+        const order = await orderStore.placeOrder(user.userId, address, {
+          paymentIntentId: payment.id,
+          amountCents: payment.amountCents,
+        }, deliveryCheck.location);
+        return res.status(201).json({ order });
+      } catch (error) {
+        // A payment that already paid for an order keeps paying for it.
+        if (error instanceof PaymentAlreadyUsedError) return res.status(409).json({ error: error.message });
+        if (error instanceof CheckoutError) return refundWith(409, error.message);
+        console.error("Order could not be saved", error);
+        return refundWith(500, "We couldn't save your order.");
+      }
     } catch (error) {
       if (error instanceof CheckoutError) return res.status(409).json({ error: error.message });
       if (error instanceof PaymentsNotConfiguredError) {

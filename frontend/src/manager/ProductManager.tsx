@@ -220,7 +220,7 @@ export function ProductFormDialog({ product, categories, onClose, onSaved }: Pro
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink/55 p-4 backdrop-blur-sm sm:items-center"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink/55 p-4 backdrop-blur-sm"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
@@ -230,7 +230,7 @@ export function ProductFormDialog({ product, categories, onClose, onSaved }: Pro
         role="dialog"
         aria-modal="true"
         aria-labelledby="product-form-title"
-        className="relative w-full max-w-xl rounded-3xl bg-surface p-6 shadow-2xl sm:p-8"
+        className="relative my-4 w-full max-w-xl rounded-3xl bg-surface p-6 shadow-2xl sm:my-8 sm:p-8"
       >
         <button
           type="button"

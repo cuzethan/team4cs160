@@ -1,3 +1,5 @@
+import { ROBOT_SPEED_METERS_PER_SECOND } from "./robotSpeed.js";
+
 /**
  * Routing spike for mock delivery runs.
  *
@@ -25,7 +27,6 @@ export type RouteResult = {
 };
 
 const EARTH_RADIUS_METERS = 6_371_000;
-const FALLBACK_ROBOT_SPEED_METERS_PER_SECOND = 1.2;
 const MAX_DELIVERY_STOPS = 10;
 const REQUEST_TIMEOUT_MS = 5_000;
 
@@ -72,7 +73,7 @@ function approximateRoute(start: RoutePoint, deliveries: RoutePoint[]): RouteRes
 
     const [next] = remaining.splice(nearestIndex, 1);
     distanceMeters += nearestDistance;
-    elapsedSeconds += nearestDistance / FALLBACK_ROBOT_SPEED_METERS_PER_SECOND;
+    elapsedSeconds += nearestDistance / ROBOT_SPEED_METERS_PER_SECOND;
     ordered.push(next);
     arrivalOffsetsSeconds[next.id] = Math.round(elapsedSeconds);
     current = next;
@@ -80,7 +81,7 @@ function approximateRoute(start: RoutePoint, deliveries: RoutePoint[]): RouteRes
 
   const returnDistance = distanceBetween(current, start);
   distanceMeters += returnDistance;
-  elapsedSeconds += returnDistance / FALLBACK_ROBOT_SPEED_METERS_PER_SECOND;
+  elapsedSeconds += returnDistance / ROBOT_SPEED_METERS_PER_SECOND;
 
   return {
     orderedStopIds: ordered.map(({ id }) => id),
@@ -138,7 +139,9 @@ async function requestValhalla(
   const url = new URL(`/${action}`, baseUrl);
   const payload = {
     locations: locations.map(({ latitude, longitude }) => ({ lat: latitude, lon: longitude, type: "break" })),
-    costing: "pedestrian",
+    // Robots use the streets, capped at their top speed (km/h).
+    costing: "auto",
+    costing_options: { auto: { top_speed: Math.round(ROBOT_SPEED_METERS_PER_SECOND * 3.6) } },
     units: "kilometers",
     directions_type: "none",
   };
