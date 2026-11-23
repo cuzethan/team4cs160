@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { dispatchPendingOrders } from "../src/batching.js";
-import { geocodeAddress, suggestAddresses } from "../src/geocoder.js";
+import { geocodeAddress, resetSuggestionPause, suggestAddresses } from "../src/geocoder.js";
 import { calculateDeliveryRoute, type RoutePoint } from "../src/routeService.js";
 import { configureRobotBaseLocation, getRobotBaseLocation, isAtRobotBaseLocation } from "../src/robotBase.js";
 import type { DeliveryStore } from "../src/store.js";
@@ -225,6 +225,7 @@ describe("address lookup backup", () => {
 });
 
 describe("address suggestions", () => {
+  beforeEach(() => resetSuggestionPause());
   const house = (properties: Record<string, string>) => ({ properties: { countrycode: "US", city: "San Jose", state: "California", postcode: "95112", ...properties } });
 
   function photon(houses: unknown[], streets: unknown[] = []) {
@@ -277,9 +278,19 @@ describe("address suggestions", () => {
     expect(fetchMock.mock.calls.length).toBe(calls);
   });
 
-  it("reports a lookup service error", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({}, false, 429)));
+  it("reports a lookup service error and waits a minute before asking again", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const refused = vi.fn(async () => jsonResponse({}, false, 429));
+    vi.stubGlobal("fetch", refused);
     await expect(suggestAddresses("1 Main St", "http://photon-e")).rejects.toThrow("HTTP 429");
+    await expect(suggestAddresses("2 Main St", "http://photon-e")).rejects.toThrow("paused");
+    expect(refused).toHaveBeenCalledTimes(1);
+
+    vi.setSystemTime(Date.now() + 61_000);
+    const fetchMock = photon([house({ housenumber: "3", street: "Main Street" })]);
+    await expect(suggestAddresses("3 Main St", "http://photon-e")).resolves.toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalled();
+    vi.useRealTimers();
   });
 });
 

@@ -3,7 +3,7 @@ import { handle } from "./auth.js";
 import { createCustomerGuard } from "./cart.js";
 import { PaymentsNotConfiguredError, type PaymentIntentCreator } from "./payments.js";
 import { distanceInMiles, estimateDeliveryMinutes } from "./deliveryArea.js";
-import { geocodeAddress, suggestAddresses, type GeocodedLocation } from "./geocoder.js";
+import { geocodeAddress, suggestAddresses, type AddressSuggestion, type GeocodedLocation } from "./geocoder.js";
 import type { ReportsStore } from "./reports.js";
 import { CheckoutError, type AuthStore, type DeliveryStore, type OrderStore, type SettingsStore } from "./store.js";
 
@@ -57,12 +57,20 @@ export function createOrderRouter({ store, orderStore, deliveryStore, settingsSt
     const user = await requireCustomer(req, res);
     if (!user) return;
     const query = text(req.query.q).slice(0, 200);
-    if (query.length < 3) return res.json({ suggestions: [] });
+    // The shopper's own past addresses come first, and still work when the map service is down.
+    const saved = (await orderStore.listAddresses?.(user.userId) ?? [])
+      .map(({ street, city, state, zipCode }) => ({ label: `${street}, ${city}, ${state} ${zipCode}`, street, city, state, zipCode }));
+    const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+    const own = saved.filter((address) => words.every((word) => address.label.toLowerCase().includes(word)));
+    if (query.length < 3) return res.json({ suggestions: own.slice(0, 3) });
+    let found: AddressSuggestion[];
     try {
-      res.json({ suggestions: await suggest(query) });
+      found = await suggest(query);
     } catch {
-      res.status(503).json({ error: "Address suggestions are unavailable right now." });
+      return res.json({ suggestions: own, unavailable: true });
     }
+    const labels = new Set(own.map((address) => address.label.toLowerCase()));
+    res.json({ suggestions: [...own, ...found.filter((address) => !labels.has(address.label.toLowerCase()))].slice(0, 6) });
   }));
 
   router.post("/validate-address", handle(async (req, res) => {

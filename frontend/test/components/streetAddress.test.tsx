@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it } from "vitest";
@@ -21,23 +21,33 @@ function Form() {
   );
 }
 
+// Like the server: text under 3 characters only matches the shopper's saved addresses.
+function suggestionServer(suggestions: AddressSuggestion[], saved: AddressSuggestion[] = []) {
+  return fakeServer({
+    "GET /api/orders/address-suggestions": ({ url }) => {
+      const q = new URLSearchParams(url.split("?")[1]).get("q") ?? "";
+      return { body: { suggestions: q.length < 3 ? saved : [...saved, ...suggestions] } };
+    },
+  });
+}
+
 describe("street address suggestions", () => {
   it("shows matches as the shopper types and fills the address when one is clicked", async () => {
-    const { calls } = fakeServer({ "GET /api/orders/address-suggestions": () => ({ body: { suggestions: [cityHall, sjsu] } }) });
+    const { calls } = suggestionServer([cityHall, sjsu]);
     const user = userEvent.setup();
     render(<Form />);
 
     await user.type(screen.getByRole("combobox", { name: "Street address" }), "200 E Santa");
+    await waitFor(() => expect(decodeURIComponent(calls.at(-1)!.url)).toContain("q=200 E Santa"));
     await user.click(await screen.findByRole("option", { name: cityHall.label }));
 
     expect(screen.getByRole("combobox")).toHaveValue("200 East Santa Clara Street");
     expect(screen.getByTestId("picked")).toHaveTextContent("San Jose|CA|95112");
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
-    expect(decodeURIComponent(calls.at(-1)!.url)).toContain("q=200 E Santa");
   });
 
   it("can be used with the arrow keys, Enter and Escape", async () => {
-    fakeServer({ "GET /api/orders/address-suggestions": () => ({ body: { suggestions: [cityHall, sjsu] } }) });
+    suggestionServer([cityHall, sjsu]);
     const user = userEvent.setup();
     render(<Form />);
     const field = screen.getByRole("combobox", { name: "Street address" });
@@ -67,16 +77,24 @@ describe("street address suggestions", () => {
 
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
     expect(screen.getByRole("combobox")).toHaveValue("769 Willow St");
+    expect(screen.getByText(/Address search is busy/)).toBeInTheDocument();
   });
 
-  it("doesn't look anything up for short text", async () => {
-    const { calls } = fakeServer({ "GET /api/orders/address-suggestions": () => ({ body: { suggestions: [sjsu] } }) });
+  it("shows the shopper's past addresses as soon as the field is clicked", async () => {
+    suggestionServer([cityHall], [sjsu]);
     const user = userEvent.setup();
     render(<Form />);
 
-    await user.type(screen.getByRole("combobox", { name: "Street address" }), "1 W");
-    await new Promise((resolve) => setTimeout(resolve, 450));
+    await user.click(screen.getByRole("combobox", { name: "Street address" }));
 
-    expect(calls).toHaveLength(0);
+    expect(await screen.findByRole("option", { name: sjsu.label })).toBeInTheDocument();
+  });
+
+  it("says when nothing matches or the search is busy", async () => {
+    suggestionServer([]);
+    const user = userEvent.setup();
+    render(<Form />);
+    await user.type(screen.getByRole("combobox", { name: "Street address" }), "99999 Nowhere");
+    expect(await screen.findByText(/No matching addresses yet/)).toBeInTheDocument();
   });
 });

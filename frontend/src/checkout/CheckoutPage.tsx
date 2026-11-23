@@ -1,6 +1,6 @@
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { fetchCart, type CartLine } from "../cart/api";
@@ -258,7 +258,10 @@ export function CheckoutPage() {
         fetchLatestCheckoutAddress(),
       ]);
       setLines(cartLines);
-      if (savedAddress) setAddress(savedAddress);
+      if (savedAddress) {
+        filledTogether.current = true;
+        setAddress(savedAddress);
+      }
       if (cartLines.length > 0) void loadPaymentIntent();
     } catch (error) {
       setLoadError((error as Error).message);
@@ -299,10 +302,20 @@ export function CheckoutPage() {
     };
   }, [user, street, city, state, zipCode]);
 
-  const updateField = (field: keyof CheckoutAddress) => (value: string) =>
-    setAddress((current) => ({ ...current, [field]: value }));
-  const pickAddress = ({ street, city, state, zipCode }: AddressSuggestion) =>
+  // City, state and ZIP that came with a saved or picked address belong to that street. When the
+  // shopper starts typing a different street, clear them so the old ones don't get mixed in.
+  const filledTogether = useRef(false);
+  const updateField = (field: keyof CheckoutAddress) => (value: string) => {
+    const clearRest = field === "street" && filledTogether.current;
+    if (field !== "deliveryInstructions") filledTogether.current = false;
+    setAddress((current) => clearRest
+      ? { ...current, street: value, city: "", state: "", zipCode: "" }
+      : { ...current, [field]: value });
+  };
+  const pickAddress = ({ street, city, state, zipCode }: AddressSuggestion) => {
+    filledTogether.current = true;
     setAddress((current) => ({ ...current, street, city, state, zipCode }));
+  };
 
   const subtotal = lines.reduce((total, line) => total + line.price * line.quantity, 0);
   const totalWeight = lines.reduce((total, line) => total + line.weightLbs * line.quantity, 0);

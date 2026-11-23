@@ -67,7 +67,23 @@ describe("address suggestions", () => {
   it("says suggestions are unavailable when the lookup fails", async () => {
     const { agent } = await shopper(setup({ suggestAddresses: async () => { throw new Error("down"); } }));
     const res = await agent.get("/api/orders/address-suggestions").query({ q: "1 Washington" });
-    expect(res.status).toBe(503);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ suggestions: [], unavailable: true });
+  });
+
+  it("suggests the shopper's own past addresses first, even when the lookup is down", async () => {
+    const pastAddress = { label: "1 Washington Sq, San Jose, CA 95192", street: "1 Washington Sq", city: "San Jose", state: "CA", zipCode: "95192" };
+    const cart = createMemoryCartStore([]);
+    const { orderStore } = createMemoryOrderStore(cart);
+    orderStore.listAddresses = async () => [{ street: "1 Washington Sq", city: "San Jose", state: "CA", zipCode: "95192", deliveryInstructions: "" }];
+    let down = false;
+    const { agent } = await shopper(setup({ orderStore, suggestAddresses: async () => { if (down) throw new Error("down"); return [suggestion, pastAddress]; } }));
+
+    expect((await agent.get("/api/orders/address-suggestions").query({ q: "" })).body).toEqual({ suggestions: [pastAddress] });
+    expect((await agent.get("/api/orders/address-suggestions").query({ q: "1 wash" })).body).toEqual({ suggestions: [pastAddress, suggestion] });
+    down = true;
+    expect((await agent.get("/api/orders/address-suggestions").query({ q: "1 wash" })).body).toEqual({ suggestions: [pastAddress], unavailable: true });
+    expect((await agent.get("/api/orders/address-suggestions").query({ q: "Story" })).body).toEqual({ suggestions: [], unavailable: true });
   });
 
   it("is only for signed-in shoppers", async () => {

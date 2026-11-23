@@ -178,6 +178,18 @@ export function createMemoryOrderStore({ cartStore, products, carts }: ReturnTyp
       const latestOrder = [...orders].reverse().find((order) => order.userId === userId);
       return latestOrder ? { ...latestOrder.address } : null;
     },
+    async listAddresses(userId) {
+      const seen = new Set<string>();
+      return [...orders].reverse().filter((order) => order.userId === userId).map((order) => order.address)
+        .filter((address) => {
+          const key = `${address.street}|${address.city}|${address.zipCode}`.toLowerCase();
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
+        .slice(0, 5)
+        .map((address) => ({ ...address, deliveryInstructions: "" }));
+    },
     async quoteOrder(userId) {
       return quoteFromLines(await pricedLines(userId), await settingsStore?.get() ?? DEFAULT_DELIVERY_SETTINGS);
     },

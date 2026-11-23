@@ -1935,6 +1935,8 @@ export type PaidCheckout = {
 
 export interface OrderStore {
   getLatestAddress(userId: string): Promise<SavedAddress | null>;
+  // The shopper's own past delivery addresses, most recent first, for checkout suggestions.
+  listAddresses?(userId: string): Promise<SavedAddress[]>;
   // Prices the cart the same way placeOrder will, so Stripe is charged the server total.
   quoteOrder(userId: string): Promise<CheckoutQuote>;
   // Turns the user's cart into a paid order in one transaction: checks stock, saves the
@@ -2012,6 +2014,24 @@ export function createPgOrderStore(pool: pg.Pool, settingsStore: SettingsStore =
         [userId],
       );
       return rows[0] ?? null;
+    },
+
+    async listAddresses(userId) {
+      const { rows } = await pool.query<SavedAddress>(
+        `SELECT street, city, state, "zipCode", '' AS "deliveryInstructions"
+         FROM (
+           SELECT DISTINCT ON (lower(a.street), lower(a.city), a.zip_code)
+                  a.street, a.city, a.state, a.zip_code AS "zipCode", o.created_at
+           FROM Orders o
+           JOIN Address a ON a.address_id = o.address_id
+           WHERE o.user_id = $1
+           ORDER BY lower(a.street), lower(a.city), a.zip_code, o.created_at DESC
+         ) recent
+         ORDER BY created_at DESC
+         LIMIT 5`,
+        [userId],
+      );
+      return rows;
     },
 
     async quoteOrder(userId) {

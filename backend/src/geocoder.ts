@@ -171,11 +171,31 @@ function matchesTypedStreet(street: string, typed: string) {
   return typed.toLowerCase().split(/\s+/).filter(Boolean).every((part) => words.some((word) => word.startsWith(part)));
 }
 
+// The public Photon server refuses this machine for a while after a burst of requests. Asking again
+// during that time only extends the block, so wait a minute before trying again.
+let photonPausedUntil = 0;
+const PHOTON_PAUSE_MS = 60_000;
+
+export function resetSuggestionPause() {
+  photonPausedUntil = 0;
+  suggestionCache.clear();
+}
+
 async function findSuggestions(expanded: string, photonUrl: string): Promise<AddressSuggestion[]> {
   const typedNumber = /^(\d+[A-Za-z]?)\s+(.+)$/.exec(expanded);
   const base = getRobotBaseLocation();
 
   async function search(text: string, layer: "house" | "street") {
+    if (Date.now() < photonPausedUntil) throw new Error("Address suggestions are paused.");
+    try {
+      return await searchPhoton(text, layer);
+    } catch (error) {
+      photonPausedUntil = Date.now() + PHOTON_PAUSE_MS;
+      throw error;
+    }
+  }
+
+  async function searchPhoton(text: string, layer: "house" | "street") {
     const url = new URL("/api", photonUrl);
     url.searchParams.set("q", text);
     url.searchParams.set("limit", "10");
@@ -190,11 +210,6 @@ async function findSuggestions(expanded: string, photonUrl: string): Promise<Add
     return (data.features ?? []).map((feature) => feature.properties ?? {});
   }
 
-  const [houses, streets] = await Promise.all([
-    search(expanded, "house"),
-    typedNumber ? search(typedNumber[2], "street") : Promise.resolve([] as PhotonPlace[]),
-  ]);
-
   const suggestions: AddressSuggestion[] = [];
   function add(place: PhotonPlace, street: string) {
     const state = STATE_CODES[place.state ?? ""] ?? (/^[A-Z]{2}$/.test(place.state ?? "") ? place.state! : "");
@@ -204,13 +219,16 @@ async function findSuggestions(expanded: string, photonUrl: string): Promise<Add
     suggestions.push({ label: `${street}, ${place.city}, ${state} ${zipCode}`, street, city: place.city, state, zipCode });
   }
 
+  // One request at a time, and the street lookup only when the houses didn't fill the list.
+  const houses = await search(expanded, "house");
   for (const place of houses) {
     if (!place.housenumber || !place.street) continue;
     if (typedNumber && (!place.housenumber.toLowerCase().startsWith(typedNumber[1].toLowerCase()) ||
         !matchesTypedStreet(place.street, typedNumber[2]))) continue;
     add(place, `${place.housenumber} ${place.street}`);
   }
-  if (typedNumber) {
+  if (typedNumber && suggestions.length < 3) {
+    const streets = await search(typedNumber[2], "street");
     for (const place of streets) if (place.name && matchesTypedStreet(place.name, typedNumber[2])) add(place, `${typedNumber[1]} ${place.name}`);
   }
   return suggestions;
