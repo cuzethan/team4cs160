@@ -66,7 +66,7 @@ export async function advanceDeliverySimulator(
 ) {
   if (!deliveryStore.listSimulatableRuns || !deliveryStore.recordSimulationTick) return 0;
   const now = options.now ?? new Date();
-  const speedMultiplier = options.speedMultiplier ?? 60;
+  const speedMultiplier = options.speedMultiplier ?? 8;
   const runs = await deliveryStore.listSimulatableRuns();
   let updated = 0;
   for (const run of runs) {
@@ -85,9 +85,9 @@ export function startDeliverySimulator(
   options: { intervalMs?: number; speedMultiplier?: number } = {},
 ) {
   const configuredInterval = options.intervalMs ?? Number(process.env.ROBOT_SIMULATOR_INTERVAL_MS ?? 1_000);
-  const configuredSpeed = options.speedMultiplier ?? Number(process.env.ROBOT_SIMULATOR_SPEED_MULTIPLIER ?? 60);
+  const configuredSpeed = options.speedMultiplier ?? Number(process.env.ROBOT_SIMULATOR_SPEED_MULTIPLIER ?? 8);
   const intervalMs = Number.isFinite(configuredInterval) && configuredInterval > 0 ? Math.max(100, configuredInterval) : 1_000;
-  const speedMultiplier = Number.isFinite(configuredSpeed) && configuredSpeed > 0 ? configuredSpeed : 60;
+  const speedMultiplier = Number.isFinite(configuredSpeed) && configuredSpeed > 0 ? configuredSpeed : 8;
   let ticking = false;
   const timer = setInterval(() => {
     if (ticking) return;

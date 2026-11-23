@@ -5,11 +5,13 @@ import { estimateDeliveryMinutes } from "../src/deliveryArea.js";
 import { createMemoryCartStore, createMemoryOrderStore, createMemoryProductStore, createMemoryStore } from "./memoryStores.js";
 
 describe("delivery time estimate", () => {
-  it("adds packing time to walking-pace travel and rounds up to five minutes", () => {
+  it("adds packing time to travel at about 20 mph and rounds up to five minutes", () => {
     expect(estimateDeliveryMinutes(0)).toBe(30);
-    // 1 mile of straight line is about 1.3 miles of streets: ~29 minutes at 1.2 m/s.
-    expect(estimateDeliveryMinutes(1)).toBe(60);
-    expect(estimateDeliveryMinutes(3)).toBe(120);
+    // 1 mile of straight line is about 1.3 miles of streets: ~4 minutes at 9 m/s.
+    expect(estimateDeliveryMinutes(1)).toBe(35);
+    expect(estimateDeliveryMinutes(3)).toBe(45);
+    // The far edge of the 50-mile delivery area is about 3.5 hours away, not most of a day.
+    expect(estimateDeliveryMinutes(50)).toBe(225);
     expect(estimateDeliveryMinutes(2.2) % 5).toBe(0);
   });
 
@@ -43,6 +45,6 @@ describe("delivery time estimate", () => {
       address: { street: "1 Main St", city: "San Jose", state: "CA", zipCode: "95112" },
     });
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ eligible: true, estimatedMinutes: 60 });
+    expect(response.body).toEqual({ eligible: true, estimatedMinutes: 35 });
   });
 });

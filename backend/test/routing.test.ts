@@ -49,9 +49,9 @@ describe("delivery route without a map server", () => {
     expect(route.arrivalOffsetsSeconds.near).toBeLessThan(route.arrivalOffsetsSeconds.far);
     expect(route.geometry[0]).toEqual([depot.longitude, depot.latitude]);
     expect(route.geometry.at(-1)).toEqual([depot.longitude, depot.latitude]);
-    // About 1.1 km out and back at 1.2 m/s.
+    // About 1.1 km out and back at 9 m/s (about 20 mph).
     expect(route.distanceMeters).toBeGreaterThan(2000);
-    expect(route.durationSeconds).toBe(Math.round(route.distanceMeters / 1.2));
+    expect(route.durationSeconds).toBe(Math.round(route.distanceMeters / 9));
   });
 
   it("rejects routes it can't build", async () => {

@@ -52,10 +52,14 @@ describe("robot simulator", () => {
     expect(recordSimulationTick.mock.calls[0][0]).toMatchObject({ latitude: 37.3482, arrivedStopNumbers: [], completed: true });
   });
 
-  it("runs 60 times faster than real time by default", async () => {
-    const { store, recordSimulationTick } = storeWith([run()]);
-    await advanceDeliverySimulator(store, { now: at(10) });
-    expect(recordSimulationTick.mock.calls[0][0].completed).toBe(true);
+  it("runs 8 times faster than real time by default", async () => {
+    const first = storeWith([run()]);
+    await advanceDeliverySimulator(first.store, { now: at(70) });
+    expect(first.recordSimulationTick.mock.calls[0][0].completed).toBe(false);
+
+    const second = storeWith([run()]);
+    await advanceDeliverySimulator(second.store, { now: at(75) });
+    expect(second.recordSimulationTick.mock.calls[0][0].completed).toBe(true);
   });
 
   it("handles short, empty and zero-length routes", async () => {

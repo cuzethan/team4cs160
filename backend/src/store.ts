@@ -3,6 +3,7 @@ import { getRobotBaseLocation, isAtRobotBaseLocation } from "./robotBase.js";
 import { DEFAULT_DELIVERY_SETTINGS, deliveryFeeFor, roundCents, type DeliverySettings } from "./pricing.js";
 import { calculateDeliveryRoute } from "./routeService.js";
 import type { GeocodedLocation } from "./geocoder.js";
+import { ROBOT_SPEED_METERS_PER_SECOND } from "./robotSpeed.js";
 
 export type { DeliverySettings } from "./pricing.js";
 export { DEFAULT_DELIVERY_SETTINGS } from "./pricing.js";
@@ -1376,7 +1377,7 @@ export function createPgDeliveryStore(pool: pg.Pool): DeliveryStore {
           );
         const returnGeometry = returnRoute.geometry;
         const distance = routeDistanceMeters(returnGeometry);
-        const durationSeconds = Math.max(1, Math.round(distance / 1.2));
+        const durationSeconds = Math.max(1, Math.round(distance / ROBOT_SPEED_METERS_PER_SECOND));
         let returnRunId: string;
         if (activeRun) {
           returnRunId = activeRun.runId;

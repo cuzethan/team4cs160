@@ -1,5 +1,6 @@
 import type { GeocodedLocation } from "./geocoder.js";
 import type { RobotBaseLocation } from "./robotBase.js";
+import { ROBOT_SPEED_METERS_PER_SECOND } from "./robotSpeed.js";
 
 const EARTH_RADIUS_MILES = 3_958.8;
 
@@ -12,8 +13,6 @@ export function distanceInMiles(from: GeocodedLocation, to: RobotBaseLocation) {
   return EARTH_RADIUS_MILES * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
 }
 
-// Delivery robots travel at walking pace, matching the route service's fallback speed.
-const ROBOT_SPEED_METERS_PER_SECOND = 1.2;
 const METERS_PER_MILE = 1_609.344;
 // Streets are longer than a straight line; this is a typical city detour factor.
 const ROAD_DISTANCE_FACTOR = 1.3;
