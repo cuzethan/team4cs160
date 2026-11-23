@@ -270,12 +270,12 @@ describe("address suggestions", () => {
     expect(found[0].zipCode).toBe("95125");
   });
 
-  it("leaves the ZIP code for the shopper when Census doesn't know the house", async () => {
-    photon([], [{ properties: { countrycode: "US", name: "Story Road", city: "San Jose", state: "CA", postcode: "95192" } }]);
+  it("keeps the street's ZIP code when Census doesn't know the house", async () => {
+    photon([], [{ properties: { countrycode: "US", name: "East Highland Avenue", city: "Tracy", state: "CA", postcode: "95376" } }]);
 
-    const found = await suggestAddresses("174 Story Rd", "http://photon-f", "http://census");
+    const found = await suggestAddresses("1666 E Highland Ave", "http://photon-f", "http://census");
 
-    expect(found).toEqual([{ label: "174 Story Road, San Jose, CA", street: "174 Story Road", city: "San Jose", state: "CA", zipCode: "" }]);
+    expect(found).toEqual([{ label: "1666 East Highland Avenue, Tracy, CA 95376", street: "1666 East Highland Avenue", city: "Tracy", state: "CA", zipCode: "95376" }]);
   });
 
   it("leaves a trailing direction letter alone while it's still being typed", async () => {

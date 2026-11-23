@@ -238,12 +238,13 @@ async function findSuggestions(expanded: string, photonUrl: string, censusUrl: s
 
   const suggestions: AddressSuggestion[] = [];
   // A street's ZIP code in OpenStreetMap is just one of the ZIP codes it runs through, so a house
-  // number put on a street gets its ZIP code from the Census geocoder, or none if that's unknown.
+  // number put on a street gets its ZIP code from the Census geocoder. When Census doesn't know the
+  // house, the street's ZIP code is kept, since it's right for most streets.
   const needZip: AddressSuggestion[] = [];
   function add(place: PhotonPlace, street: string, exactHouse = true) {
     const state = STATE_CODES[place.state ?? ""] ?? (/^[A-Z]{2}$/.test(place.state ?? "") ? place.state! : "");
     const zipCode = (place.postcode ?? "").slice(0, 5);
-    if (place.countrycode !== "US" || !place.city || !state || (exactHouse && !/^\d{5}$/.test(zipCode))) return;
+    if (place.countrycode !== "US" || !place.city || !state || !/^\d{5}$/.test(zipCode)) return;
     if (suggestions.length === 5 || suggestions.some((s) => s.street === street && s.city === place.city)) return;
     const suggestion = { label: `${street}, ${place.city}, ${state} ${zipCode}`, street, city: place.city, state, zipCode };
     if (!exactHouse) needZip.push(suggestion);
@@ -262,8 +263,8 @@ async function findSuggestions(expanded: string, photonUrl: string, censusUrl: s
     const streets = await search(typedNumber[2], "street");
     for (const place of streets) if (place.name && matchesTypedStreet(place.name, typedNumber[2])) add(place, `${typedNumber[1]} ${place.name}`, false);
     await Promise.all(needZip.map(async (suggestion) => {
-      suggestion.zipCode = await censusZip(suggestion.street, suggestion.city, suggestion.state, censusUrl);
-      suggestion.label = `${suggestion.street}, ${suggestion.city}, ${suggestion.state}${suggestion.zipCode ? ` ${suggestion.zipCode}` : ""}`;
+      suggestion.zipCode = await censusZip(suggestion.street, suggestion.city, suggestion.state, censusUrl) || suggestion.zipCode;
+      suggestion.label = `${suggestion.street}, ${suggestion.city}, ${suggestion.state} ${suggestion.zipCode}`;
     }));
   }
   return suggestions;
