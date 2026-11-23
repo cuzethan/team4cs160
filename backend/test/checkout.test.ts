@@ -86,6 +86,18 @@ describe("address suggestions", () => {
     expect((await agent.get("/api/orders/address-suggestions").query({ q: "Story" })).body).toEqual({ suggestions: [], unavailable: true });
   });
 
+  it("only suggests a past address when every typed word starts one of its words", async () => {
+    const cart = createMemoryCartStore([]);
+    const { orderStore } = createMemoryOrderStore(cart);
+    orderStore.listAddresses = async () => [{ street: "4343 Stevens Creek Blvd", city: "Santa Clara", state: "CA", zipCode: "95051", deliveryInstructions: "" }];
+    const { agent } = await shopper(setup({ orderStore, suggestAddresses: async () => [] }));
+    const labels = async (q: string) => (await agent.get("/api/orders/address-suggestions").query({ q })).body.suggestions.map((s: { street: string }) => s.street);
+
+    expect(await labels("Santa Clara St")).toEqual([]);
+    expect(await labels("4343 Stevens Creek Boulevard")).toEqual(["4343 Stevens Creek Blvd"]);
+    expect(await labels("4343 stev")).toEqual(["4343 Stevens Creek Blvd"]);
+  });
+
   it("is only for signed-in shoppers", async () => {
     const res = await request(setup()).get("/api/orders/address-suggestions").query({ q: "1 Washington" });
     expect(res.status).toBe(401);

@@ -3,7 +3,7 @@ import { handle } from "./auth.js";
 import { createCustomerGuard } from "./cart.js";
 import { PaymentsNotConfiguredError, type PaymentIntentCreator } from "./payments.js";
 import { distanceInMiles, estimateDeliveryMinutes } from "./deliveryArea.js";
-import { geocodeAddress, suggestAddresses, type AddressSuggestion, type GeocodedLocation } from "./geocoder.js";
+import { geocodeAddress, matchesTypedAddress, suggestAddresses, type AddressSuggestion, type GeocodedLocation } from "./geocoder.js";
 import type { ReportsStore } from "./reports.js";
 import { CheckoutError, PaymentAlreadyUsedError, type AuthStore, type DeliveryStore, type OrderStore, type SettingsStore } from "./store.js";
 
@@ -60,8 +60,7 @@ export function createOrderRouter({ store, orderStore, deliveryStore, settingsSt
     // The shopper's own past addresses come first, and still work when the map service is down.
     const saved = (await orderStore.listAddresses?.(user.userId) ?? [])
       .map(({ street, city, state, zipCode }) => ({ label: `${street}, ${city}, ${state} ${zipCode}`, street, city, state, zipCode }));
-    const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-    const own = saved.filter((address) => words.every((word) => address.label.toLowerCase().includes(word)));
+    const own = saved.filter((address) => matchesTypedAddress(address.label, query));
     if (query.length < 3) return res.json({ suggestions: own.slice(0, 3) });
     let found: AddressSuggestion[];
     try {

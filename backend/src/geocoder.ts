@@ -120,7 +120,7 @@ const STREET_WORDS: Record<string, string> = {
 };
 
 // Photon matches "Story Road" but not "Story Rd", so spell out the usual abbreviations.
-function expandAbbreviations(query: string) {
+export function expandAbbreviations(query: string) {
   const words = query.split(" ");
   return words.map((word, index) => {
     const key = word.replace(/\.$/, "").toLowerCase();
@@ -128,6 +128,14 @@ function expandAbbreviations(query: string) {
     if (key.length === 1 && index === words.length - 1) return word;
     return STREET_WORDS[key] ?? word;
   }).join(" ");
+}
+
+// Whether every word typed starts a word of the address, so "Santa Clara St" doesn't match
+// "4343 Stevens Creek Blvd, Santa Clara" just because "Stevens" has "st" in it.
+export function matchesTypedAddress(label: string, typed: string) {
+  const words = (text: string) => expandAbbreviations(text.replace(/[.,]/g, " ").trim().replace(/\s+/g, " ")).toLowerCase().split(" ").filter(Boolean);
+  const addressWords = words(label);
+  return words(typed).every((part) => addressWords.some((word) => word.startsWith(part)));
 }
 
 const STATE_CODES: Record<string, string> = {
