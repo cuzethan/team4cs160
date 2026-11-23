@@ -67,31 +67,41 @@ function CheckoutForm({
   return (
     <form onSubmit={onSubmit} className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
       <div className="space-y-6">
-        <section aria-labelledby="address-heading" className="rounded-2xl border border-border bg-white p-6">
+        <section
+          aria-labelledby="address-heading"
+          className="rounded-2xl border border-border bg-white p-6"
+          // Enter in an address field shouldn't submit the form, which would charge the card.
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && event.target instanceof HTMLInputElement) event.preventDefault();
+          }}
+        >
           <h2 id="address-heading" className="text-xl font-extrabold">Delivery address</h2>
           <p className="mt-1 text-sm text-muted">We deliver within {deliveryRadiusMiles} miles of the distribution center (straight-line distance).</p>
           <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-6">
             <label className="text-sm font-semibold text-muted sm:col-span-6">
               Street address
-              <StreetAddressInput value={address.street} onChange={updateField("street")} onPick={pickAddress} className={inputClassName} />
+              <StreetAddressInput maxLength={200} value={address.street} onChange={updateField("street")} onPick={pickAddress} className={inputClassName} />
             </label>
             <label className="text-sm font-semibold text-muted sm:col-span-3">
               City
-              <input required autoComplete="address-level2" value={address.city} onChange={(event) => updateField("city")(event.target.value)} className={inputClassName} />
+              <input required maxLength={100} autoComplete="address-level2" value={address.city} onChange={(event) => updateField("city")(event.target.value)} className={inputClassName} />
             </label>
             <label className="text-sm font-semibold text-muted sm:col-span-1">
               State
-              <input required autoComplete="address-level1" value={address.state} onChange={(event) => updateField("state")(event.target.value)} className={inputClassName} />
+              <input required maxLength={20} autoComplete="address-level1" value={address.state} onChange={(event) => updateField("state")(event.target.value)} className={inputClassName} />
             </label>
             <label className="text-sm font-semibold text-muted sm:col-span-2">
               ZIP code
-              <input required autoComplete="postal-code" inputMode="numeric" pattern="\d{5}(-\d{4})?" title="5-digit ZIP code" value={address.zipCode} onChange={(event) => updateField("zipCode")(event.target.value)} className={inputClassName} />
+              <input required maxLength={10} autoComplete="postal-code" inputMode="numeric" pattern="\d{5}(-\d{4})?" title="5-digit ZIP code" value={address.zipCode} onChange={(event) => updateField("zipCode")(event.target.value)} className={inputClassName} />
             </label>
             <label className="text-sm font-semibold text-muted sm:col-span-6">
               Drop-off instructions <span className="font-normal text-muted">(optional)</span>
-              <textarea rows={2} placeholder="Front door by default" value={address.deliveryInstructions} onChange={(event) => updateField("deliveryInstructions")(event.target.value)} className={inputClassName} />
+              <textarea rows={2} maxLength={500} placeholder="Front door by default" value={address.deliveryInstructions} onChange={(event) => updateField("deliveryInstructions")(event.target.value)} className={inputClassName} />
             </label>
           </div>
+          {deliveryEstimate.status === "error" && (
+            <p role="alert" className="mt-4 rounded-xl border border-red-200 px-4 py-3 text-sm text-red-800">{deliveryEstimate.message}</p>
+          )}
         </section>
 
         <section aria-labelledby="payment-heading" className="rounded-2xl border border-border bg-white p-6">
@@ -133,9 +143,6 @@ function CheckoutForm({
                   : <span className="font-normal text-muted">{deliveryEstimate.status === "error" ? "Not available" : "Enter your address"}</span>}
             </dd>
           </div>
-          {deliveryEstimate.status === "error" && (
-            <p className="text-xs text-red-800">{deliveryEstimate.message}</p>
-          )}
           <div className="flex justify-between gap-4 border-t border-border pt-3 text-base">
             <dt className="font-bold">Total</dt>
             <dd className="font-extrabold">${(subtotal + deliveryFee).toFixed(2)}</dd>

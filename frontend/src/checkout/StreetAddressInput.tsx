@@ -6,13 +6,14 @@ type StreetAddressInputProps = {
   onChange: (street: string) => void;
   onPick: (suggestion: AddressSuggestion) => void;
   className: string;
+  maxLength?: number;
 };
 
 type Status = "idle" | "searching" | "done" | "unavailable";
 
 // The street field at checkout. Like a search box, it opens a list of addresses when clicked and
 // updates it as the shopper types: their own past addresses first, then matches from the map.
-export function StreetAddressInput({ value, onChange, onPick, className }: StreetAddressInputProps) {
+export function StreetAddressInput({ value, onChange, onPick, className, maxLength }: StreetAddressInputProps) {
   const id = useId();
   const listId = `${id}-suggestions`;
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
@@ -70,6 +71,7 @@ export function StreetAddressInput({ value, onChange, onPick, className }: Stree
         aria-controls={listId}
         aria-activedescendant={showList && activeIndex >= 0 ? `${listId}-${activeIndex}` : undefined}
         placeholder="Start typing your address"
+        maxLength={maxLength}
         value={value}
         onChange={(event) => {
           picked.current = null;
@@ -95,9 +97,10 @@ export function StreetAddressInput({ value, onChange, onPick, className }: Stree
           } else if (event.key === "ArrowUp") {
             event.preventDefault();
             setActiveIndex((index) => (index <= 0 ? suggestions.length - 1 : index - 1));
-          } else if (event.key === "Enter" && activeIndex >= 0) {
+          } else if (event.key === "Enter") {
+            // Like a search box, Enter takes the highlighted suggestion, or the first one.
             event.preventDefault();
-            pick(suggestions[activeIndex]);
+            pick(suggestions[Math.max(activeIndex, 0)]);
           } else if (event.key === "Escape") {
             event.preventDefault();
             setOpen(false);

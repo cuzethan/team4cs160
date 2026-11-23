@@ -80,6 +80,20 @@ describe("street address suggestions", () => {
     expect(screen.getByText(/Address search is busy/)).toBeInTheDocument();
   });
 
+  it("takes the first suggestion when Enter is pressed without choosing one", async () => {
+    suggestionServer([cityHall, sjsu]);
+    const user = userEvent.setup();
+    render(<Form />);
+    const field = screen.getByRole("combobox", { name: "Street address" });
+
+    await user.type(field, "200 E Santa");
+    await screen.findByRole("option", { name: cityHall.label });
+    await user.keyboard("{Enter}");
+
+    expect(field).toHaveValue("200 East Santa Clara Street");
+    expect(screen.getByTestId("picked")).toHaveTextContent("San Jose|CA|95112");
+  });
+
   it("shows the shopper's past addresses as soon as the field is clicked", async () => {
     suggestionServer([cityHall], [sjsu]);
     const user = userEvent.setup();
