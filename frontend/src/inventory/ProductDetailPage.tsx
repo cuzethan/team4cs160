@@ -23,7 +23,7 @@ export function ProductDetailPage({ product, onClose, onAddToCart }: ProductDeta
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/55 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink/55 p-4 backdrop-blur-sm"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
@@ -33,7 +33,7 @@ export function ProductDetailPage({ product, onClose, onAddToCart }: ProductDeta
         role="dialog"
         aria-modal="true"
         aria-labelledby="product-detail-title"
-        className="relative grid w-full max-w-3xl overflow-hidden rounded-3xl bg-surface shadow-2xl md:grid-cols-2"
+        className="relative my-4 grid w-full max-w-3xl overflow-hidden rounded-3xl bg-surface shadow-2xl sm:my-8 md:grid-cols-2"
       >
         <button
           type="button"
