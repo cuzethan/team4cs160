@@ -2,7 +2,7 @@
 
 ## How-to video
 
-[VIDEO LINK]
+[User guide video](https://drive.google.com/file/d/1YBYbXMftGoa2m8jVd4s-ZxW4s6WZuGmb/view?usp=sharing)
 
 **Demo accounts** (preloaded with past orders and deliveries on a fresh database):
 
