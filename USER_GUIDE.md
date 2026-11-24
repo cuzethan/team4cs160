@@ -1,6 +1,6 @@
 # OFS Delivery System User Guide
 
-This guide explains how to set up the OFS Delivery System from a fresh checkout, start its Docker services, configure Stripe and Valhalla, create a manager account, and verify that the application is working.
+This guide explains how to set up the OFS Delivery System from a fresh checkout, start its Docker services, configure Stripe and Valhalla, sign in with the demo accounts or create new ones, and verify that the application is working.
 
 ## 1. Prerequisites
 
@@ -76,10 +76,19 @@ On its first start, Valhalla downloads the configured map extract and builds gra
 
 ## 6. Create a manager account
 
-Leave the Docker stack running and open a second terminal in the repository root. Create a manager account with:
+A new database comes preloaded with two demo accounts, so this step is optional:
+
+| Role | Email | Password | Sign in at |
+| --- | --- | --- | --- |
+| Customer | `test.customer@ofs.com` | `testcustomer` | <http://localhost:5173/login> |
+| Manager | `manager@ofs.com` | `manager123` | <http://localhost:5173/manager-login> |
+
+The demo customer already has past orders, deliveries, notifications, and saved addresses, and the manager dashboard shows their sales, stock, delivery, and robot history. One paid order is waiting to be dispatched, so deliveries can be tried without placing a new order. Nobody is signed in when the app starts.
+
+To add another manager, leave the Docker stack running and open a second terminal in the repository root. Create a manager account with:
 
 ```bash
-docker compose exec backend npm run create-manager -- manager@ofs.com manager123 Max Boss 408-555-0100
+docker compose exec backend npm run create-manager -- manager2@ofs.com manager123 Max Boss 408-555-0100
 ```
 
 The command format is:
@@ -174,7 +183,9 @@ docker compose down -v
 docker compose up --build
 ```
 
-This permanently removes local database data, including customer accounts, manager accounts, orders, inventory changes, and delivery history. Use it only when a clean local database is intended.
+This permanently removes local database data, including customer accounts, manager accounts, orders, inventory changes, and delivery history. Use it only when a clean local database is intended. The new database starts with the demo accounts and their data again.
+
+A database created before the demo data was added does not have the demo accounts. Reset it as shown above to load them.
 
 ## 11. Reset active robots
 

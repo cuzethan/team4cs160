@@ -1,5 +1,16 @@
 ### Team 4 - OFS Delivery System
 
+## How-to video
+
+[VIDEO LINK]
+
+**Demo accounts** (preloaded with past orders and deliveries on a fresh database):
+
+| Role | Email | Password |
+|---|---|---|
+| Customer | test.customer@ofs.com | testcustomer |
+| Manager | manager@ofs.com | manager123 |
+
 ## Login/logout update
 
 **Login/logout is on main.** Run these after pulling:
